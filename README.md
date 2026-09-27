@@ -1,61 +1,29 @@
-# 汉语 · тренажёр
+# 汉语 · Trainer
 
-Мобильное приложение-тренажёр для изучения китайских слов и иероглифов. Интерфейс на русском, карточки на китайском. Работает как PWA: устанавливается на телефон и доступно офлайн.
+A mobile-friendly web app for learning Chinese words and characters. Russian interface, Chinese flashcards. Works as a PWA — installable on your phone and available offline.
 
-## Возможности
+**[Open the app](https://refolit.github.io/Lang-trainer/)**
 
-- **Словарь** — список слов с переводом, пиньинем и начертанием иероглифов.
-- **Учить** — карточки с интервальным повторением (SRS, 5 «коробок»).
-- **Писать** — отрисовка иероглифов по штрихам с анимацией (HanziWriter).
-- **Экзамен** — проверка знаний с результатами и списком ошибок.
-- **К статистике** — прогресс, изученные слова, история.
-- **Экспорт/импорт JSON** — резервная копия данных.
+## Features
 
-## Структура
+- **Dictionary** — a list of words with translations, pinyin, and stroke-by-stroke character writing.
+- **Learn** — flashcards with spaced repetition (SRS, 5 boxes).
+- **Write** — animated stroke-order practice for characters (HanziWriter).
+- **Exam** — knowledge checks with results and a list of mistakes.
+- **Statistics** — progress, learned words, and history.
+- **JSON import / export** — back up your data at any time.
 
-| Файл | Назначение |
-|---|---|
-| `index.html` | Приложение целиком (HTML + CSS + JS) |
-| `sw.js` | Service worker — офлайн-кэш и установка как PWA |
-| `build-offline.mjs` | Сборщик офлайн-версии (вшивает HanziWriter, pinyin-pro и данные иероглифов) |
-| `PROJECT_NOTES.md` | История версий и партий правок |
-| `hanzi-trainer-offline 19.html` | Готовая офлайн-сборка (генерируется сборщиком) |
+## How to install on your phone
 
-## Запуск локально
+1. Open the app in your phone's browser:
+   `https://refolit.github.io/Lang-trainer/`
+2. Choose **Add to Home Screen** (in Android Chrome / iOS Safari).
+3. The app will appear as a regular icon and will work without internet.
 
-Нужен [Node.js](https://nodejs.org/). Из папки проекта:
+Your words and progress are stored locally on your device (IndexedDB).
 
-```bash
-npx http-server . -p 4871 -c-1
-```
+## Built with
 
-Затем открой в браузере: `http://localhost:4871/`
-
-> Service worker и офлайн-режим работают только на HTTPS или `localhost`, поэтому для локального запуска нужен именно сервер (не открывать `index.html` двойным кликом).
-
-## Сборка офлайн-версии
-
-```bash
-node build-offline.mjs "$(pwd)"
-```
-
-Сборщик читает версию из `index.html` и сохраняет файл вида `hanzi-trainer-offline <последняя цифра версии>.html`.
-
-## Публикация на GitHub Pages
-
-Репозиторий содержит всё необходимое. В настройках репозитория включи **Settings → Pages → Source: Deploy from a branch → Branch: main / root**, после чего приложение будет доступно по адресу:
-
-```
-https://<ваш-логин>.github.io/hanzi-trainer/
-```
-
-## Технологии
-
-- [HanziWriter 3.6](https://github.com/chanind/hanzi-writer) — анимация написания иероглифов.
-- [pinyin-pro 3.29.4](https://github.com/zh-lx/pinyin-pro) — генерация пиньиня.
-- [hanzi-writer-data 2.0.0](https://www.npmjs.com/package/hanzi-writer-data) — данные начертания иероглифов.
-- IndexedDB (`hanzi-trainer`) — хранение слов, настроек и статистики.
-
-## Версия
-
-Текущая версия приложения указана в шапке интерфейса и в константе `APP_VERSION` в `index.html`.
+- [HanziWriter 3.6](https://github.com/chanind/hanzi-writer) — animated character writing.
+- [pinyin-pro 3.29.4](https://github.com/zh-lx/pinyin-pro) — pinyin generation.
+- [hanzi-writer-data 2.0.0](https://www.npmjs.com/package/hanzi-writer-data) — character stroke data.
