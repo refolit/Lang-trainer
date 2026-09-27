@@ -1,0 +1,12 @@
+# Локальная настройка превью Claude Code
+.claude/
+
+# Тестовая/демо-страница, не часть приложения
+calendar-test.html
+Exam_result.html
+
+# Старые офлайн-сборки — не загружаем в репозиторий
+hanzi-trainer-offline*.html
+
+# Актуальная офлайн-сборка — загружаем, поэтому исключаем из запрета
+!hanzi-trainer-offline 19.html

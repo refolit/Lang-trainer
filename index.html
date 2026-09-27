@@ -1,0 +1,3305 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#c62828">
+<title>汉语 — тренажёр</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"汉语 тренажёр","short_name":"汉语","start_url":".","display":"standalone","background_color":"%23faf8f5","theme_color":"%23c62828","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E'>
+
+<style>
+:root{
+  --bg:#f7f4ef; --card:#ffffff; --ink:#1d1c1a; --mut:#8a847c;
+  --red:#c62828; --red-d:#a32222; --green:#2e7d32; --amber:#f9a825;
+  --line:#e8e2d8; --radius:18px;
+  --shadow-sm:0 1px 2px rgba(30,28,26,.05);
+  --shadow-md:0 6px 16px rgba(30,28,26,.08);
+  --font-cjk:"PingFang SC","Hiragino Sans GB","Noto Sans SC","Noto Sans CJK SC","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,var(--font-cjk),sans-serif;
+  overflow:hidden; height:100dvh; display:flex; flex-direction:column;
+}
+h1,h2,h3{margin:0}
+button{font-family:inherit;cursor:pointer}
+.hidden{display:none !important}
+
+/* Header */
+header.top{
+  flex:0 0 auto; padding:12px 16px 6px; display:flex; align-items:center; justify-content:space-between;
+}
+header.top .title{font-weight:800; font-size:17px; letter-spacing:.3px}
+header.top .title .zh{color:var(--red); font-size:19px}
+header.top .sub{display:flex; gap:6px}
+.chip{
+  background:var(--card); border:1px solid var(--line); border-radius:999px;
+  padding:4px 11px; font-size:12px; color:var(--mut); box-shadow:var(--shadow-sm);
+}
+.chip b{color:var(--ink); font-weight:800}
+header.top .ver{font-size:11px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
+
+/* Screens */
+main{flex:1 1 auto; overflow:hidden; position:relative}
+.screen{position:absolute; inset:0; overflow-y:auto; padding:10px 16px calc(88px + env(safe-area-inset-bottom)); display:none}
+.screen.active{display:block}
+
+/* Bottom nav — pill tabs à la uHabits */
+nav.tabs{
+  position:fixed; left:0; right:0; bottom:0; display:flex; gap:6px;
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.96); backdrop-filter:blur(12px);
+  border-top:1px solid var(--line); z-index:50;
+}
+nav.tabs button{
+  flex:1; border:0; background:transparent; padding:9px 0 8px; font-size:11px; color:var(--mut);
+  display:flex; flex-direction:column; align-items:center; gap:2px; border-radius:14px;
+}
+nav.tabs button .ic{font-size:20px; line-height:1}
+nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
+
+/* Cards & lists */
+.card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px; box-shadow:var(--shadow-sm)}
+.row{display:flex; align-items:center; gap:10px}
+.spacer{flex:1 1 auto}
+.item-line{transition:transform .06s ease, box-shadow .12s ease}
+.item-line:active{transform:scale(.992); box-shadow:var(--shadow-md)}
+.item-line .zh{font-size:26px; font-weight:600; font-family:var(--font-cjk)}
+.item-line .py{color:var(--amber); font-size:13px}
+.item-line .tr{color:var(--mut); font-size:13px}
+.badge{font-size:10px; padding:2px 7px; border-radius:999px; background:#f0ece4; color:var(--mut); white-space:nowrap}
+.badge.learned{background:#e6f2e6; color:var(--green)}
+.badge.box{background:#fdf2e0}
+
+/* Buttons — Quizlet-style soft colored shadows */
+.btn{
+  border:0; border-radius:14px; padding:13px 16px; font-size:15px; font-weight:700; background:var(--red); color:#fff;
+  display:inline-flex; align-items:center; justify-content:center; gap:7px; width:100%;
+  box-shadow:0 4px 0 var(--red-d), 0 6px 14px rgba(198,40,40,.22);
+}
+.btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d), 0 2px 6px rgba(198,40,40,.22)}
+.btn.sec{background:#fff; color:var(--ink); border:1.5px solid var(--line); box-shadow:0 4px 0 #e3ddd1, 0 4px 10px rgba(30,28,26,.07)}
+.btn.sec:active{transform:translateY(3px); box-shadow:0 1px 0 #e3ddd1}
+.btn.ghost{background:transparent; color:var(--red); box-shadow:none}
+.btn.ok{background:var(--green); box-shadow:0 4px 0 #256029, 0 6px 14px rgba(46,125,50,.22)}
+.btn.ok:active{transform:translateY(3px); box-shadow:0 1px 0 #256029}
+.btn.warn{background:var(--amber); color:#3b2f00; box-shadow:0 4px 0 #d6930b, 0 6px 14px rgba(249,168,37,.25)}
+.btn.warn:active{transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
+.btn[disabled]{opacity:.45; pointer-events:none}
+.btn-row{display:flex; gap:10px}
+.btn-row .btn{flex:1}
+.btn-col{display:flex; flex-direction:column; gap:10px; width:100%}
+/* «Вперёд ▶» в режиме «Учить» — в 1,5 раза выше остальных кнопок (~44px → 66px) */
+#studyKnow{min-height:66px}
+
+/* Big display — размером каждой части управляют CSS-переменные (mul-h/p/t) */
+:root{ --mul-h:1; --mul-p:1; --mul-t:1; }
+.bigwrap{
+  flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; align-items:center;
+  text-align:center; gap:6px; min-height:0;
+}
+.big{
+  font-family:var(--font-cjk); font-weight:700; line-height:1.12;
+  font-size:calc(50vmin * var(--mul-h,1));
+  color:var(--ink); word-break:break-all; max-width:100%;
+}
+.big.word{font-size:calc(24vmin * var(--mul-h,1))}
+.big.sent{font-size:calc(14vmin * var(--mul-h,1)); line-height:1.35}
+.bigpy{font-size:calc(9vmin * var(--mul-p,1)); color:var(--amber); min-height:1.2em; font-family:system-ui,-apple-system,var(--font-cjk),sans-serif}
+.bigtr{font-size:calc(7.5vmin * var(--mul-t,1)); color:var(--mut); min-height:1.3em; line-height:1.4}
+.speaker{font-size:13px; color:var(--mut); letter-spacing:1px}
+.speaker .speed{font-weight:800; color:var(--red)}
+
+/* Подсветка текущего иероглифа (экзамен-письмо / письмо) */
+.char-strip{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px; margin:2px 0 8px}
+.char-strip .label{flex-basis:100%; text-align:center; font-size:13px; color:var(--mut); margin-bottom:2px}
+.char-strip .c{font-family:var(--font-cjk); font-size:20px; padding:2px 9px; border-radius:9px; background:#f0ece4; color:var(--mut); line-height:1.4}
+.char-strip .c.cur{background:var(--red); color:#fff; font-size:26px; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
+
+/* Hanzi writer area */
+#writeArea{display:flex; align-items:center; justify-content:center; position:relative}
+#writeArea svg{display:block; position:relative; z-index:1}
+/* Сетка-направляющая (синяя пунктирная клетка + серые точки) */
+.hz-grid{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:0}
+.hz-grid svg{display:block}
+.hz-grid .gz-outer{stroke:#4f8edb; stroke-width:1.7; fill:none; stroke-dasharray:5 4; opacity:.75; vector-effect:non-scaling-stroke}
+.hz-grid .gz-mid{stroke:#6aa4e0; stroke-width:1; fill:none; stroke-dasharray:3 4; opacity:.6; vector-effect:non-scaling-stroke}
+.hz-grid .gz-diag{stroke:#a3c4ea; stroke-width:.8; fill:none; stroke-dasharray:2 4; opacity:.55; vector-effect:non-scaling-stroke}
+.hz-grid .gz-dot{fill:#8b9098; opacity:.9}
+.hz-fallback{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; font-family:var(--font-cjk); font-weight:700; color:rgba(29,28,26,.07); -webkit-text-stroke:2.5px #d8d2c6; text-stroke:2.5px #d8d2c6}
+.hz-freedraw{position:absolute; inset:0; width:100%; height:100%; z-index:2; touch-action:none; cursor:crosshair; background:transparent}
+.hz-skip{position:absolute; top:8px; right:8px; z-index:3; padding:6px 11px; font-size:13px}
+/* Маленькие кнопки */
+.btn.sm{padding:6px 10px; font-size:13px}
+.seg.sm button{padding:5px 8px; font-size:12px}
+/* Повтор счётчик */
+.repeat-counter{display:flex; align-items:center; gap:4px; font-size:13px; color:var(--mut)}
+.repeat-counter .num{font-weight:800; color:var(--ink); font-size:16px}
+
+/* Письмо: верхний тулбар */
+.write-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
+.write-toolbar .wbtn{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
+.write-toolbar .wbtn.lg{font-size:14px; padding:8px 13px}
+.write-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
+#writeWord{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:2px 0 8px; font-family:var(--font-cjk)}
+#writeWord .wch{font-size:40px; padding:3px 12px; border-radius:10px; background:#f0ece4; color:var(--mut); line-height:1.3}
+#writeWord .wch.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
+#writeCenter{width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; max-width:620px; margin:0 auto}
+/* Окно письма — на всю ширину телефона, строгий квадрат 1:1; боковой отступ даёт padding экрана */
+#writeArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); margin:0 auto; touch-action:none; background:#fff; border-radius:12px}
+#examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:#fff; border-radius:12px}
+#writeTr{font-size:15px; color:var(--mut); text-align:center; margin-top:2px; line-height:1.4; max-width:92%}
+#writeList{max-width:560px; margin:14px auto 0; display:flex; flex-wrap:wrap; gap:7px; align-items:center; justify-content:flex-start}
+.wl-zh-pill{font-family:var(--font-cjk); font-size:19px; padding:4px 12px; border-radius:12px; background:#f0ece4; color:var(--mut); cursor:pointer; line-height:1.4; border:1px solid transparent}
+.wl-zh-pill.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.35)}
+
+/* Словарь: центрированный список, карточки в 3 столбца */
+#dictList{max-width:560px; margin:0 auto}
+.dict-card{display:flex; gap:10px; align-items:flex-start}
+.dc-cols{flex:1; display:grid; grid-template-columns:1.1fr .9fr 1.6fr; gap:8px; align-items:baseline; min-width:0}
+.dc{min-width:0; overflow-wrap:anywhere}
+.dc.zh{font-family:var(--font-cjk); font-size:22px; font-weight:600}
+.dc.py{color:var(--amber); font-size:14px; font-weight:700}
+.dc.tr{color:#5f5a51; font-size:14px; font-weight:600; text-align:right}
+.dc-side{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto}
+.dc-btns{display:flex; gap:4px}
+.icon-btn{border:0; background:#f0ece4; color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0}
+.icon-btn:active{transform:scale(.94)}
+.icon-btn.starred{color:var(--amber); background:#fff4dd}
+.dc-stat{font-size:11px; color:var(--mut); white-space:nowrap}
+.autolink{font-size:12px; color:var(--red); text-decoration:none; font-weight:600}
+.tr-row{display:flex; align-items:center; gap:8px; margin-top:6px}
+.tr-row input{flex:1; margin:0}
+.tr-btn{flex:0 0 auto; width:34px; height:34px; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--red); font-size:18px; font-weight:700; line-height:1; cursor:pointer; padding:0}
+.tr-btn.minus{color:var(--mut)}
+
+/* Forms */
+input[type=text],textarea,select{
+  width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 12px; font-size:15px; background:#fff; font-family:inherit;
+}
+input[type=text].zh{font-family:var(--font-cjk); font-size:22px}
+textarea{min-height:110px; resize:vertical; line-height:1.5}
+label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; font-weight:600}
+.seg{display:flex; background:#f0ece4; border-radius:12px; padding:3px; gap:3px}
+.seg button{flex:1; border:0; background:none; padding:8px; border-radius:9px; font-size:13px; color:var(--mut); font-weight:600}
+.seg button.active{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
+
+/* Словарь: строка фильтров — сегмент слева, кнопки-счётчики справа (по правому краю блока) */
+.dict-filter-row{display:flex; align-items:stretch; gap:6px; margin-bottom:10px}
+.dict-filter-row .seg{flex:1}
+.dict-filter{flex:0 0 auto; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:12px; padding:8px 11px; font-size:13px; font-weight:700; white-space:nowrap}
+.dict-filter b{font-weight:800; color:var(--ink)}
+.dict-filter.active{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 4px 0 var(--red-d),0 4px 10px rgba(198,40,40,.18)}
+.dict-filter.active b{color:#fff}
+.dict-filter:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d)}
+
+/* Audio slots */
+.slot{display:flex; align-items:center; gap:8px; padding:8px 10px; border:1.5px dashed var(--line); border-radius:12px; margin-top:6px}
+.slot.has{border-style:solid; border-color:var(--green)}
+.slot .nm{font-size:12px; color:var(--mut); flex:1; word-break:break-all}
+.slot .ic{font-size:18px}
+
+/* Modal */
+.modal{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:flex-end; justify-content:center}
+.modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px calc(20px + env(safe-area-inset-bottom)); max-height:92dvh; overflow-y:auto}
+.modal h2{font-size:18px; margin-bottom:4px}
+
+/* Stats */
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+.stat{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:16px 12px; text-align:center; box-shadow:var(--shadow-sm)}
+.stat .num{font-size:34px; font-weight:800; color:var(--red); line-height:1.05}
+.stat .lbl{font-size:11.5px; color:var(--mut); margin-top:3px}
+/* Ещё: контент по центру, две вкладки */
+.more-wrap{max-width:600px; margin:0 auto}
+.card-h{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:14px; font-weight:700; color:var(--ink); margin:0 0 10px}
+.mini-select{width:auto; font-size:12px; padding:6px 8px; border-radius:10px; border:1.5px solid var(--line); background:#fff; color:var(--ink)}
+/* Память: горизонтальные бары */
+.hmbar{display:flex; align-items:center; gap:9px; margin:8px 0}
+.hmbar .lb{flex:0 0 124px; font-size:11px; color:var(--mut); text-align:right; line-height:1.25}
+.hmbar .track{flex:1; height:15px; background:#f0ece4; border-radius:8px; overflow:hidden}
+.hmbar .fill{height:100%; background:var(--red); border-radius:8px 0 0 8px}
+.hmbar .num{flex:0 0 22px; font-size:12.5px; font-weight:800; color:var(--ink)}
+/* Календарь-хитмап */
+.hm-scroll{overflow-x:auto; overflow-y:hidden; padding:2px 0 9px}
+.hm-months{position:relative; height:13px; margin:0 0 6px}
+.hm-months span{position:absolute; top:0; font-size:9.5px; color:var(--mut); white-space:nowrap}
+.hm-body{display:flex; align-items:flex-start}
+.hm-days{display:flex; flex-direction:column; gap:var(--hmgap,2px); margin-right:5px; flex:0 0 18px}
+.hm-days span{height:var(--hmcell,14px); line-height:var(--hmcell,14px); font-size:8.5px; color:var(--mut); text-align:right}
+.hm-grid{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,var(--hmcell,14px)); grid-auto-columns:var(--hmcell,14px); gap:var(--hmgap,2px)}
+.hm-cell{width:var(--hmcell,14px); height:var(--hmcell,14px); border-radius:3px; background:#f0ece4; font-size:8px; line-height:var(--hmcell,14px); text-align:center; color:#b7b0a6}
+.hm-cell.on{background:var(--red); color:#fff; font-weight:700}
+.hm-cell.future{background:transparent}
+/* Графики — горизонтальная прокрутка */
+.chart-scroll{overflow-x:auto; overflow-y:hidden; padding:2px 0 4px}
+.chart-scroll svg{display:block}
+/* История — столбцы */
+.hbars{display:flex; align-items:flex-end; gap:7px; min-width:max-content}
+.hbar{display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:170px}
+.hbar .hval{font-size:11px; font-weight:800; color:var(--ink); margin-bottom:3px; min-height:14px}
+.hbar .hcol{width:22px; border-radius:6px 6px 2px 2px; background:var(--red)}
+.hbar .hcol.zero{background:#f0ece4; min-height:3px}
+.hbar .hlab{font-size:9px; color:var(--mut); margin-top:5px; white-space:nowrap; max-width:58px; overflow:hidden; text-overflow:ellipsis}
+/* Лучшие серии */
+.streak{margin:9px 0}
+.streak .s-line{display:flex; align-items:center; gap:9px}
+.streak .s-d{flex:0 0 62px; font-size:11.5px; color:var(--mut); white-space:nowrap}
+.streak .s-d.end{flex:0 0 auto; text-align:right}
+.streak .s-barwrap{flex:1; display:flex}
+.streak .s-bar{height:12px; background:var(--red); border-radius:6px; min-width:10px}
+.streak .s-n{flex:0 0 30px; font-size:12.5px; font-weight:800; color:var(--ink); text-align:left; white-space:nowrap}
+/* Статистика: единый 13px, заголовки карточек 17px (как эталонный h2 на тестовой странице) */
+#moreTabStats .card-h{font-size:17px}
+
+/* Календарь-хитмап (сегодня справа, лента смахивается) */
+.calrow{display:flex; align-items:stretch; gap:8px}
+.wrap{flex:1 1 auto; min-width:0; overflow-x:auto; overflow-y:hidden; padding-bottom:2px;
+  scrollbar-width:none; -ms-overflow-style:none; cursor:grab; user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent; touch-action:pan-y}
+.wrap::-webkit-scrollbar{display:none}
+.wrap.grabbing{cursor:grabbing}
+.months{position:relative; height:18px}
+.months span{position:absolute; top:0; font-size:13px; color:var(--mut); white-space:nowrap}
+.grid{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,16px); grid-auto-columns:16px; gap:2px}
+.cell{position:relative; width:16px; height:16px; border-radius:4px; background:#ece9e2; color:var(--mut);
+  font-size:13px; line-height:16px; text-align:center; font-weight:500}
+.cell.on{background:var(--red); color:#fff; font-weight:700}
+.cell.future{background:transparent; color:transparent}
+.cell .dot{position:absolute; right:0; top:0; width:5px; height:5px; border-radius:50%; background:#777; transform:translate(50%,-50%)}
+.cell.on .dot{background:#eee}
+.days{flex:0 0 auto; display:flex; flex-direction:column; gap:2px; padding-top:18px}
+.days span{height:16px; line-height:16px; font-size:13px; color:var(--mut)}
+
+/* Выпадающий выбор периода (▾) */
+.dd{position:relative; flex:0 0 auto}
+.dd-btn{display:flex; align-items:center; gap:6px; border:1px solid var(--line); background:#fff;
+  border-radius:9px; padding:6px 10px; font-size:13px; color:var(--ink); cursor:pointer; font-family:inherit}
+.dd-btn .tgl{font-size:9px; color:var(--mut); transition:transform .15s}
+.dd.open .tgl{transform:rotate(180deg)}
+.dd-menu{position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--line);
+  border-radius:10px; box-shadow:var(--shadow-md); padding:4px; min-width:118px; display:none; z-index:20}
+.dd.open .dd-menu{display:block}
+.dd-menu button{display:block; width:100%; text-align:left; border:0; background:transparent;
+  padding:8px 10px; border-radius:7px; font-size:13px; color:var(--ink); cursor:pointer; font-family:inherit}
+.dd-menu button:hover{background:var(--bg)}
+.dd-menu button.active{font-weight:700; color:var(--red)}
+
+/* Графики «Слова» / «История» */
+.chart-wrap{position:relative; margin-top:8px; width:100%}
+.chart-wrap svg{display:block; font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.chart-wrap .ax{font-size:13px; fill:var(--mut)}
+.chart-wrap .num{font-size:13px; fill:var(--ink); font-weight:600}
+/* «Слова» за «день» (ось + полотно) — тот же шрифт осей/подписей, что и в остальных периодах */
+.dchart .ax{font-size:13px; fill:var(--mut)}
+.dchart .num{font-size:13px; fill:var(--ink); font-weight:600}
+.dchart svg{display:block; font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+.chart-wrap.scroll{overflow-x:auto; overflow-y:hidden; padding-bottom:2px;
+  scrollbar-width:none; -ms-overflow-style:none; cursor:grab; user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent; touch-action:pan-y}
+.chart-wrap.scroll::-webkit-scrollbar{display:none}
+.chart-wrap.scroll.grabbing{cursor:grabbing}
+/* «Слова» за «день»: неподвижная ось Y слева + прокручиваемое полотно (uHabits) */
+.dchart{display:flex; align-items:stretch}
+.daxis{flex:0 0 auto}
+.daxis svg{display:block}
+.dplot{position:relative; flex:1 1 auto; overflow-x:auto; overflow-y:hidden;
+  scrollbar-width:none; -ms-overflow-style:none; cursor:grab; user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent; touch-action:pan-y}
+.dplot::-webkit-scrollbar{display:none}
+.dplot.grabbing{cursor:grabbing}
+.tip{position:absolute; pointer-events:none; background:rgba(29,28,26,.92); color:#fff; font-size:13px; line-height:1.35;
+  padding:5px 8px; border-radius:8px; white-space:nowrap; transform:translateX(-50%); display:none; z-index:5; box-shadow:0 2px 8px rgba(0,0,0,.18)}
+
+/* «Лучшие серии» */
+.streak-row{position:relative; height:28px}
+.sbar{position:absolute; top:50%; margin-top:-8px; height:16px; border-radius:4px;
+  display:flex; align-items:center; justify-content:center; min-width:16px}
+.sbar b{font-size:13px; font-weight:700; white-space:nowrap; line-height:1}
+.sdate{position:absolute; top:50%; margin-top:-8px; font-size:13px; line-height:16px; color:var(--mut); white-space:nowrap}
+
+/* История версий (модалка) */
+#appVer{cursor:pointer}
+.ver-item{padding:11px 0; border-bottom:1px solid var(--line)}
+.ver-item:last-child{border-bottom:0}
+.ver-item .vh{font-size:13.5px; font-weight:800; color:var(--ink)}
+.ver-item .vh .vnum{color:var(--red)}
+.ver-item .vt{font-size:12.5px; color:var(--mut); line-height:1.5; margin-top:3px}
+.ver-now{margin-top:12px; padding-top:11px; border-top:2px solid var(--line); font-size:12.5px; color:var(--mut); text-align:center; font-weight:700}
+/* Выбор ответов: равные карточки, перенос, многоточие */
+.exam-opt .opt-txt{display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; max-width:100%}
+.prev-note{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5}
+
+.toast{
+  position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:rgba(30,28,26,.94); color:#fff;
+  padding:10px 18px; border-radius:999px; font-size:14px; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s;
+}
+.toast.show{opacity:1}
+
+/* Мигание при ошибке — одинаковое во всех подрежимах экзамена */
+@keyframes badBlink{
+  0%,100%{opacity:1; filter:none}
+  50%{opacity:.3; filter:brightness(1.35)}
+}
+
+.empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
+.empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
+
+/* Экзамен: верхний тулбар настроек */
+.exam-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
+.exam-toolbar .wbtn{width:auto; padding:7px 11px; font-size:12px; box-shadow:none}
+.exam-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
+
+/* Экзамен: вопрос с двумя колонками (перевод сверху, псевдо-иероглиф) */
+.exam-q{display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center}
+.exam-q .eq-word{font-family:var(--font-cjk); font-weight:600; line-height:1.2; color:var(--ink); word-break:break-all; font-size:min(30vmin,130px)}
+.exam-q .eq-tr{font-size:15px; color:var(--mut); line-height:1.4; overflow-wrap:anywhere}
+
+/* Экзамен: пиньинь-подсказка (маленькая) */
+.exam-py{font-size:14px; color:var(--amber); text-align:center; min-height:1.2em}
+
+/* Экзамен: подбор пар */
+#matchRoot{max-width:600px; margin:0 auto}
+.match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:10px 0 14px; align-items:start; width:100%}
+/* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
+.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
+.exam-opt{font-size:14px; padding:12px 8px; word-break:break-word}
+
+.match-col{display:grid; grid-template-rows:repeat(5, minmax(64px, 1fr)); gap:8px; align-content:stretch}
+.match-pair{font-family:var(--font-cjk); font-size:18px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word}
+.match-pair.match-txt{font-family:system-ui,-apple-system,var(--font-cjk),sans-serif; font-size:14px; font-weight:600}
+.match-pair.sel{background:var(--amber); border-color:#d6930b; color:#3b2f00; transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
+.match-pair.done{opacity:.18; pointer-events:none; transform:none; box-shadow:none}
+.btn.bad, .match-pair.bad{animation:badBlink .45s}
+
+/* Десктоп/ноутбук (≥1024px): крупнее карточки «Выбора ответов» и «Подбора».
+   Телефоны и планшеты (<1024px) — размеры прежние. */
+@media (min-width:1024px){
+  #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
+  .exam-opt{font-size:19px; padding:18px 14px; word-break:break-word}
+  .match-pair{font-size:22px; line-height:1.3}
+  .match-pair.match-txt{font-size:17px; line-height:1.35}
+  .match-col{grid-template-rows:repeat(5, minmax(72px, 1fr)); gap:10px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="title"><span class="zh">汉语</span> · тренажёр</div>
+  <div class="sub"><span class="ver" id="appVer">Версия</span></div>
+</header>
+
+<main>
+  <!-- СЛОВАРЬ -->
+  <section class="screen active" id="scr-dict">
+    <div style="max-width:560px; margin:0 auto">
+      <div class="row" style="margin-bottom:10px">
+        <input type="text" id="dictSearch" placeholder="Поиск…" style="flex:1">
+      </div>
+      <div class="dict-filter-row">
+        <div class="seg" id="dictFilterSeg">
+          <button data-dict-filter="all" class="active">Все слова</button>
+          <button data-dict-filter="star">★ Слова с *</button>
+        </div>
+        <button class="dict-filter" data-dict-filter="learned" id="dictFilterLearned">выучено</button>
+        <button class="dict-filter" data-dict-filter="due" id="dictFilterDue">повторить</button>
+      </div>
+      <div class="btn-row" style="margin-bottom:10px">
+        <button class="btn" id="btnAdd">＋ Слово</button>
+        <button class="btn sec" id="btnBatch">Список</button>
+      </div>
+    </div>
+    <div id="dictList"></div>
+  </section>
+
+  <!-- ИЗУЧЕНИЕ -->
+  <section class="screen" id="scr-study">
+    <div id="studyWrap" style="height:100%; display:flex; flex-direction:column">
+      <div class="row" style="justify-content:space-between; margin-bottom:4px">
+        <span class="chip" id="studyProgress">0 / 0</span>
+        <span class="speaker" id="studySpeed"></span>
+      </div>
+      <div class="bigwrap" id="studyCardArea">
+        <div class="big" id="studyHanzi"></div>
+        <div class="bigpy" id="studyPinyin"></div>
+        <div class="bigtr" id="studyTr"></div>
+      </div>
+      <div class="btn-col">
+        <button class="btn ok" id="studyKnow">Вперёд ▶</button>
+        <button class="btn sec" id="studyBack">◀ Назад</button>
+        <button class="btn warn" id="studyAgain">🔄 Повторить</button>
+      </div>
+    </div>
+    <div class="empty hidden" id="studyEmpty">
+      <span class="big-ic">🎉</span>
+      <div>Сейчас учить нечего.<br>Добавьте слова в «Словаре» или «Повторить» начнётся позже.</div>
+      <br><button class="btn sec" onclick="go('scr-dict')">К словарю</button>
+    </div>
+  </section>
+
+  <!-- ПИСЬМО -->
+  <section class="screen" id="scr-write">
+    <div class="write-toolbar">
+      <button class="btn sec wbtn on" id="writeAudio">🔊 Аудио</button>
+      <button class="btn sec wbtn" id="writeAnim">✨ Анимация</button>
+      <button class="btn sec wbtn on" id="writeOutline">◌ Контур</button>
+      <button class="btn sec wbtn" id="writeRand">🎲 Рандомно</button>
+      <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
+      <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
+    </div>
+    <div id="writeWord"></div>
+    <div id="writeCenter">
+      <div id="writeArea"></div>
+      <div class="bigpy" id="writePy"></div>
+      <div id="writeTr"></div>
+    </div>
+    <div id="writeList"></div>
+  </section>
+
+  <!-- ЭКЗАМЕН -->
+  <section class="screen" id="scr-exam">
+    <div class="row" style="justify-content:space-between; margin-bottom:2px; max-width:600px; margin-left:auto; margin-right:auto">
+      <span class="chip" id="examProgress"></span>
+      <span class="chip" id="examScore"></span>
+    </div>
+    <div class="exam-toolbar">
+      <button class="btn sec wbtn on" id="examAudio">🔊 Аудио</button>
+      <button class="btn sec wbtn on" data-exam-toggle="tf">Верно-неверно</button>
+      <button class="btn sec wbtn on" data-exam-toggle="choice">Выбор ответов</button>
+      <span class="seg sm" id="examChoiceSeg" style="width:auto">
+        <button data-v="4">4</button>
+        <button data-v="6">6</button>
+        <button data-v="8" class="active">8</button>
+        <button data-v="10">10</button>
+      </span>
+      <button class="btn sec wbtn on" id="examAllTr">Все переводы</button>
+      <button class="btn sec wbtn" id="examMatchBtn">Подбор</button>
+    </div>
+    <div id="examBody" style="display:flex; flex-direction:column; align-items:center; max-width:600px; margin:0 auto"></div>
+    <div class="empty hidden" id="examEmpty">
+      <span class="big-ic">📭</span>
+      <div>Для экзамена нужно хотя бы 4 слова.</div>
+    </div>
+  </section>
+
+  <!-- ЕЩЁ / НАСТРОЙКИ + СТАТИСТИКА -->
+  <section class="screen" id="scr-more">
+    <div class="more-wrap">
+      <div class="seg" id="moreTabSeg" style="margin-bottom:14px">
+        <button data-tab="stats" class="active">Статистика</button>
+        <button data-tab="settings">Настройки</button>
+      </div>
+
+      <!-- ВКЛАДКА: СТАТИСТИКА -->
+      <div id="moreTabStats">
+        <div class="stat-grid">
+          <div class="stat"><div class="num" id="stTotal">0</div><div class="lbl">всего карточек</div></div>
+          <div class="stat"><div class="num" id="stToday">0</div><div class="lbl">добавлено сегодня</div></div>
+          <div class="stat"><div class="num" id="stLearned">0</div><div class="lbl">выучено</div></div>
+          <div class="stat"><div class="num" id="stStudying">0</div><div class="lbl">изучаю</div></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-h">Память</div>
+          <div id="stBars"></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-h">Календарь</div>
+          <div id="stCalWrap"></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-h"><span>Слова</span><span id="stWordsSeg"></span></div>
+          <div id="stWordsChart"></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-h"><span>История</span><span id="stHistSeg"></span></div>
+          <div id="stHistChart"></div>
+        </div>
+
+        <div class="card" style="margin-top:10px">
+          <div class="card-h">Лучшие серии</div>
+          <div id="stStreakList"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА: НАСТРОЙКИ -->
+      <div id="moreTabSettings" class="hidden">
+        <div class="card">
+          <label class="lbl">Размер иероглифа</label>
+          <div class="seg" id="hanziSizeSeg">
+            <button data-v="1.35">Крупнее</button>
+            <button data-v="1" class="active">Обычно</button>
+            <button data-v="0.7">Меньше</button>
+          </div>
+          <label class="lbl">Размер пиньиня</label>
+          <div class="seg" id="pinyinSizeSeg">
+            <button data-v="1.5">Крупнее</button>
+            <button data-v="1" class="active">Обычно</button>
+            <button data-v="0.7">Меньше</button>
+          </div>
+          <label class="lbl">Размер перевода</label>
+          <div class="seg" id="trSizeSeg">
+            <button data-v="1.5">Крупнее</button>
+            <button data-v="1" class="active">Обычно</button>
+            <button data-v="0.7">Меньше</button>
+          </div>
+          <label class="lbl">Повторов озвучки на каждой скорости</label>
+          <div class="seg" id="repeatSeg">
+            <button data-v="1">1</button>
+            <button data-v="3" class="active">3</button>
+            <button data-v="5">5</button>
+          </div>
+          <label class="lbl">Подсказка в письме после промахов</label>
+          <div class="seg" id="hintSeg">
+            <button data-v="0">Сразу</button>
+            <button data-v="2" class="active">2</button>
+            <button data-v="999">Без подсказки</button>
+          </div>
+          <label class="lbl">Письмо: порядок слов</label>
+          <div class="seg" id="writeOrderSeg">
+            <button data-v="seq" class="active">Обычный</button>
+            <button data-v="rand">Рандом</button>
+          </div>
+          <label class="lbl">Письмо: подсказка (слово над окном)</label>
+          <div class="seg" id="writeHintSeg">
+            <button data-v="on" class="active">Вкл</button>
+            <button data-v="off">Выкл</button>
+          </div>
+          <label class="lbl">Голос встроенного синтеза (запасной)</label>
+          <select id="voiceSel"></select>
+        </div>
+
+        <div class="card">
+          <div class="card-h">Данные</div>
+          <div class="btn-row">
+            <button class="btn sec" id="btnExport">Экспорт JSON</button>
+            <button class="btn sec" id="btnImport">Импорт JSON</button>
+          </div>
+          <div class="btn-row" style="margin-top:10px">
+            <button class="btn sec" id="btnSample">Загрузить примеры</button>
+            <button class="btn ghost" id="btnWipe">Очистить всё…</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="font-size:12.5px; color:var(--mut); line-height:1.55">
+            <b style="color:var(--ink)">Про аудио.</b> Скачайте MP3 с
+            <a href="https://tts.wangwangit.com/" target="_blank" rel="noopener">tts.wangwangit.com</a>
+            и прикрепите файл к слову/фразе (одна запись на карточку). Если файла нет — озвучивается
+            встроенным голосом телефона.
+            <br><br><b style="color:var(--ink)">Про установку.</b> Чтобы появился значок на главном экране
+            и работало без интернета, файл нужно разместить на хостинге (Netlify/GitHub Pages) — подскажу как.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ИСТОРИЯ ВЕРСИЙ -->
+<div class="modal hidden" id="modalVersions"></div>
+
+<nav class="tabs">
+  <button data-scr="scr-dict" class="active"><span class="ic">📚</span>Словарь</button>
+  <button data-scr="scr-study"><span class="ic">🎴</span>Учить</button>
+  <button data-scr="scr-write"><span class="ic">✍️</span>Письмо</button>
+  <button data-scr="scr-exam"><span class="ic">📝</span>Экзамен</button>
+  <button data-scr="scr-more"><span class="ic">⚙️</span>Ещё</button>
+</nav>
+
+<div class="modal hidden" id="modalItem"></div>
+<div class="modal hidden" id="modalBatch"></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="fileImport" accept=".json,application/json" class="hidden">
+<input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
+
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.6/dist/hanzi-writer.min.js" onerror="this.remove();loadLibFallback()"></script>
+<script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.29.4/dist/index.min.js" onerror="this.remove();loadLibFallback2()"></script>
+<script>
+// ============================== LIB FALLBACK ==============================
+function loadLibFallback(){
+  const s=document.createElement('script');
+  s.src='https://unpkg.com/hanzi-writer@3.6.1/dist/hanzi-writer.min.js';
+  document.head.appendChild(s);
+}
+function loadLibFallback2(){
+  const s=document.createElement('script');
+  s.src='https://unpkg.com/pinyin-pro@3.29.4/dist/index.js';
+  document.head.appendChild(s);
+}
+
+// ============================== STORAGE (IndexedDB) ==============================
+const DB = {
+  db:null,
+  open(){
+    return new Promise((res,rej)=>{
+      const r=indexedDB.open('hanzi-trainer',1);
+      r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv'); };
+      r.onsuccess=()=>{ DB.db=r.result; res(); };
+      r.onerror=()=>rej(r.error);
+    });
+  },
+  tx(mode){ return DB.db.transaction('kv',mode).objectStore('kv'); },
+  get(k){ return new Promise((res,rej)=>{ const q=DB.tx('readonly').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); },
+  put(k,v){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').put(v,k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); },
+  del(k){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').delete(k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); }
+};
+
+// ============================== STATE ==============================
+let items = [];            // array of item
+let settings = {
+  repeats:3, hint:2, voiceURI:'', mulH:1, mulP:1, mulT:1, studySpeed:'all'
+};
+let stats = { streak:0, lastDay:'', activity:{} };
+
+// Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
+// заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
+const APP_VERSION='1.0.19';
+
+// ============================== SRS (5 коробок, интервалы в сессиях) ==============================
+const BOX_INT=[0,1,2,4,6,8]; // сессий до следующего показа; индекс = коробка (1..5)
+const SET='settings', ITEMS='items', STATS='stats';
+let SESS=0;                 // номер текущей сессии (Учить/Письмо/Экзамен)
+let SHOW_N=0;               // глобальный порядковый номер показа (для правила «между показами были другие слова»)
+
+function uid(){ return 'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function now(){ return Date.now(); }
+function dayStr(d){
+  d=d||new Date();
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+dd;
+}
+function normBox(it){ let b=+it.box||1; return b<1?1:(b>5?5:b); }
+function isNewWord(it){ return !it.newDone; }            // «новое» = ещё не выполнило 3+3
+function isLearned(it){ return normBox(it)>=5; }         // коробка 5 — выучено
+function markShown(it){ SHOW_N++; it.lastShowN=SHOW_N; it.lastSeen=now(); recordSeen(it); }
+
+// Сессия = один заход в режим (Учить/Письмо/Экзамен). Вход в режим открывает новую сессию.
+function enterSession(){
+  SESS=(SESS||0)+1;
+  settings.sessN=SESS;
+  sweepNewStage();
+  persist();
+}
+// Если слово завершило первую тройку в сессии N, вторая тройка должна быть в сессии N+1.
+// Как только окно «следующая сессия» прошло без 3 верных — условие сбрасывается целиком.
+function sweepNewStage(){
+  for(const it of items){
+    if(it.nsDoneSess!=null && SESS>(+it.nsDoneSess)+1){
+      it.nsDoneSess=null; it.nsStreak=0; it.nsSess=SESS;
+    }
+  }
+}
+// Миграция на одну аудио-дорожку (обычная скорость): записи slow/fast удаляем из данных и из БД.
+async function migrateNormAudio(it){
+  const kept=[];
+  for(const r of (it.recordings||[])){
+    if(r.speed==='norm'){ kept.push(r); }
+    else{
+      if(r.url && r.url.startsWith('blob:')) URL.revokeObjectURL(r.url);
+      await DB.del('aud:'+it.id+':'+r.speed);
+    }
+  }
+  it.recordings=kept.length?kept:(it.recordings||[]).filter(r=>r.speed==='norm');
+}
+// Миграция старых карточек (Leitner 0..5 → коробки 1..5)
+function migrateItem(it){
+  if(it.__v3) return;
+  if(!it.hasOwnProperty('newDone')){
+    const ob=+it.box||0;
+    it.newDone = (ob>=1 || it.learnedOn) ? 1 : 0;
+    it.box = Math.max(1, Math.min(5, ob));
+    it.dueSess = 0;
+    it.nsStreak=0; it.nsSess=0; it.nsDoneSess=null; it.nsLastGoodShow=null;
+    it.lastSeen = +it.nextDue||0;
+  }
+  it.__v3=1;
+}
+function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; stats.activity[t]=(stats.activity[t]||0)+1; }
+
+async function persist(){
+  await DB.put(ITEMS, items);
+  await DB.put(SET, settings);
+  await DB.put(STATS, stats);
+}
+
+// ============================== HELPERS ==============================
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200);
+}
+// короткое уведомление (1 секунда) — для мгновенных действий вроде понижения уровня
+function toastShort(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1000);
+}
+function go(scrId){
+  stopPlayer();
+  clearExamIdle();
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(scrId).classList.add('active');
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.scr===scrId));
+  if(scrId==='scr-dict') renderDict();
+  if(scrId==='scr-study') startStudy();
+  if(scrId==='scr-write') startWrite();
+  if(scrId==='scr-exam') startExam();
+  if(scrId==='scr-more') renderMore();
+}
+
+// ============================== PINYIN ==============================
+function toPinyin(s){
+  if(!window.pinyinPro) return '';
+  try{ return window.pinyinPro.pinyin(s,{toneType:'symbol'}); }catch(e){ return ''; }
+}
+
+// ============================== TTS ==============================
+let VOICES=[], audioUnlocked=false;
+function loadVoices(){
+  VOICES=speechSynthesis.getVoices().filter(v=>/zh|cmn|chinese/i.test(v.lang));
+  const sel=document.getElementById('voiceSel');
+  sel.innerHTML='<option value="">Авто (zh-CN)</option>';
+  VOICES.forEach(v=>{ const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=v.name+' ('+v.lang+')'; sel.appendChild(o); });
+  if(settings.voiceURI) sel.value=settings.voiceURI;
+}
+if('speechSynthesis' in window){
+  loadVoices();
+  speechSynthesis.onvoiceschanged=loadVoices;
+}
+function pickVoice(){
+  return VOICES.find(v=>v.voiceURI===settings.voiceURI) || VOICES.find(v=>/zh-CN|cmn-Hans/i.test(v.lang)) || VOICES[0] || null;
+}
+// страховочный таймаут для TTS: если onend/onerror не пришли (зависание очереди),
+// обещание завершаем принудительно — речь не «висит» в фоне.
+function maxSpeechMs(text){
+  const n=String(text||'').trim().length;
+  return Math.max(2500, Math.min(15000, 1000+n*420));
+}
+function speak(text,rate){
+  return new Promise((res)=>{
+    if(!('speechSynthesis' in window)){ res(); return; }
+    if(!text||!String(text).trim()){ res(); return; }
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='zh-CN'; u.rate=rate||1;
+    const v=pickVoice(); if(v) u.voice=v;
+    let done=false, tmo=null;
+    const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
+    u.onend=finish; u.onerror=finish;
+    try{ speechSynthesis.speak(u); }catch(e){ finish(); return; }
+    // страховка: если onend/onerror так и не пришли (зависший TTS), отпускаем обещание
+    tmo=setTimeout(finish, maxSpeechMs(text));
+  });
+}
+
+// ============================== AUDIO SEQUENCE PLAYER ==============================
+// plays tracks sequentially; each track: {kind:'file',url} or {kind:'tts',text,rate}
+const Player={
+  busy:false, gen:0, stopFlag:false, onSpeedChange:null, onDone:null, cur:null,
+  async play(tracks, opts){
+    opts=opts||{};
+    const my=++this.gen;                      // устаревший запуск сам выходит из цикла
+    if(this.cur) this._releaseTrack();
+    speechSynthesis.cancel();
+    this.busy=true; this.stopFlag=false;
+    const gap=opts.gap??450;
+    const announce=(t)=>this.onSpeedChange&&this.onSpeedChange(t.label||'');
+    try{
+      for(const t of tracks){
+        if(this.stopFlag||my!==this.gen) break;
+        const reps=t.reps||1;
+        for(let r=0;r<reps;r++){
+          if(this.stopFlag||my!==this.gen) break;
+          announce(t);
+          await this._one(t,my);
+          if(this.stopFlag||my!==this.gen) break;
+          await this._sleep(gap);
+        }
+      }
+    }finally{
+      if(my===this.gen){
+        this.busy=false;
+        this.cur=null;
+        announce('');
+        this.onDone&&this.onDone();
+      }
+    }
+  },
+  stop(){
+    this.gen++;                               // аннулирует любой идущий плейлист
+    this.stopFlag=true;
+    this.busy=false;                          // запуск прерван — признак «идёт» снимаем сразу
+    if(this.cur) this._releaseTrack();
+    if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+  },
+  _releaseTrack(){
+    const c=this.cur; this.cur=null;
+    try{ c.pause(); c.onended=c.onerror=null; }catch(e){}
+  },
+  _one(t,my){
+    return new Promise(res=>{
+      let done=false, tmo=null;
+      const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
+      if(t.kind==='tts'){
+        if(!('speechSynthesis' in window)){ res(); return; }
+        const u=new SpeechSynthesisUtterance(t.text);
+        u.lang='zh-CN'; u.rate=t.rate||1;
+        const v=pickVoice(); if(v) u.voice=v;
+        u.onend=finish; u.onerror=finish;
+        try{ speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){ finish(); return; }
+        tmo=setTimeout(finish, maxSpeechMs(t.text));
+      }else{
+        let a;
+        try{ a=new Audio(t.url); }catch(e){ res(); return; }
+        // предыдущий элемент этого же слота останавливается при старте нового
+        if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
+        this.cur=a;
+        a.onended=finish; a.onerror=finish;
+        tmo=setTimeout(finish, 90000);
+        a.play().catch(finish);
+      }
+    });
+  },
+  _sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+};
+
+// Общие «дорожки» для слова: MP3 есть → файлы; нет → TTS тремя скоростями.
+// study: speeds = выбранная скорость (или все подряд); exam: всегда ['norm'].
+function tracksFor(it, opts){
+  opts=opts||{};
+  const R=opts.reps ?? (settings.repeats||3);
+  const labelMap={slow:'медленно', norm:'обычно', fast:'быстро'};
+  const rateMap={slow:0.55, norm:1, fast:1.18};
+  const rec=(sp)=> it.recordings.find(r=>r.speed===sp);
+  const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['slow','norm','fast']);
+  const out=[];
+  for(const sp of speeds){
+    const r=rec(sp);
+    if(r) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
+  }
+  if(out.length) return out;
+  return speeds.map(sp=>({kind:'tts',text:it.hanzi,rate:rateMap[sp],reps:R,label:labelMap[sp]}));
+}
+// Какие скорости проигрывать в режиме учить (настройка studySpeed)
+function studySpeeds(){
+  const s=settings.studySpeed;
+  if(s==='slow') return ['slow'];
+  if(s==='norm') return ['norm'];
+  if(s==='fast') return ['fast'];
+  return ['slow','norm','fast'];
+}
+function playItem(it, opts){
+  opts=opts||{};
+  if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
+  const el=document.getElementById('studySpeed');
+  Player.onSpeedChange=(label)=> el.textContent=label?('🔊 '+label):'';
+  Player.onDone=()=>{ if(opts.onDone) opts.onDone(); };
+  Player.play(tracksFor(it,opts));
+}
+function stopPlayer(){ Player.stop(); }
+function playWordNorm(it){
+  // проигрывание слова в обычной скорости (из карточки словаря и в экзамене)
+  if(!it) return;
+  Player.stop();
+  Player.onSpeedChange=null;
+  const rec=it.recordings.find(r=>r.speed==='norm');
+  if(rec) Player.play([{kind:'file',url:rec.url}]);
+  else speak(it.hanzi,1);
+}
+
+// ============================== RECORDINGS / AUDIO FILES ==============================
+let audioTargetSpeed=null; // 'slow'|'norm'|'fast' — для какой скорости берём файл
+const AUDIO_SPEEDS=['norm'];
+// Выбранное, но ещё не сохранённое аудио живёт здесь (в памяти формы) до нажатия «Сохранить».
+// В БД ничего не пишется; при закрытии карточки без сохранения — отбрасывается.
+let pendingRec={};   // speed -> {name,type,buf,url}
+let pendingDrop={};  // speed -> true (уже сохранённую запись убрали, но ещё не «Сохранить»)
+function bindAudioSlot(){
+  const fi=document.getElementById('fileAudio');
+  fi.onchange=async ()=>{
+    const files=Array.from(fi.files);
+    if(!files.length||!audioTargetSpeed||!editingItem) return;
+    const speed=audioTargetSpeed;
+    const f=files[0];
+    const buf=await f.arrayBuffer();
+    appendPendingRecording(speed, f.name||'файл', f.type||'audio/mpeg', buf);
+    toast('Аудио прикреплено');
+    audioTargetSpeed=null; fi.value='';
+    renderSlots();
+  };
+}
+// Кладёт файл в память формы (с живым blob-URL для предпрослушки), не трогая БД.
+function appendPendingRecording(speed,name,type,buf){
+  const old=pendingRec[speed];
+  if(old&&old.url) URL.revokeObjectURL(old.url);
+  pendingRec[speed]={name,type,buf,url:URL.createObjectURL(new Blob([buf],{type}))};
+  delete pendingDrop[speed]; // новый файл важнее отложенного удаления
+}
+// Запись для слота скорости: свежее из формы (pending) либо уже сохранённая.
+function formRec(speed){
+  if(pendingDrop[speed]) return null;
+  if(pendingRec[speed]) return {speed, name:pendingRec[speed].name, url:pendingRec[speed].url, pending:true};
+  if(!editingItem) return null;
+  return (editingItem.recordings||[]).find(r=>r.speed===speed)||null;
+}
+// Восстанавливает blob-URL из IndexedDB после перезагрузки страницы
+async function hydrateRecordings(it){
+  if(!it.recordings) return;
+  for(const r of it.recordings){
+    if(!r.url || !r.url.startsWith('blob:')) continue;
+    const rec=await DB.get('aud:'+it.id+':'+r.speed);
+    if(rec){ URL.revokeObjectURL(r.url); r.url=URL.createObjectURL(new Blob([rec.buf],{type:rec.type})); r.name=rec.name; }
+  }
+}
+async function revokeAll(it){ (it.recordings||[]).forEach(r=>{ if(r.url&&r.url.startsWith('blob:')){ URL.revokeObjectURL(r.url); } }); }
+// Сбрасывает несохранённое аудио формы (карточку закрыли без «Сохранить»)
+function dropPendingRec(){
+  for(const s of Object.keys(pendingRec)){ URL.revokeObjectURL(pendingRec[s].url); }
+  pendingRec={};
+  pendingDrop={};
+}
+
+// ============================== HANZI WRITER DATA ==============================
+const HW_DB_NAME='hw-char-data';
+function hwDb(){
+  return new Promise((res,rej)=>{ const r=indexedDB.open(HW_DB_NAME,1);
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('c')) r.result.createObjectStore('c'); };
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+async function hwCharData(ch){
+  if(window.__BUILTIN_CHAR_DATA__ && window.__BUILTIN_CHAR_DATA__[ch]) return window.__BUILTIN_CHAR_DATA__[ch];
+  const db=await hwDb();
+  const have=await new Promise(res=>{ const q=db.transaction('c').objectStore('c').get(ch); q.onsuccess=()=>res(q.result); q.onerror=()=>res(null); });
+  if(have) return have;
+  const enc=encodeURIComponent(ch);
+  const urls=[
+    'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0.0/'+enc+'.json',
+    'https://unpkg.com/hanzi-writer-data@2.0.0/'+enc+'.json'
+  ];
+  // загрузка данных с таймаутом: недоступный CDN не должен навсегда «зависать» письмо
+  async function fetchOne(u){
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(), 4000);
+    try{
+      const r=await fetch(u, {signal:ctrl.signal});
+      if(!r.ok) return null;
+      return await r.json();
+    }catch(e){ return null; }
+    finally{ clearTimeout(timer); }
+  }
+  // несколько попыток на каждый CDN: единичный сбой сети не должен выбрасывать в «свободное рисование»
+  for(let attempt=0; attempt<3; attempt++){
+    for(const u of urls){
+      const j=await fetchOne(u);
+      if(j&&j.strokes){ db.transaction('c','readwrite').objectStore('c').put(j,ch); return j; }
+    }
+    if(attempt<2) await new Promise(res=>setTimeout(res, 250*(attempt+1)));
+  }
+  return null;
+}
+// Ждём, пока CDN-скрипт hanzi-writer загрузит глобальный HanziWriter (устраняет гонку запуска)
+function ensureHanziWriter(timeout){
+  return new Promise(res=>{
+    if(window.HanziWriter) return res(true);
+    const t0=Date.now();
+    const iv=setInterval(()=>{
+      if(window.HanziWriter){ clearInterval(iv); res(true); }
+      else if(Date.now()-t0>=timeout){ clearInterval(iv); res(false); }
+    }, 80);
+  });
+}
+
+// ============================== RENDER DICT ==============================
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// фильтр словаря: 'all' | 'star' | 'learned' | 'due'; активна всегда ровно одна кнопка
+let dictFilter='all';
+function dictFiltered(){
+  const q=(document.getElementById('dictSearch').value||'').trim().toLowerCase();
+  let arr=items.slice(); // копия: сортируем только здесь, не меняя порядок в items
+  if(dictFilter==='star') arr=arr.filter(it=>it.starred);
+  else if(dictFilter==='learned') arr=arr.filter(isLearned);
+  else if(dictFilter==='due') arr=arr.filter(it=>it.translation && isDue(it));
+  if(q) arr=arr.filter(it=> it.hanzi.toLowerCase().includes(q) || (it.pinyin&&it.pinyin.toLowerCase().includes(q)) || (trJoined(it)&&trJoined(it).toLowerCase().includes(q)) || (it.tag&&it.tag.toLowerCase().includes(q)));
+  // Новые слова вверху: сортировка по дате добавления (addedOn) по убыванию.
+  // Формат 'YYYY-MM-DD' сортируется как строка; при равной дате сохраняем прежний порядок.
+  arr.sort((a,b)=>(b.addedOn||'').localeCompare(a.addedOn||''));
+  return arr;
+}
+// подписи-счётчики «N выучено» и «M повторить» + подсветка активной кнопки
+function updateDictFilterChips(){
+  const learned=items.filter(isLearned).length;
+  const due=items.filter(it=>it.translation && isDue(it)).length;
+  document.getElementById('dictFilterLearned').innerHTML='<b>'+learned+'</b> выучено';
+  document.getElementById('dictFilterDue').innerHTML='<b>'+due+'</b> повторить';
+  document.querySelectorAll('[data-dict-filter]').forEach(b=>b.classList.toggle('active', b.dataset.dictFilter===dictFilter));
+}
+function toggleStar(id){
+  const it=items.find(x=>x.id===id); if(!it) return;
+  it.starred=!it.starred;
+  persist().then(()=>renderDict());
+}
+// ↓ понижение уровня на 1 (без подтверждения; короткое уведомление на 1 секунду).
+function demoteLevel(id){
+  const it=items.find(x=>x.id===id); if(!it) return;
+  const b=normBox(it);
+  const nb=Math.max(1, b-1);
+  if(nb===b){ persist().then(()=>{ renderDict(); toastShort('Слово уже на минимальном уровне'); }); return; }
+  it.box=nb; it.dueSess=0;
+  persist().then(()=>{ renderDict(); toastShort('Уровень этого слова понижен'); });
+}
+// ↑ повышение уровня на 1 (без подтверждения; короткое уведомление на 1 секунду).
+function promoteLevel(id){
+  const it=items.find(x=>x.id===id); if(!it) return;
+  const b=normBox(it);
+  if(b>=5){ persist().then(()=>{ renderDict(); toastShort('Слово уже на высшем уровне'); }); return; }
+  it.box=b+1; it.dueSess=0;
+  persist().then(()=>{ renderDict(); toastShort('Уровень этого слова повышен'); });
+}
+function levelOf(it){ return normBox(it); }
+function renderDict(){
+  const list=document.getElementById('dictList');
+  const arr=dictFiltered();
+  updateChips();
+  updateDictFilterChips();
+  if(!arr.length){
+    list.innerHTML='<div class="empty"><span class="big-ic">📭</span>Пока пусто.<br>Нажмите «＋ Слово», чтобы добавить первую карточку.</div>';
+    return;
+  }
+  list.innerHTML=arr.map(it=>{
+    const learned=isLearned(it);
+    const stat=learned
+      ? ('Уровень '+levelOf(it)+' · выучено')
+      : ('Уровень '+levelOf(it)+' · Повторялось '+(it.correct||0)+' раз.');
+    return `<div class="card item-line" data-id="${it.id}">
+      <div class="dict-card">
+        <div class="dc-cols">
+          <div class="dc zh">${escapeHtml(it.hanzi)}</div>
+          <div class="dc py">${escapeHtml(it.pinyin||'')}</div>
+          <div class="dc tr">${escapeHtml(trJoined(it)||'')}</div>
+        </div>
+        <div class="dc-side">
+          <div class="dc-btns">
+            <button class="icon-btn star ${it.starred?'starred':''}" data-act="star" title="Звезда">★</button>
+            <button class="icon-btn" data-act="play" title="Произнести">🔊</button>
+            <button class="icon-btn" data-act="up" title="Повысить уровень">↑</button>
+            <button class="icon-btn" data-act="down" title="Понизить уровень">↓</button>
+          </div>
+          <div class="dc-stat">${stat}</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.item-line').forEach(el=>{
+    const id=el.dataset.id;
+    el.onclick=()=>openItemModal(id);
+    el.querySelectorAll('[data-act]').forEach(b=>{
+      b.onclick=(e)=>{ e.stopPropagation();
+        const act=b.dataset.act;
+        if(act==='star') toggleStar(id);
+        else if(act==='play'){ const it=items.find(x=>x.id===id); if(it) playWordNorm(it); }
+        else if(act==='up') promoteLevel(id);
+        else if(act==='down') demoteLevel(id);
+      };
+    });
+  });
+}
+
+// ============================== ITEM MODAL ==============================
+let editingItem=null;      // живой объект карточки (уже в items)
+let isNewItem=false;       // черновик ещё не в items
+function openItemModal(id){
+  isNewItem=false;
+  editingItem = id ? items.find(x=>x.id===id) : null;
+  if(!editingItem){
+    isNewItem=true;
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr()};
+  }else{
+    hydrateRecordings(editingItem);
+  }
+  const it=editingItem;
+  const title=isNewItem?'Новая карточка':'Карточка';
+  trRows=Math.min(5, Math.max(1, 1+(editingItem.trs||[]).filter(t=>String(t||'').trim()).length));
+  dropPendingRec(); // новый вход в карточку — предыдущее несохранённое аудио сброшено
+  const m=document.getElementById('modalItem');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>${title}</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalItem')">✕</button></div>
+    <label class="lbl">Китайский текст</label>
+    <input type="text" class="zh" id="fHanzi" value="${escapeHtml(it.hanzi)}" placeholder="你好">
+    <label class="lbl">Пиньинь</label>
+    <input type="text" id="fPinyin" value="${escapeHtml(it.pinyin||'')}" placeholder="nǐ hǎo">
+    <div class="row" style="margin-top:6px">
+      <label class="lbl" style="margin:0">Перевод</label><span class="spacer"></span>
+      <a href="#" class="autolink" id="fAutoTr" onclick="event.preventDefault();autoTranslate()">Яндекс.Перевод</a>
+    </div>
+    <div id="trFields"></div>
+    <label class="lbl">Метка / группа (необязательно)</label>
+    <input type="text" id="fTag" value="${escapeHtml(it.tag||'')}" placeholder="HSK1, еда…">
+    <label class="lbl">
+      <span style="color:var(--amber)">★</span> Важное слово (звезда)
+      <input type="checkbox" id="fStarred" ${it.starred?'checked':''} style="margin-left:6px; transform:scale(1.3)">
+    </label>
+    <label class="lbl">Аудио (MP3 с tts.wangwangit.com)</label>
+    <div id="audioSlots"></div>
+    <div class="btn-row" style="margin-top:16px">
+      <button class="btn" id="btnSaveModal">Сохранить</button>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('#btnSaveModal').onclick=saveItem;
+  renderTrFields();
+  renderSlots();
+  // автопиньинь: при вводе китайского сразу подставляем пиньинь (можно поправить вручную)
+  m.querySelector('#fHanzi').oninput=()=>{
+    const h=m.querySelector('#fHanzi').value.trim();
+    m.querySelector('#fPinyin').value=toPinyin(h);
+  };
+}
+// Альтернативные переводы: «Перевод», «Перевод 2» … «Перевод 5» (максимум 5 полей).
+// «Перевод» имеет только плюс; «Перевод 2–4» — плюс и минус; «Перевод 5» — только минус.
+// Хранится: it.translation (главный) + it.trs (массив альтернативных переводов).
+let trRows=1; // сколько полей перевода видно в текущем модальном окне (1..5)
+function trList(it){
+  const out=[it.translation&&String(it.translation).trim()].filter(Boolean);
+  for(const t of (it.trs||[])){ const v=t&&String(t).trim(); if(v) out.push(v); }
+  return out;
+}
+// все заполненные переводы одной строкой через «/»
+function trJoined(it){ return trList(it).join(' / '); }
+// заполненные переводы главный + альтернативные (внутренний массив окна)
+function trValArr(it){
+  const a=[String(it.translation||'').trim(), ...(it.trs||[]).map(t=>String(t||'').trim())];
+  return a;
+}
+function renderTrFields(){
+  const box=document.getElementById('trFields'); if(!box) return;
+  const v=trValArr(editingItem);
+  box.innerHTML='';
+  for(let i=0;i<trRows;i++){
+    const wrap=document.createElement('div');
+    if(i>0){
+      const lab=document.createElement('label');
+      lab.className='lbl'; lab.style.margin='10px 0 5px';
+      lab.textContent='Перевод '+(i+1);
+      wrap.appendChild(lab);
+    }
+    const row=document.createElement('div');
+    row.className='tr-row';
+    const inp=document.createElement('input');
+    inp.type='text'; inp.id='fTr'+i; inp.placeholder=i===0?'здравствуй':('доп. перевод '+(i+1)); inp.value=v[i]||'';
+    row.appendChild(inp);
+    if(i>0){ // «Перевод 2» и далее — с кнопкой минус
+      const mn=document.createElement('button');
+      mn.type='button'; mn.className='tr-btn minus'; mn.textContent='−'; mn.title='Удалить перевод';
+      mn.onclick=()=>removeTrField(i);
+      row.appendChild(mn);
+    }
+    if(i<4 && trRows<5){ // плюса нет только на «Перевод 5» (и когда максимум достигнут)
+      const pl=document.createElement('button');
+      pl.type='button'; pl.className='tr-btn'; pl.textContent='+'; pl.title='Добавить перевод';
+      pl.onclick=()=>addTrField(i);
+      row.appendChild(pl);
+    }
+    wrap.appendChild(row);
+    box.appendChild(wrap);
+  }
+}
+function addTrField(i){
+  if(trRows>=5) return;
+  flushTrInputs();      // сохраняем уже введённые переводы, чтобы они не стёрлись
+  trRows++;
+  renderTrFields();
+  const inp=document.getElementById('fTr'+(i+1));
+  if(inp) setTimeout(()=>inp.focus(),0);
+}
+function removeTrField(i){
+  if(i===0) return;     // «Перевод» не удаляется — только поле номер удаляется вместе со значением
+  flushTrInputs();
+  const v=trValArr(editingItem);
+  v.splice(i,1);        // убираем этот перевод; следующие сдвигаются вверх
+  editingItem.translation=v[0]||'';
+  editingItem.trs=v.slice(1);
+  trRows=Math.max(1, trRows-1);
+  renderTrFields();
+}
+// Читает текущие значения полей перевода и кладёт их в editingItem (перевод + trs),
+// чтобы перерисовка полей (renderTrFields) не теряла уже введённый текст.
+function flushTrInputs(){
+  const a=[];
+  for(let i=0;i<trRows;i++){
+    const inp=document.getElementById('fTr'+i);
+    a.push(inp?inp.value.trim():'');
+  }
+  editingItem.translation=a[0]||'';
+  editingItem.trs=a.slice(1).filter(t=>t);
+}
+// Один аудио-файл на карточку (обычная скорость). Кнопка «Прикрепить аудио» — обычная btn,
+// кликается целиком. Если файл прикреплён — строка с именем + ▶ (прослушать) и 🗑 (удалить).
+function renderSlots(){
+  const box=document.getElementById('audioSlots'); if(!box) return;
+  const r=formRec('norm');
+  if(r){
+    box.innerHTML=`<div class="slot has">
+      <span class="ic">🎧</span>
+      <span class="nm">${escapeHtml(r.name||'файл')}</span>
+      <button class="btn ghost" style="width:auto;font-size:14px" data-play="norm">▶</button>
+      <button class="btn ghost" style="width:auto;font-size:14px" data-rm="norm">🗑</button>
+    </div>
+    <button class="btn sec" id="btnAddAudio" style="margin-top:8px">Заменить аудио</button>`;
+  } else {
+    box.innerHTML=`<button class="btn sec" id="btnAddAudio">＋ Прикрепить аудио</button>`;
+  }
+  box.querySelector('#btnAddAudio').onclick=()=>pickAudioForNext();
+  box.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>playSlot(b.dataset.play));
+  box.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>rmSlot(b.dataset.rm));
+}
+// Прикрепляем файл к единственной (обычной) скорости.
+function pickAudioForNext(){
+  if(!editingItem) return;
+  audioTargetSpeed='norm';
+  document.getElementById('fileAudio').click();
+}
+function closeModal(id){
+  const m=document.getElementById(id);
+  if(id==='modalItem') dropPendingRec(); // закрыли без «Сохранить» — несохранённое аудио отброшено
+  m.classList.add('hidden');
+}
+// Клик по затемнённому фону или Esc закрывает любую модалку
+function bindModalDismiss(){
+  document.querySelectorAll('.modal').forEach(m=>{
+    m.addEventListener('pointerdown', e=>{ if(e.target===m) m.classList.add('hidden'); });
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Escape') document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));
+  });
+}
+
+// ============================== AUTO TRANSLATE ==============================
+// При нажатии «Яндекс.Перевод» открываем translate.yandex.ru (zh→ru).
+// Работает только если браузер откроет внешнее окно; т.к. сторонние сайты
+// блокируют встраивание, всегда переключаемся на всплывающее окно,
+// а в мобильном PWA/браузере — на вкладку, с которой пользователь
+// вернётся и вставит перевод сам (может и исправить его в поле).
+let trFallback=false;
+function autoTranslate(){
+  const link=document.getElementById('fAutoTr');
+  const h=(document.getElementById('fHanzi').value||'').trim();
+  if(!h){ toast('Сначала введите китайский текст'); return; }
+  const provider=trFallback?'google':'yandex';
+  const url= provider==='yandex'
+    ? 'https://translate.yandex.ru/?source_lang=zh&target_lang=ru&text='+encodeURIComponent(h)
+    : 'https://translate.google.com/?sl=zh-CN&tl=ru&text='+encodeURIComponent(h);
+  let w=null;
+  try{ w=window.open(url,'_blank','noopener'); }catch(e){ w=null; }
+  if(!w || w.closed){
+    // попап заблокирован или недоступен → переключаемся на запасной переводчик
+    if(!trFallback){ trFallback=true; if(link) link.textContent='Перевести'; toast('Открою запасной переводчик'); autoTranslate(); }
+    else toast('Не удалось открыть переводчик — вставьте перевод сами');
+  }
+}
+function playSlot(speed){
+  const r=formRec(speed);
+  if(r && r.url){ const a=new Audio(r.url); a.play(); }
+  else{ const t=(editingItem&&editingItem.hanzi)||document.getElementById('fHanzi').value; if(t) speak(t,0.7); }
+}
+function rmSlot(speed){
+  if(!editingItem) return;
+  if(pendingRec[speed]){ URL.revokeObjectURL(pendingRec[speed].url); delete pendingRec[speed]; renderSlots(); return; }
+  // удаление уже сохранённой записи — откладываем до «Сохранить» (память формы)
+  pendingDrop[speed]=true;
+  renderSlots();
+}
+async function saveItem(){
+  if(!editingItem) return;
+  const hanzi=document.getElementById('fHanzi').value.trim();
+  if(!hanzi){ toast('Введите китайский текст'); return; }
+  editingItem.hanzi=hanzi;
+  editingItem.pinyin=document.getElementById('fPinyin').value.trim()||toPinyin(hanzi);
+  const trs=[];
+  for(let i=0;i<5;i++){
+    const inp=document.getElementById('fTr'+i);
+    const v=inp?inp.value.trim():'';
+    if(i===0){ editingItem.translation=v; }
+    else if(v){ trs.push(v); }
+  }
+  editingItem.trs=trs;
+  editingItem.tag=document.getElementById('fTag').value.trim();
+  editingItem.starred=document.getElementById('fStarred').checked;
+  editingItem.kind='word';
+  // --- пишем в БД только при «Сохранить» (аудио из памяти формы + снятые записи) ---
+  for(const s of AUDIO_SPEEDS){
+    const p=pendingRec[s];
+    if(p){
+      await DB.put('aud:'+editingItem.id+':'+s, {name:p.name, type:p.type, buf:p.buf});
+      attachRecordingPersist(editingItem, s, p.name, p.type, p.buf);
+    }
+  }
+  for(const s of Object.keys(pendingDrop)){
+    const old=(editingItem.recordings||[]).find(r=>r.speed===s);
+    if(old&&old.url) URL.revokeObjectURL(old.url);
+    editingItem.recordings=(editingItem.recordings||[]).filter(r=>r.speed!==s);
+    await DB.del('aud:'+editingItem.id+':'+s);
+  }
+  if(isNewItem){ items.push(editingItem); isNewItem=false; }
+  await persist();
+  dropPendingRec();
+  closeModal('modalItem');
+  renderDict(); updateChips();
+  toast('Сохранено');
+}
+// Заменяет запись в it.recordings на живую blob-ссылку (используется при «Сохранить» из pendingRec).
+function attachRecordingPersist(it,speed,name,type,buf){
+  it.recordings=it.recordings||[];
+  const old=it.recordings.find(r=>r.speed===speed);
+  if(old&&old.url) URL.revokeObjectURL(old.url);
+  it.recordings=it.recordings.filter(r=>r.speed!==speed);
+  it.recordings.push({speed, name, url:URL.createObjectURL(new Blob([buf],{type}))});
+}
+
+// ============================== BATCH MODAL ==============================
+function openBatch(){
+  const m=document.getElementById('modalBatch');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Добавить списком</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalBatch')">✕</button></div>
+    <div style="font-size:13px;color:var(--mut);line-height:1.5;margin:8px 0">По одной записи на строку:<br>
+      1) <b>你好 - здравствуй</b><br>
+      2) <b>我爱学汉语</b><br>
+      3) <b>再见 ; zài jiàn ; до свидания</b><br>
+      Разделитель « - » (или « — »). Если перевод не указан, он останется пустым. Точка с запятой « ; » — пиньинь и перевод.
+    </div>
+    <textarea id="batchText" placeholder="你好 - здравствуй"></textarea>
+    <div class="btn-row" style="margin-top:16px"><button class="btn ok" onclick="saveBatch()">Добавить</button></div>
+  </div>`;
+  m.classList.remove('hidden');
+}
+function saveBatch(){
+  const txt=document.getElementById('batchText').value;
+  const kind='word';
+  let n=0;
+  txt.split(/\n+/).forEach(line=>{
+    line=line.trim(); if(!line) return;
+    let hanzi=line, pinyin='', tr='';
+    if(line.includes(';')){
+      const p=line.split(';').map(s=>s.trim());
+      hanzi=p[0]||''; pinyin=p[1]||''; tr=(p[2]||'').trim();
+    }else{
+      const sep=line.match(/ - | — | – |\t/);
+      if(sep){ hanzi=line.slice(0,sep.index).trim(); tr=line.slice(sep.index+sep[0].length).trim(); }
+    }
+    if(!hanzi) return;
+    if(!pinyin) pinyin=toPinyin(hanzi);
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr()});
+    n++;
+  });
+  persist().then(()=>{ closeModal('modalBatch'); renderDict(); updateChips(); toast('Добавлено: '+n); });
+}
+
+// ============================== КЛЕТКА-НАПРАВЛЯЮЩАЯ ==============================
+// Рисует под окном письма синюю пунктирную клетку (квадрат 9 зон) + серые точки-ориентиры,
+// как в прописях для китайских иероглифов. Слой вставляется первым внутри контейнера;
+// HanziWriter рисует поверх, поэтому сетка остаётся видимой через прозрачный фон.
+function makeGuideSVG(size){
+  const N=size||280;
+  const step=N/8;
+  const pts=[];
+  for(let r=2;r<=6;r+=2){ for(let col=2;col<=6;col+=2){ pts.push([col*step, r*step]); } }
+  const dots=pts.map(p=>`<circle class="gz-dot" cx="${p[0]}" cy="${p[1]}" r="1.6"></circle>`).join('');
+  return `<svg width="${N}" height="${N}" viewBox="0 0 ${N} ${N}">
+      <rect class="gz-outer" x="${step}" y="${step}" width="${N-2*step}" height="${N-2*step}"></rect>
+      <line class="gz-mid" x1="${step}" y1="${N/2}" x2="${N-step}" y2="${N/2}"></line>
+      <line class="gz-mid" x1="${N/2}" y1="${step}" x2="${N/2}" y2="${N-step}"></line>
+      <line class="gz-diag" x1="${step}" y1="${step}" x2="${N-step}" y2="${N-step}"></line>
+      <line class="gz-diag" x1="${step}" y1="${N-step}" x2="${N-step}" y2="${step}"></line>
+      ${dots}
+    </svg>`;
+}
+// Свободное рисование (когда у иероглифа нет данных начертания): палец/стилус/мышь
+// рисуют по бледному контуру-подложке; при касании слово повторяется (как и в обычном письме).
+function freeDraw(cv){
+  const ctx=cv.getContext('2d');
+  ctx.lineWidth=Math.max(6, cv.width*0.03);
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle='#1d1c1a';
+  let drawing=false, px=0, py=0;
+  const pos=e=>{
+    const r=cv.getBoundingClientRect();
+    return [e.clientX-r.left, e.clientY-r.top];
+  };
+  const down=e=>{ drawing=true; [px,py]=pos(e); ctx.beginPath(); ctx.moveTo(px,py); e.preventDefault(); };
+  const move=e=>{
+    if(!drawing) return;
+    [px,py]=pos(e);
+    ctx.lineTo(px,py); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px,py);
+  };
+  const up=()=>{ drawing=false; };
+  cv.addEventListener('pointerdown',down);
+  cv.addEventListener('pointermove',move);
+  cv.addEventListener('pointerup',up);
+  cv.addEventListener('pointerleave',up);
+}
+function attachGuide(el, size){
+  // вставляет слой сетки первым; HanziWriter добавит svg поверх (z-index:1 у #writeArea svg)
+  let g=el.querySelector('.hz-grid');
+  if(!g){ g=document.createElement('div'); g.className='hz-grid'; g.setAttribute('aria-hidden','true'); el.insertBefore(g, el.firstChild); }
+  size=size||Math.min(el.clientWidth||280, el.clientHeight||280);
+  g.innerHTML=makeGuideSVG(size);
+  if(g.firstElementChild){ g.firstElementChild.style.width='100%'; g.firstElementChild.style.height='100%'; }
+  return g;
+}
+
+// ============================== STUDY ==============================
+let studyQueue=[], studyIdx=0;
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+// Приоритет: звёзды наверху; внутри — «давно не видел — первым» (меньше lastSeen первым).
+function studyPool(){
+  const due=items.filter(it=>it.translation && isDue(it));
+  const seen=it=>(it.lastSeen||it.nextDue||0);
+  return [].concat(
+    due.filter(it=>it.starred).sort((a,b)=>seen(a)-seen(b)),
+    due.filter(it=>!it.starred).sort((a,b)=>seen(a)-seen(b))
+  );
+}
+function queueStudy(){
+  const due=studyPool();
+  const newW=due.filter(it=>isNewWord(it));
+  const oldW=due.filter(it=>!isNewWord(it));
+  // 2 новых : 1 старое; если старых нет — новые подряд; если новых нет — цикл старых.
+  const out=[]; let ni=0, oi=0;
+  while(ni<newW.length || oi<oldW.length){
+    if(ni<newW.length){ out.push(newW[ni++]); if(ni<newW.length) out.push(newW[ni++]); }
+    if(oi<oldW.length){ out.push(oldW[oi++]); }
+  }
+  return out;
+}
+function buildStudyQueue(){
+  const q=queueStudy(); return q.length?q:[];
+}
+function startStudy(){
+  Player.stop();
+  enterSession();
+  resetStudyQueue();
+}
+// перестроить очередь БЕЗ открытия новой сессии (конец очереди → зацикливание)
+function resetStudyQueue(){
+  document.getElementById('studySpeed').textContent='';
+  studyQueue=buildStudyQueue();
+  studyIdx=0;
+  const wrap=document.getElementById('studyWrap');
+  const emp=document.getElementById('studyEmpty');
+  if(!studyQueue.length){ wrap.classList.add('hidden'); emp.classList.remove('hidden'); return; }
+  wrap.classList.remove('hidden'); emp.classList.add('hidden');
+  showStudyCard();
+}
+function showStudyCard(){
+  if(studyIdx>=studyQueue.length){ resetStudyQueue(); return; }
+  const it=studyQueue[studyIdx];
+  markShown(it);
+  document.getElementById('studyProgress').textContent=(studyIdx+1)+' / '+studyQueue.length;
+  const big=document.getElementById('studyHanzi');
+  big.textContent=it.hanzi;
+  // размер подбирается автоматически: 1 символ — big, 2-4 — word, >=5 — sent
+  big.className='big '+(it.hanzi.length===1?'':(it.hanzi.length<=4?'word':'sent'));
+  // пиньинь и перевод видны сразу (и крупно)
+  document.getElementById('studyPinyin').textContent=it.pinyin||'';
+  document.getElementById('studyTr').textContent=trJoined(it)||'';
+  playItem(it);
+}
+function studyRepeat(){
+  // «Повторить» — перезапустить аудио текущего слова
+  if(!studyQueue.length) return;
+  Player.stop();
+  playItem(studyQueue[studyIdx]);
+}
+function studyNext(){
+  const it=studyQueue[studyIdx]; if(!it) return;
+  Player.stop();
+  it.nextDue=now(); // пометим как просмотренный, чтобы не блокировало повторение
+  touchStreak();
+  logActivity();
+  studyIdx++;
+  showStudyCard();
+  updateChips();
+  persist();
+}
+function studyBack(){
+  const it=studyQueue[studyIdx]; if(!it) return;
+  Player.stop();
+  studyIdx=Math.max(0,studyIdx-1);
+  showStudyCard();
+}
+function studyAnswer(know){
+  const it=studyQueue[studyIdx]; if(!it) return;
+  Player.stop();
+  if(know){
+    it.correct=(it.correct||0)+1;
+    it.nextDue=now()+60000; // в «Учить» просто немного отодвигаем повтор
+  } else {
+    it.wrong=(it.wrong||0)+1;
+    it.nextDue=now();
+  }
+  touchStreak();
+  logActivity();
+  persist().then(()=>{ studyIdx++; showStudyCard(); updateChips(); });
+}
+// --- результат ответа (общий для «Письма» и всех подрежимов «Экзамена») ---
+// Верный ответ/написание → в следующую коробку. Ошибка → −2 коробки + повтор в текущей сессии.
+function srsGood(it){
+  it.correct=(it.correct||0)+1;
+  it.wrongStreak=0;
+  if(!it.newDone){ it.box=1; }                           // новое слово держится в коробке 1 до 3+3
+  else {
+    const b=normBox(it);
+    if(b>=5){ it.dueSess=(SESS||0)+BOX_INT[5]; }         // коробка 5 — навсегда, раз в 8 сессий
+    else if(it.dueSess && (SESS||0)<(+it.dueSess)){ /* ещё не пришло время — откладываем */ }
+    else {
+      it.box=Math.min(5, b+1);
+      it.dueSess=(SESS||0)+BOX_INT[normBox(it)];
+    }
+  }
+}
+// общий счётчик «нового»: 3 верных подряд в одной сессии → 3 верных подряд в следующей.
+// «написание верно с первого раза» = подряд без ошибки; «между показами были другие слова»
+// гарантируется очередью (слово повторяется в тесте только после других показов).
+function newGood(it){
+  if(it.newDone) return;
+  const myShow=it.lastShowN||0;
+  if(it.nsLastGoodShow!=null && (myShow - it.nsLastGoodShow) <= 1) return; // тот же показ — между не было другого слова
+  it.nsLastGoodShow=myShow;
+  it.nsSess=(SESS||0);
+  it.nsStreak=(it.nsStreak||0)+1;
+  if(it.nsDoneSess==null){
+    if(it.nsStreak>=3){ it.nsDoneSess=(SESS||0); it.nsStreak=0; } // первая тройка готова
+  }else if((SESS||0)===(+it.nsDoneSess)+1){
+    if(it.nsStreak>=3){
+      it.newDone=1;                                    // 3+3 выполнено
+      it.nsDoneSess=null; it.nsStreak=0;
+      it.box=Math.max(2, it.box||1);                    // покидает коробку 1 → коробка 2
+      it.dueSess=(SESS||0)+BOX_INT[2];
+      toast('✨ «'+it.hanzi+'» больше не новое');
+    }
+  }
+}
+// Ошибка → слово откатывается на 2 коробки (или в 3 из 5) и показывается в текущей сессии.
+function demoteBox(it){
+  const b=normBox(it);
+  if(b>=5){ it.box=3; it.dueSess=0; }                  // из коробки 5 — в коробку 3
+  else if(b===4 || b===3){ it.box=b-2; it.dueSess=0; }  // 4→2, 3→1 (гарантирует повтор ниже)
+  else if(b===2){ it.box=1; it.dueSess=0; }             // 2→1
+  else { it.box=1; it.dueSess=0; }                      // 1→1
+}
+function srsBad(it){
+  it.wrong=(it.wrong||0)+1;
+  it.wrongStreak=(it.wrongStreak||0)+1;
+  if(!it.newDone){
+    it.nsStreak=0;                                      // сброс текущей тройки («Выбор ответов»)
+    if(it.nsDoneSess!=null && (SESS||0)!==(+it.nsDoneSess)+1){ it.nsDoneSess=null; }
+  }
+  demoteBox(it);
+}
+// Лёгкая ошибка (Верно-неверно / Подбор): влияет на коробку и статистику,
+// но НЕ трогает счётчик 3+3 «нового» (требование 7).
+function srsBadSoft(it){
+  it.wrong=(it.wrong||0)+1;
+  it.wrongStreak=(it.wrongStreak||0)+1;
+  demoteBox(it);
+}
+// Верный ответ → (для изученного) в следующую коробку; счётчик 3+3 не трогает.
+function srsGoodSoft(it){
+  it.correct=(it.correct||0)+1;
+  it.wrongStreak=0;
+  if(!it.newDone){ return; }                            // новое слово держится в коробке 1 до 3+3
+  srsGood(it);
+}
+// Звёздочка всегда в очереди (не зависит от dueSess), поэтому dueSess=0 не мешает.
+function isDue(it){ return it.starred || ((it.dueSess||0)<=(SESS||0)); }
+
+// ============================== WRITING ==============================
+// writeChars = китайские иероглифы текущего слова/предложения (по порядку, без знаков препинания)
+// writeCharIdx = текущий индекс в writeChars (бесконечный цикл)
+// Три переключателя сохраняют своё последнее состояние в settings
+let writer=null, writeChars=[], writeCharIdx=0, writeCurItem=null;
+let writeAudioOn=true, writeOutlineOn=true, writeAnimOn=false;
+let writeAnimRunning=false, writeToken=0;
+let writeSeq=[]; // упорядоченный список слов/предложений для письма (звёзды первыми; при «Рандом» — вразброс)
+
+function loadWritePrefs(){
+  writeAudioOn=settings.writeAudio!==false;
+  writeOutlineOn=settings.writeOutline!==false;
+  writeAnimOn=!!settings.writeAnim;
+}
+function writeHintOn(){ return settings.writeHint!==false && settings.writeHint!=='off'; }
+function writeRandOn(){ return settings.writeOrder==='rand'; }
+function applyWriteToggles(){
+  const b=(id,on)=>document.getElementById(id)&&document.getElementById(id).classList.toggle('on',on);
+  b('writeAudio',writeAudioOn); b('writeOutline',writeOutlineOn); b('writeAnim',writeAnimOn);
+  b('writeRand', writeRandOn());
+}
+function writableItems(){
+  return items.filter(it=>/[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi));
+}
+function startWrite(){
+  Player.stop();
+  enterSession();
+  loadWritePrefs(); applyWriteToggles();
+  const all=writableItems();
+  if(!all.length){
+    document.getElementById('writeWord').innerHTML='';
+    document.getElementById('writeArea').innerHTML='<div class="empty">Нет слов с иероглифами.<br>Добавьте их в «Словаре».</div>';
+    document.getElementById('writePy').textContent=''; document.getElementById('writeTr').textContent='';
+    return;
+  }
+  // самое последнее добавленное слово — первое в списке ниже
+  rebuildWriteSeq();
+  setWriteItem(writeSeq[0]);
+}
+function setWriteItem(it, keepIdx){
+  if(!it) return;
+  writeCurItem=it;
+  markShown(it);
+  writeChars=Array.from(it.hanzi).filter(c=>/[一-鿿]/.test(c));
+  if(!writeChars.length) writeChars=Array.from(it.hanzi);
+  writeCharIdx=keepIdx ? writeCharIdx : 0;
+  if(writeCharIdx>=writeChars.length) writeCharIdx=0;
+  writeToken++;
+  startWriteChar();
+}
+function renderWriteWord(){
+  const el=document.getElementById('writeWord');
+  if(!writeChars.length || !writeHintOn()){ el.innerHTML=''; el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  el.innerHTML=writeChars.map((c,i)=>`<span class="wch ${i===writeCharIdx?'cur':''}">${c}</span>`).join('');
+}
+function renderWriteLabels(){
+  const ch=writeChars[writeCharIdx];
+  document.getElementById('writePy').textContent=ch?toPinyin(ch):'';
+  document.getElementById('writeTr').textContent=(writeCurItem&&trJoined(writeCurItem))||'';
+}
+function renderWriteList(){
+  const el=document.getElementById('writeList'); if(!el) return;
+  const L=writeSeq.length?writeSeq:writeWordList();
+  if(!L.length){ el.innerHTML=''; return; }
+  // простой список слева направо, только китайский текст; текущее подсвечено
+  el.innerHTML=L.map(it=>{
+    const cur=writeCurItem && it.id===writeCurItem.id;
+    return `<span class="wl-zh-pill ${cur?'cur':''}" data-id="${it.id}">${escapeHtml(it.hanzi)}</span>`;
+  }).join('');
+  el.querySelectorAll('.wl-zh-pill').forEach(pill=>{
+    pill.onclick=()=>{ const it=items.find(x=>x.id===pill.dataset.id); if(it){ setWriteItem(it, false); } };
+  });
+}
+function writeGoto(idx){
+  const n=writeChars.length; if(!n) return;
+  writeCharIdx=((idx%n)+n)%n;
+  startWriteChar();
+}
+function writeWordList(){
+  // кандидаты: по приоритету и «давно не видел — первым»; чередование 2:1.
+  const ids=new Set(writableItems().map(x=>x.id));
+  const list=queueStudy().filter(it=>ids.has(it.id));
+  if(!writeRandOn()) return list;
+  return shuffle(list);
+}
+function rebuildWriteSeq(){
+  writeSeq=writeWordList();
+}
+function writePrev(){ // предыдущее слово/предложение (по списку ниже); внутри — к его ПЕРВОМУ иероглифу
+  const L=writeSeq.length?writeSeq:writeWordList(); if(!L.length) return;
+  let i=L.findIndex(x=>x.id===writeCurItem.id);
+  i=(i<=0)?L.length-1:i-1;
+  setWriteItem(L[i]);
+}
+function writeNext(){ // следующее слово/предложение; после последнего — снова первое
+  let L=writeSeq.length?writeSeq:writeWordList();
+  if(!L.length) return;
+  let i=L.findIndex(x=>x.id===writeCurItem.id);
+  if(i<0){ setWriteItem(L[0]); return; }
+  if(i>=L.length-1){ rebuildWriteSeq(); L=writeSeq; i=0; }  // конец — очередь зацикливается
+  else i=i+1;
+  setWriteItem(L[i]);
+}
+
+function stopWriteAnim(){ writeToken++; } // прерывает отложенную перестройку
+// --- озвучка при возобновлении рисования после паузы ---
+// слово целиком произносится сразу при появлении иероглифа; если пользователь бросил
+// рисовать на 3 секунды и снова повёл пальцем/стилусом — слово повторяется.
+let writeLastMove=0;
+function writeSpeakWord(){
+  if(!writeAudioOn) return;
+  const full=(writeCurItem&&writeCurItem.hanzi)||writeChars.join('');
+  if(full) speak(full,1);
+}
+function initWriteResume(){
+  const area=document.getElementById('writeArea');
+  if(!area || area._resumeBound) return;
+  area._resumeBound=true;
+  area.addEventListener('pointerdown',()=>{ writeLastMove=Date.now(); });
+  area.addEventListener('pointermove',()=>{
+    const t=Date.now();
+    if(writeLastMove && (t-writeLastMove)>=3000) writeSpeakWord();
+    writeLastMove=t;
+  });
+}
+function startWriteChar(quiet){
+  const token=++writeToken;
+  writeAnimRunning=false;
+  if(!writeChars.length) return;
+  writeLastMove=0; initWriteResume();
+  renderWriteWord(); renderWriteLabels(); renderWriteList();
+  const ch=writeChars[writeCharIdx];
+  const area=document.getElementById('writeArea');
+  area.innerHTML=''; area.style.opacity='';
+  writer=null;
+  hwCharData(ch).then(async data=>{
+    if(token!==writeToken) return;
+    const size=Math.min(area.clientWidth||320, area.clientHeight||320);
+    if(!data){
+      // данных начертания нет ни во вшитых, ни в кэше, ни на CDN — свободное рисование
+      // поверх бледного контура вместо «готового» знака, с пометкой пользователю
+      attachGuide(area, size);
+      const fb=document.createElement('div');
+      fb.className='hz-fallback';
+      fb.style.fontSize=(size*0.9)+'px';
+      fb.textContent=ch;
+      area.appendChild(fb);
+      const cv=document.createElement('canvas');
+      cv.className='hz-freedraw';
+      cv.width=size; cv.height=size;
+      area.appendChild(cv);
+      const skip=document.createElement('button');
+      skip.className='btn sec hz-skip'; skip.type='button'; skip.textContent='Дальше ▶';
+      skip.onclick=()=>{ if(writeAnimRunning) return; blinkWriteArea(()=>writeGoto(writeCharIdx+1)); };
+      area.appendChild(skip);
+      freeDraw(cv);
+      if(!quiet){ writeSpeakWord(); toast('Подключитесь к интернету, иероглиф недоступен'); }
+      return;
+    }
+    // библиотека могла ещё не загрузиться (CDN подгружается асинхронно) — подождём её
+    const hwOk=await ensureHanziWriter(3000);
+    if(token!==writeToken) return;
+    if(!hwOk){
+      attachGuide(area, size);
+      const fb=document.createElement('div');
+      fb.className='hz-fallback';
+      fb.style.fontSize=(size*0.9)+'px';
+      fb.textContent=ch;
+      area.appendChild(fb);
+      const cv=document.createElement('canvas');
+      cv.className='hz-freedraw';
+      cv.width=size; cv.height=size;
+      area.appendChild(cv);
+      const skip=document.createElement('button');
+      skip.className='btn sec hz-skip'; skip.type='button'; skip.textContent='Дальше ▶';
+      skip.onclick=()=>{ if(writeAnimRunning) return; blinkWriteArea(()=>writeGoto(writeCharIdx+1)); };
+      area.appendChild(skip);
+      freeDraw(cv);
+      if(!quiet){ writeSpeakWord(); toast('Подключитесь к интернету, иероглиф недоступен'); }
+      return;
+    }
+    attachGuide(area, size);
+    writer=HanziWriter.create(area,ch,{
+      width:size,
+      height:size,
+      padding:4, strokeAnimationSpeed:1.05, delayBetweenStrokes:130,
+      showOutline:writeOutlineOn,
+      charDataLoader:(c,ok,err)=>ok(data)
+    });
+    startWriteQuiz();
+    if(writeAnimOn) playWriteAnim();
+    if(!quiet) writeSpeakWord();
+  });
+}
+function startWriteQuiz(){
+  if(!writer) return;
+  // вид контура задаётся опцией showOutline при создании писателя;
+  // quiz() сам не трогает слой контура, поэтому состояние сохраняется
+  writer.quiz({
+    onComplete:onCharComplete,
+    showHintAfterMisses:settings.hint===0?1:(settings.hint||2)
+  });
+}
+function onCharComplete(){
+  if(writeAnimRunning) return;
+  // слово засчитываем, когда дописан последний иероглиф целиком;
+  // тогда верное написание идёт в общий счётчик «нового» 3+3 и двигает коробку.
+  const isLast=writeCharIdx>=writeChars.length-1;
+  if(isLast && writeCurItem){ good(writeCurItem); newGood(writeCurItem); persist(); updateChips(); }
+  blinkWriteArea(()=>{ writeGoto(writeCharIdx+1); });
+}
+function blinkWriteArea(done){
+  const area=document.getElementById('writeArea');
+  const seq=[0.25,1,0.25,1,0.25,1]; let i=0;
+  const step=()=>{ if(i>=seq.length){ area.style.opacity=''; if(done) done(); return; } area.style.opacity=String(seq[i++]); setTimeout(step,140); };
+  step();
+}
+function toggleWriteAudio(){
+  writeAudioOn=!writeAudioOn;
+  settings.writeAudio=writeAudioOn; persist();
+  applyWriteToggles();
+  if(!writeAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  else { const full=(writeCurItem&&writeCurItem.hanzi)||writeChars.join(''); if(full) speak(full,1); }
+}
+function toggleWriteOutline(){
+  writeOutlineOn=!writeOutlineOn;
+  settings.writeOutline=writeOutlineOn; persist();
+  applyWriteToggles();
+  // пересоздаём писателя с новой опцией showOutline — гарантированно применяется
+  startWriteChar(true);
+}
+function toggleWriteAnim(){
+  writeAnimOn=!writeAnimOn;
+  settings.writeAnim=writeAnimOn; persist();
+  applyWriteToggles();
+  if(writeAnimOn){ playWriteAnim(); }
+  else { startWriteChar(); } // немедленное отключение: пересоздаём чистый контур
+}
+function toggleWriteRand(){
+  // «Рандомно» в тулбаре Письма — тот же флаг, что и в настройках (Обычный/Рандом)
+  settings.writeOrder = writeRandOn() ? 'seq' : 'rand';
+  persist();
+  applyWriteToggles();
+  syncWriteOrderSeg();
+  if(document.getElementById('scr-write').classList.contains('active')){
+    rebuildWriteSeq();   // при включении — новый случайный порядок
+    renderWriteList();
+  }
+}
+function playWriteAnim(){
+  if(!writer || writeAnimRunning) return;
+  const ch=writeChars[writeCharIdx]; if(!ch) return;
+  writeAnimRunning=true;
+  writer.animateCharacter({onComplete:()=>{ writeAnimRunning=false; }});
+}
+
+// ============================== EXAM ==============================
+// examSeq — упорядоченный поток заданий (слова с повтором по числу иероглифов в Письменно);
+// каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
+let examSeq=[], examIdx=0, examRight=0, examWrong=[];
+let examSettings={tf:true, choice:true, choiceN:8, match:false};
+let examAudioOn=true; // 🔊 Аудио в Экзамене (по умолчанию, как и в Письме)
+let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
+let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
+
+// Случайный перевод слова для задания: либо главный, либо одна из альтернатив (если «Все переводы»).
+function examPickTr(it){
+  const all=trList(it);
+  if(!all.length) return '';
+  if(!examAllTr) return all[0];
+  return all[Math.floor(Math.random()*all.length)];
+}
+function examChoiceN(){ return examSettings.choiceN||8; }
+function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice}; }
+const EXAM_MIN_GAP=5; // слово нельзя повторить, пока не прошло 5 других заданий
+
+// Поточное формирование заданий экзамена. Для каждого слова из очереди — по одному
+// заданию на включённый подрежим (Выбор ответов / Верно-неверно), подрежимы чередуются.
+// Правила выбора слова в каждом новом задании:
+// 1) слово не повторяется дважды подряд (ни внутри подрежима, ни при переходе);
+// 2) слово не возвращается, пока не прошло минимум 5 ДРУГИХ заданий (фильтр поверх
+//    стратегии: если слово подходит по приоритету раньше — пропускается, берётся следующее);
+// 3) если слов меньше 5 — отступ «по возможности»: сначала исключаются недавние повторы,
+//    затем берётся то слово, которое «отдыхало» дольше всех.
+function examBuildSeq(){
+  const sep=examModes();
+  const pool=queueStudy().filter(it=>it.translation);
+  const modeOrder=[];
+  if(sep.choice) modeOrder.push('choice');
+  if(sep.tf) modeOrder.push('tf');
+  if(!modeOrder.length || !pool.length) return [];
+  const total=pool.length*modeOrder.length;
+  const seq=[];
+  const last={}; // id -> индекс задания, где слово показывалось в последний раз
+  for(let t=0;t<total;t++){
+    const mode=modeOrder[t%modeOrder.length];
+    let pick=null, bestScore=-Infinity;
+    for(let p=0;p<pool.length;p++){
+      const cand=pool[p];
+      const lastT=last[cand.id];
+      const never=lastT===undefined;
+      const gap=never?Infinity:(t-lastT-1);          // сколько заданий прошло после последнего показа
+      const eligible=never || gap>=EXAM_MIN_GAP;
+      const rest=never?(1000000-p):(t-lastT);        // отдохнул дольше = раньше в очереди
+      const score=(eligible?1000000000:0)+rest;
+      if(score>bestScore){ bestScore=score; pick=cand; }
+    }
+    if(!pick) break;
+    last[pick.id]=t;
+    seq.push({it:pick, mode});
+  }
+  return seq;
+}
+function startExam(){
+  Player.stop();
+  clearExamIdle();
+  enterSession();
+  examSeq=examBuildSeq();
+  examIdx=0; examRight=0; examWrong=[]; examCurrentIt=null;
+  document.getElementById('examEmpty').classList.toggle('hidden', examSeq.length>=4);
+  if(examSeq.length<4){ document.getElementById('examBody').innerHTML=''; updateExamScore(); return; }
+  updateExamScore();
+  updateExamToggleUI();
+  nextExamQ();
+}
+function updateExamScore(){
+  document.getElementById('examProgress').textContent=(examIdx)+' / '+examSeq.length;
+  document.getElementById('examScore').textContent='✓ '+examRight;
+}
+function updateExamToggleUI(){
+  document.querySelectorAll('.exam-toolbar [data-exam-toggle]').forEach(b=>{
+    b.classList.toggle('on', !!examSettings[b.dataset.examToggle]);
+  });
+  syncExamChoiceSeg();
+}
+function syncExamChoiceSeg(){
+  const seg=document.getElementById('examChoiceSeg'); if(!seg) return;
+  seg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', +b.dataset.v===examChoiceN()));
+}
+// смена числа карточек 4-6-8-10: мгновенно перерисовать текущий вопрос, если это «Выбор ответов»
+function examChoiceChanged(){
+  settings.examChoiceN=examSettings.choiceN;
+  syncExamChoiceSeg();
+  const q=examSeq[examIdx];
+  if(q && q.mode==='choice') renderExamChoice(q);
+  persist();
+}
+function nextExamQ(){
+  if(examIdx>=examSeq.length){ showExamResult(); return; }
+  updateExamScore();
+  const q=examSeq[examIdx];
+  examCurrentIt=q.it;
+  markShown(q.it);
+  clearExamIdle(); examLastMove=0;
+  if(q.mode==='tf') renderExamTF(q);
+  else if(q.mode==='choice') renderExamChoice(q);
+  else if(q.mode==='match'){ matchStart(); }
+  else renderExamTF(q);
+}
+function clearExamIdle(){
+  if(examIdleTimer){ clearInterval(examIdleTimer); examIdleTimer=null; }
+}
+// повтор слова целиком (обычный темп) — используется при бездействии
+function examSpeakWord(it){
+  if(!examAudioOn) return;
+  if(!it||!it.hanzi) return;
+  speak(it.hanzi,1);
+}
+function toggleExamAudio(){
+  examAudioOn=!examAudioOn;
+  settings.examAudio=examAudioOn; persist();
+  document.getElementById('examAudio').classList.toggle('on', examAudioOn);
+  if(!examAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  else { const it=examCurrentIt; if(it&&it.hanzi) speak(it.hanzi,1); }
+}
+function toggleExamAllTr(){
+  examAllTr=!examAllTr;
+  settings.examAllTr=examAllTr; persist();
+  document.getElementById('examAllTr').classList.toggle('on', examAllTr);
+}
+// сбрасывает отсчёт бездействия на новое взаимодействие (касание/ответ/рисование)
+function examTouch(){
+  if(examIdleTimer) examLastMove=Date.now();
+}
+function examFinish(steps){
+  // переход к следующему заданию (без повторов счёта); steps — сколько заданий уже посчитано внутри
+  clearExamIdle();
+  examIdx+=steps;
+  touchStreak(); logActivity(); persist();
+  updateExamScore();
+  nextExamQ();
+}
+function flashBad(el, done){
+  if(!el) return;
+  el.classList.remove('bad'); void el.offsetWidth;
+  el.classList.add('bad');
+  if(done) setTimeout(done, 460);
+}
+function examAdv(){
+  Player.stop();
+  clearExamIdle();
+  examIdx++;
+  touchStreak(); logActivity(); persist();
+  updateExamScore();
+  nextExamQ();
+}
+function examMistakeSoft(it){  // Верно-неверно / Подбор: ошибка НЕ трогает 3+3
+  Player.stop();
+  if(it===examCurrentIt) examWrong.push(it);
+  if(it!==writeCurItem){ examCurrentIt=it; }
+  srsBadSoft(it);
+  requeueExam(it);        // ошибка → слово повторяется в текущей сессии
+  persist();
+}
+function examMistake(it){  // «Выбор ответов»: ошибка сбрасывает тройку «нового»
+  Player.stop();
+  if(it===examCurrentIt) examWrong.push(it);
+  wrong(it);
+  requeueExam(it);        // ошибка → слово повторяется в текущей сессии
+  persist();
+}
+function examCorrect(it){  // подрежимы ВН/Подбор: двигают коробку, НЕ кормят 3+3
+  Player.stop();
+  examRight++;
+  if(it!==writeCurItem){ examCurrentIt=it; }
+  srsGoodSoft(it);
+  persist();
+}
+function examCorrectCounted(it){  // «Выбор ответов»: кормим счётчик 3+3
+  Player.stop();
+  examRight++;
+  good(it);
+  newGood(it);
+  if(isNewWord(it) && it.newDone) examDrop(it);
+  persist();
+}
+// легковесные обёртки с семантикой «Письма» и «Экзамена»
+function good(it){
+  if(it!==writeCurItem){ examCurrentIt=it; }
+  srsGood(it);
+}
+function wrong(it){
+  if(it!==writeCurItem){ examCurrentIt=it; }
+  srsBad(it);
+}
+// слово с ошибкой показывается ещё раз в текущей сессии, но НЕ сразу:
+// повтор ставится в самый конец очереди, чтобы между показами прошли другие задания
+// (правило «слово не показывается дважды подряд» + отступ).
+function requeueExam(it){
+  const modes=[];
+  if(examSettings.choice) modes.push('choice');
+  if(examSettings.tf) modes.push('tf');
+  if(!modes.length) return;
+  const mode=modes[Math.floor(Math.random()*modes.length)];
+  examSeq.push({it, mode});
+  updateExamScore();
+}
+// слово, ставшее НЕ-новым прямо в этой сессии, перестаёт щеголять «новеньким» приоритетом
+function examDrop(it){
+  for(let i=examIdx+1;i<examSeq.length;i++){
+    if(examSeq[i].it===it){ examSeq.splice(i,1); i--; }
+  }
+  updateExamScore();
+}
+
+// ---------- Верно-неверно ----------
+function renderExamTF(q){
+  const it=q.it;
+  const showOk=Math.random()<0.5;
+  let tr=examPickTr(it);
+  if(!showOk){
+    const others=items.filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
+    if(others.length) tr=others[Math.floor(Math.random()*others.length)];
+  }
+  const body=document.getElementById('examBody');
+  body.innerHTML=`
+    <div class="exam-q">
+      <div class="eq-word">${escapeHtml(it.hanzi)}</div>
+      <div class="exam-py" style="font-size:20px; font-weight:700">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
+      <div class="eq-tr" style="font-size:20px; font-weight:700">${escapeHtml(tr)}</div>
+    </div>
+    <div class="btn-row" style="margin-top:18px; width:100%">
+      <button class="btn warn" data-v="0">Не верно</button>
+      <button class="btn ok" data-v="1">Верно</button>
+    </div>`;
+  body.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{
+    examTouch();
+    const taskOk=(b.dataset.v==='1')===showOk;
+    if(taskOk){ examCorrect(it); examFinish(1); }
+    else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
+  });
+  examSpeakWord(it);
+}
+
+// ---------- Выбор ответов ----------
+function renderExamChoice(q){
+  const it=q.it;
+  const body=document.getElementById('examBody');
+  // вопрос один раз; варианты перерисовываются мгновенно при смене 4-6-8-10
+  body.innerHTML=`
+    <div class="exam-q" style="margin-bottom:14px">
+      <div class="eq-word">${escapeHtml(it.hanzi)}</div>
+    </div>
+    <div class="exam-q" style="width:100%">
+      <div class="seg sm" style="width:auto; margin-bottom:4px">
+        <button data-v="4">4</button><button data-v="6">6</button>
+        <button data-v="8" class="active">8</button><button data-v="10">10</button>
+      </div>
+      <div id="examOpts" class="exam-opts"></div>
+    </div>`;
+  const seg=body.querySelector('.seg.sm');
+  seg.querySelectorAll('button').forEach(b=>{
+    b.classList.toggle('active', +b.dataset.v===examChoiceN());
+    b.onclick=()=>{
+      seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+      examSettings.choiceN=+b.dataset.v;
+      settings.examChoiceN=examSettings.choiceN;
+      persist();
+      drawOpts(+b.dataset.v);   // мгновенно: тот же иероглиф, новое число карточек
+      syncExamChoiceSeg();
+    };
+  });
+  function drawOpts(N){
+    const correct=examPickTr(it);
+    const opts=[correct];
+    const others=items.filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
+    shuffle(others);
+    for(const o of others){
+      if(opts.length>=N) break;
+      if(opts.includes(o) || trList(it).includes(o)) continue;
+      opts.push(o);
+    }
+    while(opts.length<N) opts.push('—');
+    shuffle(opts);
+    const box=document.getElementById('examOpts');
+    box.innerHTML='';
+    opts.forEach(o=>{
+      const b=document.createElement('button');
+      b.className='btn sec exam-opt';
+      const t=document.createElement('span');
+      t.className='opt-txt';
+      t.textContent=o;
+      b.appendChild(t);
+      b.onclick=()=>{
+        examTouch();
+        if(trList(it).includes(o)){ examCorrectCounted(it); examFinish(1); }
+        else { examMistake(it); flashBad(b, ()=>examFinish(1)); }
+      };
+      box.appendChild(b);
+    });
+  }
+  drawOpts(examChoiceN());
+  examSpeakWord(it);
+}
+// ---------- Письменно: УБРАНО из экзамена (используется только отдельный режим «Письмо») ----------
+function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
+
+// ---------- Подбор ----------
+let matchRound=[], matchSelLeft=null, matchSelRight=null, matchSelRightEl=null;
+function matchDeck(){
+  // звёздные в первую очередь, всё в полном рандоме
+  const star=items.filter(it=>it.translation&&it.starred);
+  const rest=items.filter(it=>it.translation&&!it.starred);
+  return shuffle(star).concat(shuffle(rest));
+}
+function matchDraw(arr, n){
+  const out=[]; const seen=new Set();
+  const src=[...arr];
+  while(out.length<n && src.length){
+    const i=Math.floor(Math.random()*src.length);
+    const it=src[i];
+    if(!seen.has(it.id)){ seen.add(it.id); out.push(it); }
+    src.splice(i,1);
+  }
+  return out;
+}
+function matchStart(){
+  Player.stop();
+  matchRound=[]; matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
+  matchNextRound();
+}
+function matchNextRound(){
+  const deck=matchDeck();
+  const need=5;
+  if(deck.length<2){
+    document.getElementById('examBody').innerHTML='<div class="empty">Для подбора нужно хотя бы 2 слова.</div>';
+    return;
+  }
+  matchRound=matchDraw(deck, Math.min(need, deck.length));
+  matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
+  renderMatch();
+}
+function renderMatch(){
+  const left=shuffle([...matchRound]);
+  const right=shuffle([...matchRound]);
+  const body=document.getElementById('examBody');
+  body.innerHTML=`
+    <div class="match-cols">
+      <div class="match-col" id="matchLeft">${left.map(it=>`<button class="btn sec match-pair" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`).join('')}</div>
+      <div class="match-col" id="matchRight">${right.map(it=>`<button class="btn sec match-pair match-txt" data-id="${it.id}">${escapeHtml(examPickTr(it))}</button>`).join('')}</div>
+    </div>
+    <button class="btn" id="matchDone" style="width:100%; margin-top:12px">Завершить подбор</button>`;
+  document.querySelectorAll('#matchLeft button').forEach(b=>{
+    b.onclick=()=>matchPickLeft(b.dataset.id, b);
+  });
+  document.querySelectorAll('#matchRight button').forEach(b=>{
+    b.onclick=()=>matchPickRight(b.dataset.id, b);
+  });
+  document.getElementById('matchDone').onclick=examReturnToExam;
+}
+function matchPair(id, side){
+  const el=document.querySelector(`#match${side} button[data-id="${id}"]`);
+  return el;
+}
+function matchPickLeft(id, btn){
+  if(btn.classList.contains('done')) return;
+  if(matchSelRight===id){ // справа уже выбран этот же иероглиф → верная пара в обратном порядке
+    const rightBtn=matchSelRightEl;
+    const it=matchRound.find(x=>x.id===id);
+    if(it) examSpeakWord(it);
+    matchDone(btn, rightBtn, id);
+    return;
+  }
+  matchSelLeft=id; matchSelRight=null; matchSelRightEl=null;
+  document.querySelectorAll('#matchLeft button').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('#matchRight button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  // клик по иероглифу слева сразу озвучивает его (если «Аудио» включено)
+  const it=matchRound.find(x=>x.id===id);
+  if(it) examSpeakWord(it);
+}
+function matchPickRight(id, btn){
+  if(matchSelLeft){ // выбран иероглиф слева → проверяем пару
+    const leftBtn=matchPair(matchSelLeft,'Left');
+    if(matchSelLeft===id){
+      matchDone(leftBtn, btn, id);
+    }else{
+      // ошибка — моргает (коробка откатывается; 3+3 «нового» не трогаем)
+      flashBad(btn);
+      flashBad(leftBtn);
+      matchSelLeft=null;
+      const it=matchRound.find(x=>x.id===id);
+      if(it){ srsBadSoft(it); }
+      persist();
+    }
+    return;
+  }
+  // левый не выбран — запоминаем перевод как «левый по выбору» (пара в любом порядке)
+  matchSelRight=id; matchSelRightEl=btn; matchSelLeft=null;
+  document.querySelectorAll('#matchLeft button').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('#matchRight button').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+function matchDone(leftBtn, rightBtn, id){
+  leftBtn.classList.remove('sel');
+  rightBtn.classList.remove('sel');
+  leftBtn.classList.add('done'); leftBtn.disabled=true;
+  rightBtn.classList.add('done'); rightBtn.disabled=true;
+  matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
+  const it=matchRound.find(x=>x.id===id);
+  if(it){ examRight++; touchStreak(); logActivity(); updateExamScore(); srsGoodSoft(it); }
+  persist();
+  if(document.querySelectorAll('#matchLeft button:not(.done)').length===0){
+    // раунд угадан — новая пятёрка
+    setTimeout(matchNextRound, 450);
+  }
+}
+function examReturnToExam(){
+  Player.stop();
+  // «Завершить» возвращает из подбора в обычный экзамен (следующее задание)
+  examAdv();
+}
+
+// ---------- Результат ----------
+function showExamResult(){
+  clearExamIdle();
+  const body=document.getElementById('examBody');
+  const total=examSeq.length;
+  const pct=total?Math.round(examRight/total*100):0;
+  body.innerHTML=`
+    <div class="card" style="text-align:center">
+      <div style="font-size:44px">🎓</div>
+      <div class="num" style="font-size:40px;font-weight:800;color:var(--red)">${examRight} / ${total}</div>
+      <div class="lbl" style="color:var(--mut)">правильно · ${pct}%</div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" id="examRetake">🔁 Начать экзамен заново</button>
+        <button class="btn sec" id="examReview">📖 Перейти в режим «Учить»</button>
+      </div>
+      <button class="btn ghost" style="margin-top:6px" onclick="go('scr-more')">К статистике</button>
+    </div>
+    <h3 style="margin:14px 0 8px">Ошибки</h3>
+    <div>${examWrong.length?'':'<div class="empty" style="padding:10px">Ошибок нет — отлично! 🎉</div>'}${examWrong.map(it=>`
+      <div class="card item-line">
+        <div class="row"><div class="zh" style="font-size:22px">${escapeHtml(it.hanzi)}</div><div class="spacer"></div></div>
+        <div class="row" style="margin-top:3px"><span class="py">${escapeHtml(it.pinyin||'')}</span><span class="spacer"></span><span class="tr">${escapeHtml(it.translation||'')}</span></div>
+      </div>`).join('')}
+    </div>`;
+  document.getElementById('examProgress').textContent=total+' / '+total;
+  document.getElementById('examRetake').onclick=startExam;
+  document.getElementById('examReview').onclick=()=>go('scr-study');
+}
+
+// ============================== STATS / MORE ==============================
+function updateChips(){
+  const learned=items.filter(isLearned).length;
+  const due=items.filter(it=>it.translation && isDue(it)).length;
+  const lb=document.getElementById('dictFilterLearned');
+  const db=document.getElementById('dictFilterDue');
+  if(lb) lb.innerHTML='<b>'+learned+'</b> выучено';
+  if(db) db.innerHTML='<b>'+due+'</b> повторить';
+}
+
+// ---------- История версий ----------
+const VERSIONS=[
+  ['1.0.19','27.09.26','Экзамен: кнопки результатов переименованы («Начать экзамен заново», «Перейти в режим «Учить»»); «Учить» — кнопка «Вперёд ▶» в 1,5 раза выше; экспорт JSON сохраняется как «hanzi-backup <дата>»; офлайн-файл называется «hanzi-trainer-offline <версия>»'],
+  ['1.0.18','26.09.26','Словарь: кнопка ↑ (повысить уровень) вместо ✎, ↑ и ↓ теперь меняют уровень на 1; одно аудио на карточку (кнопка «Прикрепить аудио» целиком, старые скорости удалены); новые слова вверху списка; в карточке «Уровень N»; «Учить» — кнопки Вперёд/Назад/Повторить столбиком; уведомление «Подключитесь к интернету, иероглиф недоступен»'],
+  ['1.0.17','25.09.26','Исправление ошибок: единый шрифт 13px оси Y и дат в «Словах» за «День» (как в остальных периодах); «Письмо» — таймаут загрузки данных иероглифа (4 c, 3 попытки) + ожидание HanziWriter, при неудаче — fallback со свободным рисованием и уведомлением «Иероглиф недоступен»'],
+  ['1.0.16','22.09.26','Статистика переработана по образцу Loop Habit Tracker: единый шрифт 13px (заголовки карточек 17px), календарь-хитмап, «Слова» и «История» с подбором числа точек/столбиков под ширину (подписи не накладываются), день в «Словах» — смахиваемая лента, столбики «Истории» справа налево, «Лучшие серии» топ-5'],
+  ['1.0.15','21.09.26','Экзамен: крупный иероглиф в «Верно-неверно» и «Выбор ответов» снова адаптивный (min 30vmin / 130px) вместо фиксированных 40px'],
+  ['1.0.14','21.09.26','«Ещё»: вкладки «Статистика»/«Настройки», Память барами, Календарь-хитмап, график «Слова», столбцы «История», «Лучшие серии», модалка «История версий», выравнивание карточек «Выбора ответов»'],
+  ['1.0.13','21.09.26','Упрощение карточки (одно «Слово», один плюсик аудио), аудио в памяти формы до «Сохранить», скругления, единый 40px в Письме/Экзамене, свободное рисование без данных начертания, «Подбор» во всю ширину без зачёркивания, убраны ползунки скорости в «Учить»'],
+  ['1.0.12','20.09.26','Альтернативные переводы (до 5 полей), «Все переводы», «Подбор» в любом порядке + «Завершить подбор»'],
+  ['1.0.11','20.09.26','Экзамен: новое слово при каждом задании + отступ ≥5, повтор ошибки в конец, единое моргание badBlink'],
+  ['1.0.10','20.09.26','Кнопка «↓» понижения, шапка с версией «от DD.MM.YY», правки экзамена'],
+  ['1.0.9','19.09.26','Словарь: 4 фильтра с числами, жирнее пиньинь/перевод; экзамен: крупнее карточки на десктопе'],
+  ['1.0.8','18.09.26','SRS: 5 коробок 1/2/4/6/8, «новое слово» 3+3, приоритет, 2:1, очередь без дублей, из экзамена убран «Письменно»'],
+  ['1.0.7','17.09.26','Окно письма на всю ширину, аудио переписано'],
+  ['1.0.6','14.09.26','«Рандомно» в Письме, озвучка при появлении + повтор через 3 c паузы, сетка под большой иероглиф, «Письменно» озвучка/повтор 5 c, ВН: Верно справа, мгновенное 4-6-8-10, порядок «Письменно», кнопка «Контур»'],
+  ['1.0.5','14.09.26','Аудио в нормальном темпе везде + слово целиком, клетка-сетка, «Учить»: свежие первыми, «Экзамен» переработан полностью (+ «Подбор»)'],
+  ['1.0.4','14.09.26','«Учить» без зависаний + «◀ Назад», в «Письме» список слов внизу, «Рандом» и «Подсказка», иероглиф по центру, контур через showOutline'],
+  ['1.0.3','14.09.26','Полная переработка «Письма» и «Словаря»'],
+  ['1.0.2','12.09.26','«🔄 Повторить» / «➡️ Следующее ✓», «Письмо» по центру на 1–3 иероглифа, кнопки по углам'],
+  ['1.0.1','12.09.26','Остановка звука при переключении режимов, перемешивание в «Учить», пиньинь+перевод сразу, переключатель скорости, экран результатов, крупнее шрифты, подсветка иероглифа, раздельные размеры']
+];
+function openVersionModal(){
+  const m=document.getElementById('modalVersions');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>История версий</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalVersions')">✕</button></div>
+    <div style="margin-top:8px">${VERSIONS.map(([v,d,t])=>`
+      <div class="ver-item">
+        <div class="vh">Версия <span class="vnum">${v}</span> от ${d}</div>
+        <div class="vt">${t}</div>
+      </div>`).join('')}
+      <div class="ver-now">Текущая версия — ${APP_VERSION} от ${versionDate()}</div>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+}
+// Версия программы в шапке: «Версия X.Y.Z от DD.MM.YY» + клик открывает историю
+function versionDate(){
+  const d=new Date(); const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0'); const yy=String(d.getFullYear()).slice(2);
+  return dd+'.'+mm+'.'+yy;
+}
+function renderVersion(){
+  const el=document.getElementById('appVer');
+  if(!el) return;
+  el.textContent='Версия '+APP_VERSION+' от '+versionDate();
+  el.onclick=openVersionModal;
+}
+
+function touchStreak(){
+  const t=dayStr();
+  if(stats.lastDay===t) return;
+  const yest=new Date(); yest.setDate(yest.getDate()-1);
+  if(stats.lastDay===dayStr(yest)) stats.streak=(stats.streak||0)+1; else stats.streak=1;
+  stats.lastDay=t;
+}
+// Разница в днях b-a (обе — 'YYYY-MM-DD', локальные даты)
+function dayDiff(a,b){
+  const x=new Date(+a.slice(0,4), +a.slice(5,7)-1, +a.slice(8,10));
+  const y=new Date(+b.slice(0,4), +b.slice(5,7)-1, +b.slice(8,10));
+  return Math.round((y-x)/86400000);
+}
+
+// ---------- Периоды (день/неделя/месяц/квартал/год) ----------
+function startOfWeek(day){
+  const d=new Date(+day.slice(0,4), +day.slice(5,7)-1, +day.slice(8,10));
+  const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd); return d;
+}
+function startOfMonth(day){ return new Date(+day.slice(0,4), +day.slice(5,7)-1, 1); }
+function startOfQuarter(day){ return new Date(+day.slice(0,4), Math.floor((+day.slice(5,7)-1)/3)*3, 1); }
+function startOfYear(day){ return new Date(+day.slice(0,4), 0, 1); }
+const MONTHS_ACC=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
+const QUARTERS=['I','II','III','IV'];
+function labelOf(periodStart, range){
+  if(range==='day'){ const d=dayStr(periodStart); return d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(2,4); }
+  if(range==='week'){
+    const end=new Date(periodStart); end.setDate(end.getDate()+6);
+    return periodStart.getDate()+'–'+end.getDate()+' '+MONTHS_ACC[periodStart.getMonth()];
+  }
+  if(range==='month') return MONTHS_ACC[periodStart.getMonth()]+' '+periodStart.getFullYear();
+  if(range==='quarter') return QUARTERS[Math.floor(periodStart.getMonth()/3)]+' кв. '+periodStart.getFullYear();
+  return String(periodStart.getFullYear());
+}
+// Начальная дата использования: первый активный день или день добавления первого слова
+function earliestUsageDay(){
+  let e=null;
+  const act=stats.activity||{};
+  for(const d in act){ if(act[d]>0 && (!e||d<e)) e=d; }
+  for(const it of items){ if(it.addedOn && (!e||it.addedOn<e)) e=it.addedOn; }
+  return e||dayStr();
+}
+// Перечисляет периоды подряд от отправной точки использования до текущего периода включительно (старые слева).
+// Для диапазона «день» точка отсчёта — дата начала использования (глубже данных нет).
+function periodList(range){
+  const today=dayStr();
+  let cur, curEnd;
+  if(range==='day'){
+    cur=new Date(+earliestUsageDay().slice(0,4), +earliestUsageDay().slice(5,7)-1, +earliestUsageDay().slice(8,10));
+    curEnd=new Date(+today.slice(0,4), +today.slice(5,7)-1, +today.slice(8,10));
+  } else {
+    const e=earliestUsageDay();
+    if(range==='week') cur=startOfWeek(e);
+    else if(range==='month') cur=startOfMonth(e);
+    else if(range==='quarter') cur=startOfQuarter(e);
+    else cur=startOfYear(e);
+    if(range==='week') curEnd=startOfWeek(today);
+    else if(range==='month') curEnd=startOfMonth(today);
+    else if(range==='quarter') curEnd=startOfQuarter(today);
+    else curEnd=startOfYear(today);
+  }
+  const out=[];
+  while(cur<=curEnd){
+    out.push(new Date(cur));
+    if(range==='day') cur.setDate(cur.getDate()+1);
+    else if(range==='week') cur.setDate(cur.getDate()+7);
+    else if(range==='month') cur=new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+    else if(range==='quarter') cur=new Date(cur.getFullYear(), cur.getMonth()+3, 1);
+    else cur=new Date(cur.getFullYear()+1, 0, 1);
+  }
+  return out;
+}
+// Конец периода (эксклюзив) как 'YYYY-MM-DD'
+function periodEnd(periodStart, range, nextStart){
+  if(range==='day') return dayStr(periodStart);
+  const end=new Date(nextStart); end.setDate(end.getDate()-1);
+  return dayStr(end);
+}
+
+// ---------- Вкладки Ещё ----------
+let moreTab='stats';
+function switchMoreTab(tab){
+  moreTab=tab;
+  document.getElementById('moreTabStats').classList.toggle('hidden', tab!=='stats');
+  document.getElementById('moreTabSettings').classList.toggle('hidden', tab!=='settings');
+  document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+  if(tab==='stats') renderMoreStats();
+}
+
+function renderMore(){
+  updateChips();
+  renderMoreStats();
+}
+function renderMoreStats(){
+  renderTiles();
+  renderMemoryBars();
+  ensureStatsDropdowns();
+  renderStCalendar();
+  renderStWords();
+  renderStHist();
+  renderStStreaks();
+}
+function renderTiles(){
+  const learned=items.filter(isLearned).length;
+  const studying=items.filter(it=>!isLearned(it)).length;
+  const today=dayStr();
+  const addedToday=items.filter(it=>it.addedOn===today).length;
+  document.getElementById('stTotal').textContent=items.length;
+  document.getElementById('stToday').textContent=addedToday;
+  document.getElementById('stLearned').textContent=learned;
+  document.getElementById('stStudying').textContent=studying;
+}
+// «Память (5 уровней)» — горизонтальные бары
+function renderMemoryBars(){
+  const el=document.getElementById('stBars'); if(!el) return;
+  const labels=['Уровень 1 — новое','Уровень 2 — раз в 2 сессии','Уровень 3 — раз в 4 сессии','Уровень 4 — раз в 6 сессий','Уровень 5 — выучено'];
+  const counts=[0,0,0,0,0];
+  items.forEach(it=>{ const b=normBox(it)-1; counts[b]=(counts[b]||0)+1; });
+  const max=Math.max(1,...counts);
+  el.innerHTML=counts.map((c,i)=>`
+    <div class="hmbar">
+      <div class="lb">${labels[i]}</div>
+      <div class="track"><div class="fill" style="width:${Math.round(c/max*100)}%"></div></div>
+      <div class="num">${c}</div>
+    </div>`).join('');
+}
+// ============================================================
+//  Статистика (по образцу uHabits / Loop Habit Tracker).
+//  Единый шрифт 13px (заголовки карточек 17px); число точек и
+//  столбиков подбирается так, чтобы подписи не накладывались
+//  и не обрезались. Измеряем ширину надписей канвой 13px.
+// ============================================================
+var measCv=document.createElement('canvas').getContext('2d');
+var ETALON='13px system-ui,-apple-system,"Segoe UI",sans-serif';
+function stTextW(s){ measCv.font=ETALON; return measCv.measureText(s).width; }
+function stAt(t){ const d=new Date(t); return {y:d.getFullYear(), m:d.getMonth(), d:d.getDate()}; }
+function stKey(y,m,d){ return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
+function stMs(y,m,d){ return new Date(y,m,d).getTime(); }
+const ST_TODAY=stAt(Date.now());
+const MONTHS_NOM=['янв.','февр.','мар.','апр.','май','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
+const MO_NO=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
+
+// горизонтальное смахивание без ползунка (календарь и «Слова» за «день»)
+function makeSwipeable(el){
+  let down=false, startX=0, startL=0, tracked=false;
+  el.addEventListener('pointerdown', function(e){
+    down=true; tracked=false; startX=e.clientX; startL=el.scrollLeft;
+    el.classList.add('grabbing');
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  el.addEventListener('pointermove', function(e){
+    if(!down) return;
+    const dx=e.clientX-startX;
+    if(Math.abs(dx)>3) tracked=true;
+    el.scrollLeft=startL-dx;
+  });
+  el.addEventListener('pointerup', function(e){
+    down=false; el.classList.remove('grabbing');
+    if(tracked){ e.preventDefault(); e.stopPropagation(); }
+  });
+}
+
+// выпадающий выбор периода (▾). initialId согласует надпись с нарисованным графиком.
+function buildDropdown(el, periods, onChange, initialId){
+  el.className='dd';
+  el.innerHTML=
+    '<button type="button" class="dd-btn"><span class="dd-label"></span><span class="tgl">▾</span></button>'+
+    '<div class="dd-menu"></div>';
+  const btn=el.querySelector('.dd-btn'), lbl=el.querySelector('.dd-label'), menu=el.querySelector('.dd-menu');
+  let cur=initialId||periods[0].id;
+  function render(){
+    const p=periods.filter(x=>x.id===cur)[0];
+    lbl.textContent=p.label;
+    menu.innerHTML='';
+    periods.forEach(x=>{
+      const b=document.createElement('button');
+      b.type='button'; b.textContent=x.label;
+      if(x.id===cur) b.classList.add('active');
+      b.addEventListener('click', function(){ cur=x.id; render(); el.classList.remove('open'); onChange(x.id); });
+      menu.appendChild(b);
+    });
+  }
+  btn.addEventListener('click', function(e){ e.stopPropagation(); el.classList.toggle('open'); });
+  document.addEventListener('click', function(e){ if(!el.contains(e.target)) el.classList.remove('open'); });
+  render();
+}
+
+// ---------- «Календарь» — хитмап, сегодня справа, лента смахивается ----------
+function renderStCalendar(){
+  const el=document.getElementById('stCalWrap'); if(!el) return;
+  const act=stats.activity||{};
+  const S=16, GAP=2, STEP=S+GAP;
+  const DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+  const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
+  const WEEKS=53;
+  const curDow=(new Date(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d).getDay()+6)%7;
+  const leftMon=t0-curDow*86400000-(WEEKS-1)*7*86400000;
+  const gridW=WEEKS*STEP;
+
+  let html='<div class="calrow"><div class="wrap">';
+  html+='<div class="months" style="width:'+gridW+'px">';
+  let lastM=-1, lastY=-1, lastEnd=-1e9;
+  for(let w=0;w<WEEKS;w++){
+    const topDate=new Date(leftMon + w*7*86400000);
+    const y=topDate.getFullYear(), m=topDate.getMonth();
+    if(m!==lastM){
+      let label=MONTHS_NOM[m];
+      if(y!==lastY) label+=' '+y;
+      lastM=m; lastY=y;
+      let lx=Math.max(w*STEP+2, lastEnd+6);
+      lx=Math.min(lx, gridW-stTextW(label));
+      html+='<span style="left:'+lx+'px">'+label+'</span>';
+      lastEnd=lx+stTextW(label);
+    }
+  }
+  html+='</div>';
+  const nextDay=t0+86400000;
+  html+='<div class="grid" style="width:'+gridW+'px">';
+  for(let w=0;w<WEEKS;w++){
+    for(let r=0;r<7;r++){
+      const dt=new Date(leftMon + (w*7+r)*86400000);
+      const y=dt.getFullYear(), m=dt.getMonth(), d=dt.getDate();
+      const t=stMs(y,m,d);
+      let cls='cell';
+      if(t>=nextDay) cls+=' future';
+      else if(act[stKey(y,m,d)]>0) cls+=' on';
+      let dot='';
+      if(t<nextDay && t>=t0-9*86400000) dot='<i class="dot"></i>';
+      html+='<div class="'+cls+'">'+(t>=nextDay?'':d)+dot+'</div>';
+    }
+  }
+  html+='</div>';
+  html+='</div><div class="days"></div></div>';
+  el.innerHTML=html;
+  el.querySelector('.days').innerHTML=DOW.map(x=>'<span>'+x+'</span>').join('');
+  const scroll=el.querySelector('.wrap');
+  makeSwipeable(scroll);
+  scroll.scrollLeft=scroll.scrollWidth;
+}
+// ---------- общие геометрические хелперы графиков ----------
+function stBucketStart(id, t){
+  const a=stAt(t);
+  if(id==='d') return stMs(a.y,a.m,a.d);
+  if(id==='w'){ const dow=(new Date(a.y,a.m,a.d).getDay()+6)%7; return stMs(a.y,a.m,a.d-dow); }
+  if(id==='m') return stMs(a.y,a.m,1);
+  if(id==='q') return stMs(a.y,a.m-(a.m%3),1);
+  return stMs(a.y,0,1);
+}
+function stStepBack(id, t){
+  const a=stAt(t);
+  if(id==='d') return new Date(a.y,a.m,a.d-1).getTime();
+  if(id==='w') return new Date(a.y,a.m,a.d-7).getTime();
+  if(id==='m') return new Date(a.y,a.m-1,1).getTime();
+  if(id==='q') return new Date(a.y,a.m-3,1).getTime();
+  return new Date(a.y-1,0,1).getTime();
+}
+function stKeyOf(t){ const a=stAt(t); return stKey(a.y,a.m,a.d); }
+function stBucketLabel(st, id){
+  const a=stAt(st);
+  if(id==='d'||id==='w') return a.d+' '+MO_NO[a.m];
+  if(id==='m') return MONTHS_NOM[a.m];
+  if(id==='q'){ const q=Math.floor(a.m/3)+1; return q+' кв. '+a.y; }
+  return String(a.y);
+}
+function stNiceCeil(rawMax, steps, div){
+  let step=steps[steps.length-1];
+  for(let s=0;s<steps.length;s++){ if(steps[s]>=rawMax/div){ step=steps[s]; break; } }
+  return Math.ceil(rawMax/step)*step;
+}
+function estimateMonthWidth(){
+  // ширина блока графика: карточка 600px − 2×16px отступа
+  return (document.getElementById('stWordsChart')||{}).clientWidth || 568;
+}
+
+// ---------- «Слова» — линейный график (uHabits Score) ----------
+const WORDS_PERIODS=[
+  {id:'d',days:1,  label:'День'},
+  {id:'w',days:7,  label:'Неделя'},
+  {id:'m',days:30, label:'Месяц'},
+  {id:'q',days:90, label:'Квартал'},
+  {id:'y',days:365,label:'Год'}
+];
+const HIST_PERIODS=[
+  {id:'w',days:7,  label:'Неделя'},
+  {id:'m',days:30, label:'Месяц'},
+  {id:'q',days:90, label:'Квартал'},
+  {id:'y',days:365,label:'Год'}
+];
+let stWordsCur='w', stHistCur='w', stSegsReady=false;
+
+function ensureStatsDropdowns(){
+  if(stSegsReady) return;
+  stSegsReady=true;
+  buildDropdown(document.getElementById('stWordsSeg'), WORDS_PERIODS, function(id){ stWordsCur=id; renderStWords(); }, stWordsCur);
+  buildDropdown(document.getElementById('stHistSeg'), HIST_PERIODS, function(id){ stHistCur=id; renderStHist(); }, stHistCur);
+}
+
+function wordsBuckets(id, N){
+  const words=stats.words||{};
+  const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
+  const starts=[]; let s=stBucketStart(id, t0);
+  for(let i=0;i<N;i++){ starts.push(s); s=stStepBack(id, s); }
+  starts.reverse();
+  const out=[];
+  for(let j=0;j<starts.length;j++){
+    const st=starts[j];
+    const end=(j===starts.length-1) ? t0+86400000 : starts[j+1];
+    const stEndK=stKeyOf(end), stK=stKeyOf(st);
+    const set={};
+    for(const d in words){ if(d>=stK && d<stEndK) words[d].forEach(w=>set[w]=1); }
+    out.push({st:st, end:end, sum:Object.keys(set).length});
+  }
+  return out;
+}
+function wordsFitN(id){
+  const span=WORDS_PERIODS.filter(p=>p.id===id)[0].days;
+  const spanN=Math.ceil(365/span)+1;
+  const all=wordsBuckets(id, spanN);
+  let maxW=0;
+  all.forEach(b=>{ const w=stTextW(stBucketLabel(b.st,id)); if(w>maxW) maxW=w; });
+  const plotW=estimateMonthWidth()-34-10;
+  let n=Math.floor(plotW/(maxW+16))+1;
+  n=Math.max(2, Math.min(10, n, spanN));
+  return n;
+}
+function renderStWords(){
+  const wrapEl=document.getElementById('stWordsChart'); if(!wrapEl) return;
+  const cur=stWordsCur, isDay=(cur==='d');
+  const PW=estimateMonthWidth(), PH=190;
+  const PT=12, PB=28, PL=34, PR=10;
+  const DAY_N=30;
+
+  let D;
+  if(isDay){
+    D=wordsBuckets('d', DAY_N);
+  } else {
+    D=wordsBuckets(cur, wordsFitN(cur));
+  }
+
+  let maxLabW=0;
+  D.forEach(b=>{ const w=stTextW(stBucketLabel(b.st,cur)); if(w>maxLabW) maxLabW=w; });
+
+  // Крайние подписи центрируются на своих точках; чтобы не обрезаться краем SVG,
+  // для ленты (день) первый столбик отступает на полширины подписи, а под последний
+  // подпись резервируем место в viewBox; для растянутых периодов — врезка с двух краёв.
+  let W, xs, PWv;
+  if(isDay){
+    const stepX=maxLabW+18;
+    W=stepX*(D.length-1);
+    xs=D.map((_,i)=>PL+maxLabW/2+stepX*i);
+    PWv=PL+maxLabW+W+PR;
+  } else {
+    const innerL=PL+maxLabW/2;
+    const innerR=PL+(PW-PL-PR)-maxLabW/2;
+    W=innerR-innerL;
+    xs=D.map((_,i)=>innerL+W*i/(D.length-1));
+    PWv=PW;
+  }
+
+  let rawMax=1;
+  D.forEach(b=>{ if(b.sum>rawMax) rawMax=b.sum; });
+  const max=stNiceCeil(rawMax, [1,2,5,10,20,50,100,200,500,1000], 3);
+
+  const H=PH-PT-PB;
+  const ys=D.map(b=>PT+H*(1-b.sum/max));
+
+  function pathOf(pts){
+    const n=pts.length;
+    if(!n) return '';
+    if(n===1) return 'M'+pts[0][0]+' '+pts[0][1];
+    let d='M'+pts[0][0]+' '+pts[0][1];
+    for(let i=0;i<n-1;i++){
+      const p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||p2;
+      const c1x=p1[0]+(p2[0]-p0[0])/6, c1y=p1[1]+(p2[1]-p0[1])/6;
+      const c2x=p2[0]-(p3[0]-p1[0])/6, c2y=p2[1]-(p3[1]-p1[1])/6;
+      d+=' C'+c1x+' '+c1y+' '+c2x+' '+c2y+' '+p2[0]+' '+p2[1];
+    }
+    return d;
+  }
+  const pts=D.map((_,i)=>[xs[i],ys[i]]);
+  const line=pathOf(pts);
+  const area=line+' L'+xs[xs.length-1]+' '+(PT+H)+' L'+xs[0]+' '+(PT+H)+' Z';
+
+  let yGrid='', yTicks='';
+  for(let v=0; v<=max; v+=max/4){
+    if(v<=0) continue;
+    const yy=PT+H*(1-v/max);
+    yGrid+='<line x1="'+PL+'" y1="'+yy+'" x2="'+(PL+W)+'" y2="'+yy+'" stroke="#eee" stroke-width="1"/>';
+    yTicks+='<text class="ax" x="'+(PL-5)+'" y="'+(yy+3)+'" text-anchor="end">'+Math.round(v*10)/10+'</text>';
+  }
+
+  let xTicks='';
+  D.forEach((b,i)=>{
+    const lab=stBucketLabel(b.st, cur);
+    xTicks+='<text class="ax" x="'+xs[i]+'" y="'+(PH-8)+'" text-anchor="middle">'+lab+'</text>';
+  });
+
+  let dots='';
+  D.forEach((b,i)=>{
+    const r=isDay?2.4:2.8;
+    dots+='<circle cx="'+xs[i]+'" cy="'+ys[i]+'" r="'+r+'" fill="#c62828"/>';
+  });
+
+  let hoverCells='';
+  D.forEach((_,i)=>{
+    const l=i===0?Math.min(PL, xs[0]):(xs[i-1]+xs[i])/2;
+    const r=i===D.length-1?Math.max(PL+W, xs[xs.length-1]):(xs[i]+xs[i+1])/2;
+    const x0=Math.max(PL, l), x1=Math.min(PL+W, r);
+    if(x1>x0) hoverCells+='<rect x="'+x0+'" y="'+PT+'" width="'+(x1-x0)+'" height="'+H+'" fill="transparent"/>';
+  });
+
+  const svgOpen=isDay
+    ? '<svg width="'+PWv+'" height="'+(PH+4)+'" viewBox="0 0 '+PWv+' '+(PH+4)+'">'
+    : '<svg width="100%" height="'+(PH+4)+'" viewBox="0 0 '+PWv+' '+(PH+4)+'" preserveAspectRatio="none">';
+  const svg=svgOpen+
+    '<g class="chart">'+
+    yGrid+
+    '<path d="'+area+'" fill="rgba(198,40,40,.10)"/>'+
+    '<path d="'+line+'" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+
+    yTicks+xTicks+dots+hoverCells+
+    '</g></svg>';
+
+  if(isDay){
+    // «День»: ось Y неподвижна слева, прокручивается только полотно графика.
+    // Ось рисует лишь подписи Y в своей колонке (ширина PL); сетка остаётся в полотне.
+    const axisOnly='<svg width="'+PL+'" height="'+(PH+4)+'" viewBox="0 0 '+PL+' '+(PH+4)+'">'+
+      '<g class="chart">'+yTicks+'</g></svg>';
+    const plotSvg='<svg width="'+PWv+'" height="'+(PH+4)+'" viewBox="0 0 '+PWv+' '+(PH+4)+'">'+
+      '<g class="chart">'+yGrid+
+      '<path d="'+area+'" fill="rgba(198,40,40,.10)"/>'+
+      '<path d="'+line+'" fill="none" stroke="#c62828" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+
+      xTicks+dots+hoverCells+
+      '</g></svg>';
+    wrapEl.className='dchart';
+    wrapEl.innerHTML='<div class="daxis">'+axisOnly+'</div><div class="dplot">'+plotSvg+'</div>';
+    const plot=wrapEl.querySelector('.dplot');
+    makeSwipeable(plot);
+    plot.scrollLeft=plot.scrollWidth;
+    attachWordsHover(wrapEl, D, cur, xs, ys, PWv, PH);
+    return;
+  }
+
+  wrapEl.className='chart-wrap';
+  wrapEl.innerHTML=svg;
+  attachWordsHover(wrapEl, D, cur, xs, ys, PWv, PH);
+}
+
+function attachWordsHover(wrapEl, D, cur, xs, ys, PWv, PH){
+  const tip=document.createElement('div');
+  tip.className='tip';
+  wrapEl.appendChild(tip);
+  const svgEl=wrapEl.querySelector('.dplot svg')||wrapEl.querySelector('svg');
+  wrapEl.querySelectorAll('rect[fill="transparent"]').forEach(function(rect, i){
+    if(!D[i]) return;
+    rect.addEventListener('mousemove', function(e){
+      const svgRect=svgEl.getBoundingClientRect();
+      const b=D[i];
+      tip.innerHTML=stBucketLabel(b.st, cur)+'<br><b>слов: '+b.sum+'</b>';
+      tip.style.display='block';
+      tip.style.left=((xs[i]/PWv)*svgRect.width)+'px';
+      let topPx=(ys[i]/PH)*svgRect.height-30;
+      tip.style.top=(topPx<0?4:topPx)+'px';
+    });
+    rect.addEventListener('mouseleave', function(){ tip.style.display='none'; });
+  });
+}
+
+// ---------- «История» — столбики, справа налево (uHabits History) ----------
+function histBuckets(id, N){
+  const act=stats.activity||{};
+  const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
+  const starts=[]; let s=stBucketStart(id, t0);
+  for(let i=0;i<N;i++){ starts.push(s); s=stStepBack(id, s); }
+  starts.reverse();
+  const out=[];
+  for(let j=0;j<starts.length;j++){
+    const st=starts[j];
+    const end=(j===starts.length-1) ? t0+86400000 : starts[j+1];
+    const stEndK=stKeyOf(end), stK=stKeyOf(st);
+    let n=0;
+    for(const d in act){ if(act[d]>0 && d>=stK && d<stEndK) n++; }
+    out.push({st:st, end:end, n:n});
+  }
+  return out;
+}
+function histFitN(id){
+  const span=HIST_PERIODS.filter(p=>p.id===id)[0].days;
+  const spanN=Math.ceil(365/span)+1;
+  const all=histBuckets(id, spanN);
+  let maxW=0;
+  all.forEach(b=>{ const w=stTextW(stBucketLabel(b.st,id)); if(w>maxW) maxW=w; });
+  const plotW=estimateMonthWidth()-34-10;
+  // самый левый столбик должен встать так, чтобы его подпись (полностью,
+  // центрированная) не выходила за левый край и не касалась соседней
+  const n=Math.floor((plotW-maxW)/(maxW+16))+1;
+  return Math.max(2, Math.min(10, n, spanN));
+}
+function renderStHist(){
+  const wrapEl=document.getElementById('stHistChart'); if(!wrapEl) return;
+  const cur=stHistCur;
+  const PW=estimateMonthWidth(), PH=190;
+  const PT=26, PB=28, PL=34, PR=10;
+  const FONT=ETALON;
+
+  const N=histFitN(cur);
+  const buckets=histBuckets(cur, N);
+
+  let rawMax=1;
+  buckets.forEach(b=>{ if(b.n>rawMax) rawMax=b.n; });
+  const max=stNiceCeil(rawMax, [1,2,5,10,20,50,100,200,365], 4);
+
+  const H=PH-PT-PB;
+  const baseY=PT+H;
+  const plotR=PW-PR, plotL=PL;
+
+  let maxW=0;
+  buckets.forEach(b=>{ const w=stTextW(stBucketLabel(b.st, cur)); if(w>maxW) maxW=w; });
+  const stepX=maxW+16;
+  const lastX=plotR-maxW/2;
+  const xs=buckets.map((_,i)=>lastX-(buckets.length-1-i)*stepX);
+  const ys=buckets.map(b=>PT+H*(1-b.n/max));
+
+  let yGrid='', yTicks='';
+  for(let v=0; v<=max; v+=max/4){
+    if(v<=0) continue;
+    const yy=PT+H*(1-v/max);
+    yGrid+='<line x1="'+plotL+'" y1="'+yy+'" x2="'+plotR+'" y2="'+yy+'" stroke="#eee" stroke-width="1"/>';
+    yTicks+='<text class="ax" x="'+(plotL-5)+'" y="'+(yy+3)+'" text-anchor="end">'+Math.round(v*10)/10+'</text>';
+  }
+
+  let xTicks='';
+  buckets.forEach((b,i)=>{
+    const lab=stBucketLabel(b.st, cur);
+    const w=stTextW(lab);
+    let anchor='middle', tx=xs[i];
+    if(tx-w/2<plotL){ anchor='start'; tx=plotL; }
+    else if(tx+w/2>plotR){ anchor='end'; tx=plotR; }
+    xTicks+='<text class="ax" x="'+tx+'" y="'+(PH-8)+'" text-anchor="'+anchor+'">'+lab+'</text>';
+  });
+
+  const barW=Math.min(stepX*0.55, 26);
+  let bars='', barNums='';
+  buckets.forEach((b,i)=>{
+    bars+='<rect x="'+(xs[i]-barW/2)+'" y="'+ys[i]+'" width="'+barW+'" height="'+(baseY-ys[i])+'" rx="2" fill="#c62828"/>';
+    if(b.n>0) barNums+='<text class="num" x="'+xs[i]+'" y="'+(ys[i]-6)+'" text-anchor="middle">'+b.n+'</text>';
+  });
+
+  let hoverCells='';
+  buckets.forEach((_,i)=>{
+    const x0=Math.max(plotL, xs[i]-stepX/2);
+    const x1=Math.min(plotR, xs[i]+stepX/2);
+    if(x1>x0) hoverCells+='<rect x="'+x0+'" y="'+PT+'" width="'+(x1-x0)+'" height="'+H+'" fill="transparent"/>';
+  });
+
+  const svg='<svg width="100%" height="'+(PH+4)+'" viewBox="0 0 '+PW+' '+(PH+4)+'" preserveAspectRatio="none">'+
+    '<g class="chart">'+yGrid+bars+barNums+yTicks+xTicks+hoverCells+'</g></svg>';
+
+  wrapEl.className='chart-wrap';
+  wrapEl.innerHTML=svg;
+
+  const tip=document.createElement('div');
+  tip.className='tip';
+  wrapEl.appendChild(tip);
+  const svgEl=wrapEl.querySelector('svg');
+  wrapEl.querySelectorAll('rect[fill="transparent"]').forEach(function(rect,i){
+    rect.addEventListener('mousemove', function(){
+      const svgRect=svgEl.getBoundingClientRect();
+      if(buckets[i]){
+        const b=buckets[i];
+        tip.innerHTML=stBucketLabel(b.st, cur)+'<br><b>дней: '+b.n+'</b>';
+        tip.style.display='block';
+        tip.style.left=((xs[i]/PW)*svgRect.width)+'px';
+        let topPx=(ys[i]/PH)*svgRect.height-34;
+        tip.style.top=(topPx<0?4:topPx)+'px';
+      }
+    });
+    rect.addEventListener('mouseleave', function(){ tip.style.display='none'; });
+  });
+}
+
+// ---------- «Лучшие серии» — топ-5 (uHabits Best streaks) ----------
+function pluralDays(n){
+  const d=n%10, h=n%100;
+  if(d===1&&h!==11) return 'день';
+  if(d>=2&&d<=4&&(h<10||h>=20)) return 'дня';
+  return 'дней';
+}
+function renderStStreaks(){
+  const listEl=document.getElementById('stStreakList'); if(!listEl) return;
+  const act=stats.activity||{};
+  const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
+  const yest=t0-86400000;
+
+  const keysSorted=Object.keys(act).filter(k=>act[k]>0).sort();
+  const streaks=[];
+  let i=0;
+  while(i<keysSorted.length){
+    const p=keysSorted[i].split('-').map(Number);
+    const start=stMs(p[0], p[1]-1, p[2]);
+    let prev=start, days=1; i++;
+    while(i<keysSorted.length){
+      const q=keysSorted[i].split('-').map(Number);
+      const t=stMs(q[0], q[1]-1, q[2]);
+      if(t-prev===86400000){ prev=t; days++; i++; }
+      else break;
+    }
+    streaks.push({start:start, end:prev, days:days});
+  }
+
+  function fmtDate(t){
+    const a=stAt(t);
+    return a.d+' '+MONTHS_ACC[a.m]+' '+a.y;
+  }
+  function numW(s){ measCv.font='700 13px system-ui,-apple-system,"Segoe UI",sans-serif'; return measCv.measureText(s).width; }
+  function lblW(s){ measCv.font=ETALON; return measCv.measureText(s).width; }
+  function bandColor(f){
+    if(f>=1) return '#c62828';
+    if(f>=0.8) return 'rgba(198,40,40,.75)';
+    if(f>=0.5) return 'rgba(198,40,40,.38)';
+    return 'rgba(29,28,26,.14)';
+  }
+  function bandText(f){ return f>=0.5 ? '#fff' : 'rgba(29,28,26,.62)'; }
+
+  if(!streaks.length){
+    listEl.innerHTML='<div style="font-size:13px;color:var(--mut)">Пока нет серий — начните заниматься!</div>';
+    return;
+  }
+
+  streaks.sort((a,b)=>(b.days-a.days)||(b.end-a.end));
+  const shown=streaks.slice(0,5);
+  shown.sort((a,b)=>b.end-a.end);
+
+  let maxEnd=-Infinity;
+  shown.forEach(s=>{ if(s.end>maxEnd) maxEnd=s.end; });
+  shown.forEach(s=>{ if(s.end===maxEnd && maxEnd>=yest) s.end=t0; });
+
+  let maxLength=0;
+  shown.forEach(s=>{ if(s.days>maxLength) maxLength=s.days; });
+  const scale=Math.max(30, maxLength);
+
+  let I=listEl.clientWidth;
+  if(!I) I=estimateMonthWidth();
+
+  let maxLabelWidth=0;
+  shown.forEach(s=>{ maxLabelWidth=Math.max(maxLabelWidth, lblW(fmtDate(s.start)), lblW(fmtDate(s.end))); });
+  let textMargin=5, shouldShowLabels=true;
+  if(I-2*maxLabelWidth < I*0.25){ maxLabelWidth=0; shouldShowLabels=false; }
+
+  const rows=shown.map(s=>{
+    let f=s.days/scale; if(f>1) f=1;
+    const cf=s.days/maxLength;
+    let availableWidth=I-2*maxLabelWidth;
+    if(shouldShowLabels) availableWidth-=2*textMargin;
+    let barWidth=f*availableWidth;
+    const minBarWidth=numW(String(s.days))+14;
+    if(barWidth<minBarWidth) barWidth=minBarWidth;
+    if(barWidth>I) barWidth=I;
+    const gap=Math.max(0, (I-barWidth)/2);
+    const B=I-gap+textMargin;
+    return '<div class="streak-row" title="'+fmtDate(s.start)+' — '+fmtDate(s.end)+' · '+s.days+' '+pluralDays(s.days)+'">'+
+      (shouldShowLabels
+        ? '<span class="sdate" style="left:0;right:'+B+'px;text-align:right">'+fmtDate(s.start)+'</span>'+
+          '<span class="sdate" style="left:'+B+'px;right:0;text-align:left">'+fmtDate(s.end)+'</span>'
+        : '')+
+      '<span class="sbar" style="left:'+gap+'px;width:'+barWidth+'px;background:'+bandColor(cf)+'">'+
+        '<b style="color:'+bandText(cf)+'">'+s.days+'</b>'+
+      '</span>'+
+    '</div>';
+  }).join('');
+  listEl.innerHTML=rows;
+}
+
+// Дополнение к markShown: фиксируем уникальные слова за день (для графика «Слова»)
+function recordSeen(it){
+  if(!it || !it.hanzi) return;
+  const t=dayStr();
+  stats.words=stats.words||{};
+  const set=stats.words[t]||(stats.words[t]=[]);
+  if(set.indexOf(it.id)<0) set.push(it.id);
+}
+
+// ============================== SETTINGS BIND ==============================
+function applySizes(){
+  document.documentElement.style.setProperty('--mul-h', settings.mulH||1);
+  document.documentElement.style.setProperty('--mul-p', settings.mulP||1);
+  document.documentElement.style.setProperty('--mul-t', settings.mulT||1);
+}
+function bindSettings(){
+  const seg=(id, key, type, after)=>{
+    document.getElementById(id).querySelectorAll('button').forEach(b=>{
+      const val= type==='num'||type==='float' ? (+b.dataset.v) : b.dataset.v;
+      if(val===settings[key]) b.classList.add('active');
+      else b.classList.remove('active');
+      b.onclick=()=>{
+        document.getElementById(id).querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+        settings[key]=val;
+        if(after) after();
+        persist();
+      };
+    });
+  };
+  seg('hanziSizeSeg','mulH','float',applySizes);
+  seg('pinyinSizeSeg','mulP','float',applySizes);
+  seg('trSizeSeg','mulT','float',applySizes);
+  seg('repeatSeg','repeats','num');
+  seg('hintSeg','hint','num');
+  seg('writeOrderSeg','writeOrder','str',onWriteOrderChange);
+  seg('writeHintSeg','writeHint','str',onWriteHintChange);
+  document.getElementById('voiceSel').onchange=e=>{ settings.voiceURI=e.target.value; persist(); };
+  applySizes();
+}
+function onWriteOrderChange(){
+  // порядок слов в письме сменился — перестроить список; текущая карточка остаётся активной
+  if(document.getElementById('scr-write').classList.contains('active')){
+    rebuildWriteSeq();
+    renderWriteList();
+  }
+}
+function syncWriteOrderSeg(){
+  // синхронизирует сегмент «Письмо: порядок слов» в Ещё с кнопкой тулбара «Рандомно»
+  const seg=document.getElementById('writeOrderSeg'); if(!seg) return;
+  seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.v===(writeRandOn()?'rand':'seq')));
+}
+function onWriteHintChange(){
+  // показать/скрыть слово над окном письма
+  const el=document.getElementById('writeWord');
+  if(!el) return;
+  if(writeHintOn()){ el.classList.remove('hidden'); renderWriteWord(); }
+  else { el.classList.add('hidden'); el.innerHTML=''; }
+}
+
+// ============================== EXPORT / IMPORT ==============================
+async function doExport(){
+  const out=await Promise.all(items.map(async it=>{
+    const recs=[];
+    if(it.recordings) for(const r of it.recordings){
+      const rec=await DB.get('aud:'+it.id+':'+r.speed);
+      recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
+    }
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,recordings:recs};
+  }));
+  const blob=new Blob([JSON.stringify({items:out,settings,stats},null,1)],{type:'application/json'});
+  downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
+}
+function blobToB64(blob){ return new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); }); }
+function b64ToBuf(b64){ const [head,data]=b64.split(','); const bin=atob(data); const arr=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); const mime=(head.match(/data:(.*?);/)||[])[1]||'audio/mpeg'; return {buf:arr,mime}; }
+function downloadBlob(blob,name){
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
+async function doImportFile(file){
+  try{
+    const j=JSON.parse(await file.text());
+    if(!j.items){ toast('Не похоже на файл бэкапа'); return; }
+    for(const each of items) revokeAll(each);
+    items=[];
+    for(const d of (j.items||[])){
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||''};
+      migrateItem(it);
+      for(const r of (d.recordings||[])){
+        if(r.data){ const {buf,mime}=b64ToBuf(r.data); await DB.put('aud:'+it.id+':'+r.speed,{name:r.name,type:mime,buf}); it.recordings.push({speed:r.speed,name:r.name,url:URL.createObjectURL(new Blob([buf],{type:mime}))}); }
+      }
+      items.push(it);
+    }
+    if(j.settings) settings={...settings,...j.settings};
+    if(j.stats) stats={...stats,...j.stats};
+    await persist(); await refreshAll();
+    toast('Импортировано: '+items.length);
+  }catch(e){ toast('Ошибка импорта'); console.error(e); }
+}
+
+// ============================== SAMPLE DATA ==============================
+function sampleData(){
+  if(items.length && !confirm('Добавить примеры к уже существующим словам?')) return;
+  const S=[
+    ['char','你','nǐ','ты'],
+    ['char','我','wǒ','я'],
+    ['char','好','hǎo','хороший'],
+    ['char','爱','ài','любить, любовь'],
+    ['char','学','xué','учиться'],
+    ['char','中','zhōng','середина; Китай'],
+    ['word','你好','nǐ hǎo','здравствуй'],
+    ['word','谢谢','xiè xie','спасибо'],
+    ['word','再见','zài jiàn','до свидания'],
+    ['word','中国','zhōng guó','Китай'],
+    ['word','学习','xué xí','учёба, учиться'],
+    ['sentence','我爱学汉语','wǒ ài xué hàn yǔ','Я люблю учить китайский'],
+    ['sentence','你好，我叫安娜','nǐ hǎo, wǒ jiào ān nà','Здравствуйте, меня зовут Анна']
+  ];
+  for(const [kind,hanzi,pinyin,tr] of S){
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr()});
+  }
+  persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
+}
+async function wipeAll(){
+  if(!confirm('Удалить ВСЕ слова, аудио и статистику? Это необратимо.')) return;
+  for(const it of items) for(const r of (it.recordings||[])){ if(r.url)URL.revokeObjectURL(r.url); await DB.del('aud:'+it.id+':'+r.speed); }
+  items=[]; stats={streak:0,lastDay:'',activity:{}};
+  await persist(); await refreshAll(); toast('Всё очищено');
+}
+
+// ============================== REFRESH ==============================
+async function refreshAll(){
+  renderDict(); renderMore(); updateChips(); renderVersion();
+}
+// ============================== NAV ==============================
+document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.scr));
+
+// ============================== TOOLBAR BIND ==============================
+document.getElementById('btnAdd').onclick=()=>openItemModal(null);
+document.getElementById('btnBatch').onclick=openBatch;
+document.getElementById('dictSearch').oninput=renderDict;
+document.querySelectorAll('[data-dict-filter]').forEach(b=>{
+  b.onclick=()=>{
+    dictFilter=b.dataset.dictFilter;
+    renderDict();
+  };
+});
+document.getElementById('studyAgain').onclick=studyRepeat;
+document.getElementById('studyKnow').onclick=studyNext;
+document.getElementById('studyBack').onclick=studyBack;
+document.getElementById('writeAudio').onclick=toggleWriteAudio;
+document.getElementById('writeAnim').onclick=toggleWriteAnim;
+document.getElementById('writeOutline').onclick=toggleWriteOutline;
+document.getElementById('writeRand').onclick=toggleWriteRand;
+document.getElementById('writePrev').onclick=writePrev;
+document.getElementById('writeNext').onclick=writeNext;
+document.querySelectorAll('.exam-toolbar [data-exam-toggle]').forEach(b=>{
+  b.onclick=()=>{
+    const k=b.dataset.examToggle;
+    examSettings[k]=!examSettings[k];
+    // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
+    if(!examSettings.tf && !examSettings.choice){ examSettings[k]=true; }
+    settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice;
+    b.classList.toggle('on', !!examSettings[k]);
+    persist();
+  };
+});
+document.getElementById('examAudio').onclick=toggleExamAudio;
+document.getElementById('examAllTr').onclick=toggleExamAllTr;
+document.getElementById('examMatchBtn').onclick=()=>{ matchStart(); };
+document.getElementById('examChoiceSeg').querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>{
+    examSettings.choiceN=+b.dataset.v;
+    examChoiceChanged();
+  };
+});
+document.getElementById('btnExport').onclick=doExport;
+document.getElementById('btnImport').onclick=()=>document.getElementById('fileImport').click();
+document.getElementById('fileImport').onchange=e=>{ if(e.target.files[0]) doImportFile(e.target.files[0]); e.target.value=''; };
+document.getElementById('btnSample').onclick=sampleData;
+document.getElementById('btnWipe').onclick=wipeAll;
+document.getElementById('voiceSel').onchange=e=>{ settings.voiceURI=e.target.value; persist(); };
+// Вкладки «Ещё»: Статистика / Настройки
+document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>{
+  b.onclick=()=>switchMoreTab(b.dataset.tab);
+});
+bindModalDismiss();
+
+// ============================== AUDIO LIFECYCLE ==============================
+// Автовоспроизведение: браузеры (особенно мобильные) блокируют звук до первого
+// жеста пользователя. Разблокируем очередь TTS самым первым касанием — в фоне,
+// без какого-либо звука (говорим пустую строку, которую сразу отменяем).
+function unlockAudio(){
+  if(audioUnlocked) return;
+  if(!('speechSynthesis' in window)){ audioUnlocked=true; return; }
+  try{
+    const u=new SpeechSynthesisUtterance(' ');
+    u.volume=0; u.rate=1;
+    u.onend=u.onerror=()=>{ audioUnlocked=true; };
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+    // на случай, если событие не пришло — всё равно считаем разблокированным
+    setTimeout(()=>{ try{ speechSynthesis.cancel(); }catch(e){} audioUnlocked=true; }, 800);
+  }catch(e){ audioUnlocked=true; }
+}
+function bindAudioLifecycle(){
+  ['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev, unlockAudio, {passive:true, once:true}));
+  // сворачивание/уход в фон — останавливаем всё, чтобы речь не «висела» при возврате
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) stopAllAudio(); });
+  window.addEventListener('pagehide', stopAllAudio);
+}
+// Единая точка остановки: и плейлист, и одиночные TTS, и проигрывание из словаря
+function stopAllAudio(){
+  Player.stop();
+  if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
+}
+
+// ============================== BOOT ==============================
+async function boot(){
+  await DB.open();
+  items=(await DB.get(ITEMS))||[];
+  settings={...{repeats:3,hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,studySpeed:'all',examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,sessN:0}, ...((await DB.get(SET))||{})};
+  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, match:false};
+  examAudioOn=settings.examAudio!==false;
+  examAllTr=settings.examAllTr!==false;
+  document.getElementById('examAudio').classList.toggle('on', examAudioOn);
+  document.getElementById('examAllTr').classList.toggle('on', examAllTr);
+  stats={...{streak:0,lastDay:'',activity:{}}, ...((await DB.get(STATS))||{})};
+  SESS=settings.sessN||0;
+  for(const it of items) migrateItem(it);
+  for(const it of items) await migrateNormAudio(it);
+  SHOW_N=items.reduce((m,it)=>Math.max(m, it.lastShowN||0), 0);
+  for(const it of items) await hydrateRecordings(it);
+  await persist();
+  bindSettings();
+  bindAudioSlot();
+  bindAudioLifecycle();
+  refreshAll();
+}
+boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
+
+// PWA: service worker только на https/localhost (иначе — просто кэш браузера)
+if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
