@@ -1,6 +1,10 @@
 # Локальная настройка превью Claude Code
 .claude/
 
+# Служебные файлы Windows
+desktop.ini
+Thumbs.db
+
 # Тестовая/демо-страница, не часть приложения
 calendar-test.html
 Exam_result.html
