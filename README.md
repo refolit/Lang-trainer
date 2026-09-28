@@ -4,6 +4,8 @@ A mobile-friendly web app for learning Chinese words and characters. Russian int
 
 **[Open the app](https://refolit.github.io/Lang-trainer/)**
 
+![Screenshot of the app](screenshot.png)
+
 ## Features
 
 - **Dictionary** — a list of words with translations, pinyin, and stroke-by-stroke character writing.
