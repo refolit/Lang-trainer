@@ -659,7 +659,7 @@ let stats = { streak:0, lastDay:'', activity:{} };
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.0.19';
+const APP_VERSION='1.1.0';
 
 // ============================== SRS (5 коробок, интервалы в сессиях) ==============================
 const BOX_INT=[0,1,2,4,6,8]; // сессий до следующего показа; индекс = коробка (1..5)
@@ -707,8 +707,12 @@ async function migrateNormAudio(it){
   }
   it.recordings=kept.length?kept:(it.recordings||[]).filter(r=>r.speed==='norm');
 }
-// Миграция старых карточек (Leitner 0..5 → коробки 1..5)
+// Миграция старых карточек (Leitner 0..5 → коробки 1..5) + проставка lang/updated_at.
+// Поля lang/updated_at проставляются ДО раннего выхода по __v3: старые карточки
+// тоже должны получить актуальные версии метки синхронизации.
 function migrateItem(it){
+  if(!it.lang) it.lang='zh';
+  if(!it.updated_at) it.updated_at=now();
   if(it.__v3) return;
   if(!it.hasOwnProperty('newDone')){
     const ob=+it.box||0;
@@ -722,7 +726,36 @@ function migrateItem(it){
 }
 function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; stats.activity[t]=(stats.activity[t]||0)+1; }
 
+// Сигнатура карточки для LWW: только поля, которые реально синхронизируются.
+// view-маркеры (lastShowN/lastSeen/nextDue), аудио-ссылки и служебные флаги исключены,
+// чтобы простой просмотр карточки не делал её «новее» настоящего ответа на другом устройстве.
+function itemSig(it){
+  return JSON.stringify([
+    it.lang, it.kind, it.hanzi, it.pinyin, it.translation, it.trs, it.note, it.tag, it.starred,
+    it.box, it.dueSess, it.newDone, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow,
+    it.correct, it.wrong, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
+    it.learnedOn, it.addedOn
+  ]);
+}
+// Сигнатуры settings/stats для LWW. Исключаем updated_at (сама метка) и sessN
+// (локальный счётчик сессий — меняется при каждом входе в режим, но это не пользовательская настройка).
+function settingsSig(s){ const o={}; for(const k in s){ if(k==='updated_at'||k==='sessN') continue; o[k]=s[k]; } return JSON.stringify(o); }
+function statsSig(s){ const o={}; for(const k in s){ if(k==='updated_at') continue; o[k]=s[k]; } return JSON.stringify(o); }
+let _sigSet=null, _sigStats=null;   // базовые сигнатуры, проставляются в boot()
+
 async function persist(){
+  const t=now();
+  // карточки: двигаем updated_at только при реальном изменении синхронизируемых полей;
+  // __sig хранится на карточке, поэтому простой перезапуск не сдвигает метку.
+  for(const it of items){
+    const s=itemSig(it);
+    if(it.__sig!==s){ it.updated_at=t; it.__sig=s; }
+  }
+  // settings/stats: двигаем updated_at только при изменении содержимого
+  const ss=settingsSig(settings);
+  if(_sigSet!==ss){ settings.updated_at=t; _sigSet=ss; }
+  const st=statsSig(stats);
+  if(_sigStats!==st){ stats.updated_at=t; _sigStats=st; }
   await DB.put(ITEMS, items);
   await DB.put(SET, settings);
   await DB.put(STATS, stats);
@@ -1119,7 +1152,7 @@ function openItemModal(id){
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
     isNewItem=true;
-    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr()};
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:'zh',updated_at:now()};
   }else{
     hydrateRecordings(editingItem);
   }
@@ -1394,7 +1427,7 @@ function saveBatch(){
     }
     if(!hanzi) return;
     if(!pinyin) pinyin=toPinyin(hanzi);
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:'zh',updated_at:now()});
     n++;
   });
   persist().then(()=>{ closeModal('modalBatch'); renderDict(); updateChips(); toast('Добавлено: '+n); });
@@ -2338,6 +2371,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.1.0','29.09.26','Фаза 1 — фундамент синхронизации: у карточек, настроек и статистики появились поля lang и updated_at; миграция старых данных; updated_at обновляется только при реальном изменении содержимого (подпись содержимого). Внешне ничего не изменилось'],
   ['1.0.19','27.09.26','Экзамен: кнопки результатов переименованы («Начать экзамен заново», «Перейти в режим «Учить»»); «Учить» — кнопка «Вперёд ▶» в 1,5 раза выше; экспорт JSON сохраняется как «hanzi-backup <дата>»; офлайн-файл называется «hanzi-trainer-offline <версия>»'],
   ['1.0.18','26.09.26','Словарь: кнопка ↑ (повысить уровень) вместо ✎, ↑ и ↓ теперь меняют уровень на 1; одно аудио на карточку (кнопка «Прикрепить аудио» целиком, старые скорости удалены); новые слова вверху списка; в карточке «Уровень N»; «Учить» — кнопки Вперёд/Назад/Повторить столбиком; уведомление «Подключитесь к интернету, иероглиф недоступен»'],
   ['1.0.17','25.09.26','Исправление ошибок: единый шрифт 13px оси Y и дат в «Словах» за «День» (как в остальных периодах); «Письмо» — таймаут загрузки данных иероглифа (4 c, 3 попытки) + ожидание HanziWriter, при неудаче — fallback со свободным рисованием и уведомлением «Иероглиф недоступен»'],
@@ -3141,7 +3175,7 @@ async function doImportFile(file){
     for(const each of items) revokeAll(each);
     items=[];
     for(const d of (j.items||[])){
-      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||''};
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',updated_at:d.updated_at||now()};
       migrateItem(it);
       for(const r of (d.recordings||[])){
         if(r.data){ const {buf,mime}=b64ToBuf(r.data); await DB.put('aud:'+it.id+':'+r.speed,{name:r.name,type:mime,buf}); it.recordings.push({speed:r.speed,name:r.name,url:URL.createObjectURL(new Blob([buf],{type:mime}))}); }
@@ -3174,7 +3208,7 @@ function sampleData(){
     ['sentence','你好，我叫安娜','nǐ hǎo, wǒ jiào ān nà','Здравствуйте, меня зовут Анна']
   ];
   for(const [kind,hanzi,pinyin,tr] of S){
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:'zh',updated_at:now()});
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
 }
@@ -3288,6 +3322,10 @@ async function boot(){
   for(const it of items) await migrateNormAudio(it);
   SHOW_N=items.reduce((m,it)=>Math.max(m, it.lastShowN||0), 0);
   for(const it of items) await hydrateRecordings(it);
+  // миграция: у настроек/статистики должна быть начальная метка синхронизации
+  if(!settings.updated_at) settings.updated_at=now();
+  if(!stats.updated_at) stats.updated_at=now();
+  _sigSet=settingsSig(settings); _sigStats=statsSig(stats);   // базовые сигнатуры текущей сессии
   await persist();
   bindSettings();
   bindAudioSlot();

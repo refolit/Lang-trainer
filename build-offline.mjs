@@ -38,9 +38,9 @@ out = out.replace(
 out = out.replace(/\/\/ ============================== LIB FALLBACK ==============================[\s\S]*?\n}\n\);\n/, '');
 out = out.replace(/\/\/ ============================== LIB FALLBACK ==============================[\s\S]*?document\.head\.appendChild\(s\);\n}\n/, '');
 
-// Имя файла: «hanzi-trainer-offline <цифра версии>.html» (например, hanzi-trainer-offline 19)
+// Имя файла: «hanzi-trainer-offline <полная версия>.html» (например, hanzi-trainer-offline 1.1.0)
 const vm = src.match(/const APP_VERSION='([^']+)'/);
-const verCode = vm ? vm[1].split('.').pop() : 'offline';
+const verCode = vm ? vm[1] : 'offline';
 const outName = 'hanzi-trainer-offline ' + verCode + '.html';
 writeFileSync(base + '/' + outName, out);
 console.log('размер итога: ' + out.length + ' байт, файл: ' + outName);
