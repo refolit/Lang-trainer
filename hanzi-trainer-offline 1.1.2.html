@@ -202,8 +202,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .slot .ic{font-size:18px}
 
 /* Modal */
-.modal{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:flex-end; justify-content:center}
-.modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px calc(20px + env(safe-area-inset-bottom)); max-height:92dvh; overflow-y:auto}
+.modal{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:12px}
+.modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px 20px; max-height:calc(100dvh - 24px); overflow-y:auto}
 .modal h2{font-size:18px; margin-bottom:4px}
 
 /* Stats */
@@ -684,7 +684,7 @@ let stats = { streak:0, lastDay:'', activity:{} };
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.1.1';
+const APP_VERSION='1.1.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -794,10 +794,10 @@ async function persist(){
 }
 
 // ============================== HELPERS ==============================
-function toast(msg){
+function toast(msg, ms=2200){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
-  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200);
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'), ms);
 }
 // короткое уведомление (1 секунда) — для мгновенных действий вроде понижения уровня
 function toastShort(msg){
@@ -2403,6 +2403,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.1.2','30.09.26','Все модальные окна (вход, карточка, пакетный ввод, история версий) открываются по центру экрана, а не снизу; подтверждение входа — toast «Проверьте почту…» поверх окна'],
   ['1.1.1','30.09.26','Фаза 3 (синхронизация): вход по email в Supabase — блок «Аккаунт» в Настройках, вход по magic-link без пароля, автоподхват сессии из ссылки письма, кнопка «Выйти»; офлайн-сборка — без Supabase (честная заглушка)'],
   ['1.1.0','29.09.26','Фаза 1 — фундамент синхронизации: у карточек, настроек и статистики появились поля lang и updated_at; миграция старых данных; updated_at обновляется только при реальном изменении содержимого (подпись содержимого). Внешне ничего не изменилось'],
   ['1.0.19','27.09.26','Экзамен: кнопки результатов переименованы («Начать экзамен заново», «Перейти в режим «Учить»»); «Учить» — кнопка «Вперёд ▶» в 1,5 раза выше; экспорт JSON сохраняется как «hanzi-backup <дата>»; офлайн-файл называется «hanzi-trainer-offline <версия>»'],
@@ -3397,8 +3398,8 @@ function openAuthModal(){
       options:{ emailRedirectTo: location.origin + location.pathname }
     });
     send.disabled=false; send.textContent='Отправить ссылку';
-    if(error){ msg.textContent='Ошибка: '+error.message; }
-    else{ msg.textContent='Готово! Проверьте почту и откройте ссылку из письма.'; }
+    if(error){ toastShort('Ошибка: '+error.message); msg.textContent='Ошибка: '+error.message; }
+    else{ toast('✅ Проверьте почту и откройте ссылку из письма'); msg.textContent='Готово! Проверьте почту и откройте ссылку из письма.'; }
   };
 }
 async function authSignOut(){
