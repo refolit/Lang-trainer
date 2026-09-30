@@ -195,6 +195,18 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .dict-filter.active b{color:#fff}
 .dict-filter:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d)}
 
+/* Синхронизация: поиск слева (половина ширины), кнопка справа, статус-строка под ними */
+.sync-row{display:flex; align-items:stretch; gap:8px; margin-bottom:6px}
+.sync-row #dictSearch{flex:1; min-width:0}
+.btn-sync{flex:0 0 auto; width:auto; padding:12px 14px; font-size:14px; white-space:nowrap}
+.btn-sync.busy{pointer-events:none}
+.sync-status{display:flex; align-items:center; gap:7px; min-height:20px; margin:0 0 10px; font-size:12px; color:var(--mut); font-weight:600}
+.sync-status .dot{flex:0 0 auto; width:9px; height:9px; border-radius:50%; background:var(--line)}
+.sync-status.ok .dot{background:var(--green)}
+.sync-status.off .dot{background:var(--amber)}
+.sync-status.spin .dot{background:transparent; border:2px solid var(--line); border-top-color:var(--red); animation:syncl .8s linear infinite}
+@keyframes syncl{to{transform:rotate(360deg)}}
+
 /* Audio slots */
 .slot{display:flex; align-items:center; gap:8px; padding:8px 10px; border:1.5px dashed var(--line); border-radius:12px; margin-top:6px}
 .slot.has{border-style:solid; border-color:var(--green)}
@@ -400,9 +412,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <!-- СЛОВАРЬ -->
   <section class="screen active" id="scr-dict">
     <div style="max-width:560px; margin:0 auto">
-      <div class="row" style="margin-bottom:10px">
-        <input type="text" id="dictSearch" placeholder="Поиск…" style="flex:1">
+      <div class="sync-row">
+        <input type="text" id="dictSearch" placeholder="Поиск…">
+        <button class="btn btn-sync" id="btnSync">Синхронизировать</button>
       </div>
+      <div class="sync-status" id="syncStatus"><span class="dot"></span><span id="syncStatusText">Войдите, чтобы синхронизировать</span></div>
       <div class="dict-filter-row">
         <div class="seg" id="dictFilterSeg">
           <button data-dict-filter="all" class="active">Все слова</button>
@@ -671,7 +685,7 @@ let stats = { streak:0, lastDay:'', activity:{} };
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.1.2';
+const APP_VERSION='1.1.3';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2390,6 +2404,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.1.3','01.10.26','Фаза 4 — облачная синхронизация: кнопка «Синхронизировать» в Словаре (поиск слева, кнопка справа, строка статуса); LWW-merge карточек/настроек/статистики по updated_at; календарь и «дни» склеиваются по датам; сбой сети не трогает локальные данные'],
   ['1.1.2','30.09.26','Все модальные окна (вход, карточка, пакетный ввод, история версий) открываются по центру экрана, а не снизу; подтверждение входа — toast «Проверьте почту…» поверх окна'],
   ['1.1.1','30.09.26','Фаза 3 (синхронизация): вход по email в Supabase — блок «Аккаунт» в Настройках, вход по magic-link без пароля, автоподхват сессии из ссылки письма, кнопка «Выйти»; офлайн-сборка — без Supabase (честная заглушка)'],
   ['1.1.0','29.09.26','Фаза 1 — фундамент синхронизации: у карточек, настроек и статистики появились поля lang и updated_at; миграция старых данных; updated_at обновляется только при реальном изменении содержимого (подпись содержимого). Внешне ничего не изменилось'],
@@ -3250,6 +3265,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.datas
 // ============================== TOOLBAR BIND ==============================
 document.getElementById('btnAdd').onclick=()=>openItemModal(null);
 document.getElementById('btnBatch').onclick=openBatch;
+document.getElementById('btnSync').onclick=doSync;
 document.getElementById('dictSearch').oninput=renderDict;
 document.querySelectorAll('[data-dict-filter]').forEach(b=>{
   b.onclick=()=>{
@@ -3327,7 +3343,240 @@ function stopAllAudio(){
   if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
 }
 
-// ============================== AUTH (Supabase: вход по email-ссылке) ==============================
+// ============================== SYNC (Supabase: LWW-merge) ==============================
+// Кнопка «Синхронизировать» на экране Словаря. Только для вошедшего пользователя, только онлайн.
+// Модель: каждая строка (карточка / настройки / статистика) побеждает по updated_at (epoch-мс).
+// Календарь activity и «дни» words склеиваются по датам (union), а не побеждают одной стороной.
+const SYNC_LANG='zh';                 // активный язык (пока один; Фаза 5 добавит переключение)
+let syncBusy=false;                   // идёт синхронизация (блокирует повторный клик)
+let lastSyncAt=0;                     // момент последней успешной синхронизации
+let _syncUser=null;                   // вошедший пользователь (обновляется в renderAuth)
+
+// --- кэш облака после последней синхронизации (для «Изменено: N» и «В сети · синхр.») ---
+let cloudRecs={};                     // id карточки → updated_at в облаке
+let cloudSettingsU=0;                 // updated_at настроек в облаке
+let cloudStatsU=0;                    // updated_at статистики в облаке
+
+function syncStatus(text, cls){
+  const el=document.getElementById('syncStatus'); if(!el) return;
+  el.className='sync-status '+(cls||'');
+  const t=document.getElementById('syncStatusText'); if(t) t.textContent=text;
+}
+function setSyncEnabled(incoming){
+  const b=document.getElementById('btnSync'); if(!b) return;
+  if(syncBusy){ b.disabled=true; b.classList.add('busy'); b.textContent='Синхронизация…'; return; }
+  b.disabled=!incoming; b.classList.remove('busy'); b.textContent='Синхронизировать';
+}
+function syncNetDown(){ return SB_OFFLINE || !sbReady(); }
+function refreshSyncUI(){
+  if(!document.getElementById('btnSync')) return;
+  if(SB_OFFLINE){ setSyncEnabled(false); syncStatus('Офлайн-версия — без облачной синхронизации','off'); return; }
+  if(!sbReady()){ setSyncEnabled(false); syncStatus('Нет соединения','off'); return; }
+  if(!_syncUser){ setSyncEnabled(false); syncStatus('Войдите, чтобы синхронизировать',''); return; }
+  setSyncEnabled(true);
+  if(lastSyncAt){
+    const n=dirtyCount();
+    syncStatus(n>0 ? ('Изменено: '+n+' · не синхронизировано') : ('В сети · синхр. '+fmtHM(lastSyncAt)), 'ok');
+  }else{
+    syncStatus('В сети · ещё не синхронизировалось','ok');
+  }
+}
+function fmtHM(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+// Локальных строк свежее облака — для подсказки «Изменено: N».
+function dirtyCount(){
+  let n=0;
+  for(const it of items){
+    if(it.lang!==SYNC_LANG) continue;
+    const c=cloudRecs[it.id];
+    if(c===undefined || (it.updated_at||0)>c) n++;
+  }
+  if((settings.updated_at||0)>cloudSettingsU) n++;
+  if((stats.updated_at||0)>cloudStatsU) n++;
+  return Math.min(n,100);
+}
+// Сериализация карточки для облака: только JSON-значения, без blob-ссылок аудио (аудио — отдельной фазой).
+function cloudCard(it){
+  const o={};
+  for(const k of Object.keys(it)){
+    if(k==='recordings'||k==='__sig') continue;
+    const v=it[k], t=typeof v;
+    if(t==='string'||t==='number'||t==='boolean'||v===null) o[k]=v;
+  }
+  if(!o.lang) o.lang=SYNC_LANG;
+  return o;
+}
+// Восстановление карточки из облака: числовые поля приводим к числам, recordings — локально.
+function cardFromCloud(data){
+  return {...data,
+    recordings:[],
+    box:Math.max(1,Math.min(5,+data.box||1)),
+    dueSess:+data.dueSess||0, correct:+data.correct||0, wrong:+data.wrong||0,
+    correctStreak:+data.correctStreak||0, correctStreakDays:+data.correctStreakDays||0,
+    nsStreak:+data.nsStreak||0, nsSess:+data.nsSess||0,
+    nsDoneSess:data.nsDoneSess==null?null:data.nsDoneSess,
+    nsLastGoodShow:data.nsLastGoodShow==null?null:data.nsLastGoodShow,
+    lastShowN:+data.lastShowN||0, lastSeen:+data.lastSeen||0, nextDue:+data.nextDue||0,
+    newDone:+data.newDone||0, starred:!!data.starred,
+    lastCorrectDay:data.lastCorrectDay||'', learnedOn:data.learnedOn||'', addedOn:data.addedOn||'',
+    lang:data.lang||'zh'
+  };
+}
+// Склейка календарей по датам (union): activity {дата→счёт}, words {дата→[id]}.
+function unionArr(a,b){ const s={}; (a||[]).forEach(x=>s[x]=1); (b||[]).forEach(x=>s[x]=1); return Object.keys(s); }
+function mergeCalendars(local, remote){
+  const out={...local};
+  for(const k of Object.keys(remote||{})){
+    if(!out[k]){ out[k]=remote[k]; continue; }
+    if(Array.isArray(remote[k]) || Array.isArray(out[k])) out[k]=unionArr(out[k], remote[k]);
+    else out[k]=Math.max(out[k]||0, remote[k]||0);
+  }
+  return out;
+}
+// METADATA (кэш синхронизации в IndexedDB)
+const META='sync-meta';
+function syncMeta(){ return {lang:SYNC_LANG, email:_syncUser?_syncUser.email:null, lastSync:lastSyncAt, recs:cloudRecs, settingsU:cloudSettingsU, statsU:cloudStatsU}; }
+async function saveMeta(){ await DB.put(META, syncMeta()); }
+
+// ---------- PULL (Supabase → память) ----------
+async function pullCloudRows(u){
+  const cards=[];
+  let from=0;
+  for(;;){
+    const r=await sbClient().from('cards').select('id,lang,data,updated_at').eq('user_id',u.id).range(from,from+999);
+    if(r.error) throw r.error;
+    const rows=r.data||[]; cards.push(...rows);
+    if(rows.length<1000) break; from+=1000;
+  }
+  const sR=await sbClient().from('user_settings').select('data,updated_at').eq('user_id',u.id).limit(1).maybeSingle();
+  if(sR.error) throw sR.error;
+  const stR=await sbClient().from('user_stats').select('lang,data,updated_at').eq('user_id',u.id);
+  if(stR.error) throw stR.error;
+  return {cards, settings:sR.data||null, stats:stR.data||[]};
+}
+// ---------- MERGE + PUSH ----------
+async function doSync(){
+  if(syncBusy || syncNetDown()) return;
+  syncBusy=true; setSyncEnabled(false); syncStatus('Синхронизация…','spin');
+  // Снапшот для отката: если сеть оборвётся на полпути, локальные данные не должны пострадать.
+  const snap={items:items.slice(), settings:{...settings}, stats:{...stats}, sigSet:_sigSet, sigStats:_sigStats};
+  let pulledN=0, pushedN=0;
+  try{
+    const u=_syncUser;
+    if(!u) throw new Error('Сначала войдите в аккаунт');
+    const cloud=await pullCloudRows(u);
+    const cloudById={};
+    for(const row of cloud.cards){ if(row.lang===SYNC_LANG) cloudById[row.id]={u:row.updated_at||0, data:row.data}; }
+
+    // --- карточки ---
+    const localSeen={};
+    for(let i=0;i<items.length;i++){
+      const it=items[i];
+      if(it.lang!==SYNC_LANG) continue;
+      localSeen[it.id]=1;
+      const rec=cloudById[it.id];
+      const locU=it.updated_at||0;
+      if(!rec){
+        // локальна, в облаке нет → push
+        const ts=locU||now(); it.updated_at=ts;
+        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang:SYNC_LANG, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
+        if(r.error) throw r.error;
+        pushedN++;
+        cloudRecs[it.id]=ts;
+      }else if(locU>rec.u){
+        // локальное новее → push
+        const ts=locU;
+        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang:SYNC_LANG, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
+        if(r.error) throw r.error;
+        pushedN++;
+        cloudRecs[it.id]=ts;
+      }else if(locU<rec.u){
+        // облако новее → pull (своё аудио оставляем: оно живёт только локально)
+        const keepRec=(it.recordings||[]).slice();
+        const merged=cardFromCloud(rec.data||{});
+        merged.recordings=keepRec;
+        merged.updated_at=rec.u;
+        merged.__sig=itemSig(merged);
+        items[i]=merged;
+        pulledN++;
+        cloudRecs[it.id]=rec.u;
+      }else{
+        cloudRecs[it.id]=locU;
+      }
+    }
+    // облачные карточки, которых нет локально → pull (новое устройство / восстановление)
+    for(const id of Object.keys(cloudById)){
+      if(localSeen[id]) continue;
+      const rec=cloudById[id];
+      const n=cardFromCloud(rec.data||{});
+      n.updated_at=rec.u||now();
+      migrateItem(n);
+      n.__sig=itemSig(n);
+      items.push(n);
+      pulledN++;
+      cloudRecs[id]=rec.u||0;
+    }
+
+    // --- настройки ---
+    const locSU=settings.updated_at||0, remSU=cloud.settings?(cloud.settings.updated_at||0):0;
+    if(remSU>locSU){
+      const d={...cloud.settings.data};
+      for(const k of Object.keys(d)){ if(k==='updated_at'||k==='sessN') continue; settings[k]=d[k]; }
+      settings.updated_at=remSU;
+      pulledN++;
+    }else if(locSU>remSU){
+      const r=await sbClient().from('user_settings').upsert({user_id:u.id, data:cleanSettings(), updated_at:locSU},{onConflict:'user_id'});
+      if(r.error) throw r.error;
+      pushedN++;
+    }
+    cloudSettingsU=Math.max(locSU,remSU);
+
+    // --- статистика (на активный язык; глобальный stats = статистика этого языка, пока язык один) ---
+    const stCloud=cloud.stats.find(s=>s.lang===SYNC_LANG)||null;
+    const stLoc=stats;
+    const slU=stLoc.updated_at||0, sRU=stCloud?(stCloud.updated_at||0):0;
+    if(sRU>slU){
+      const d=stCloud.data||{};
+      stLoc.activity=mergeCalendars(stLoc.activity||{}, d.activity||{});
+      stLoc.words=mergeCalendars(stLoc.words||{}, d.words||{});
+      for(const k of Object.keys(d)){ if(k==='activity'||k==='words'||k==='updated_at') continue; stLoc[k]=d[k]; }
+      stLoc.updated_at=sRU;
+      pulledN++;
+    }else if(slU>sRU){
+      const r=await sbClient().from('user_stats').upsert({user_id:u.id, lang:SYNC_LANG, data:cleanStats(), updated_at:slU},{onConflict:'user_id,lang'});
+      if(r.error) throw r.error;
+      pushedN++;
+    }
+    cloudStatsU=Math.max(slU,sRU);
+
+    // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул updated_at) ---
+    _sigSet=settingsSig(settings); _sigStats=statsSig(stats);
+    await persist(); await refreshAll();
+    lastSyncAt=now();
+    await saveMeta();
+    syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
+  }catch(e){
+    // откат к снапшоту — локальные данные не тронуты
+    items=snap.items; settings=snap.settings; stats=snap.stats; _sigSet=snap.sigSet; _sigStats=snap.sigStats;
+    const msg=String(e&&e.message||e);
+    if(/fetch|network|Failed to fetch/i.test(msg)) syncStatus('Нет соединения — не синхронизировано','off');
+    else if(/войдите|Сначала/i.test(msg)) syncStatus('Войдите, чтобы синхронизировать','');
+    else syncStatus('Ошибка синхронизации','off');
+  }finally{
+    syncBusy=false; setSyncEnabled(!!_syncUser && !syncNetDown());
+  }
+}
+// Настройки без служебных полей (updated_at/sessN) — то, что уходит в облако.
+function cleanSettings(){
+  const o={};
+  for(const k of Object.keys(settings)){ if(k==='updated_at'||k==='sessN') continue; if(settings[k]!==undefined) o[k]=settings[k]; }
+  return o;
+}
+// Статистика без метки updated_at — то, что уходит в облако.
+function cleanStats(){
+  const o={};
+  for(const k of Object.keys(stats)){ if(k==='updated_at') continue; if(stats[k]!==undefined) o[k]=stats[k]; }
+  return o;
+}
 function sbReady(){ return !SB_OFFLINE && !!window.supabase && typeof window.supabase.createClient==='function'; }
 function sbClient(){
   if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON); }
@@ -3349,10 +3598,11 @@ async function renderAuth(){
     return;
   }
   const u=await currentUser();
+  _syncUser=u;
   if(u){
     box.innerHTML=`<div class="auth-line"><span class="mail">${escapeHtml(u.email||'')}</span><span class="spacer"></span>
       <button class="btn sec" style="width:auto; padding:9px 14px" id="btnSignOut">Выйти</button></div>
-      <div class="auth-hint">Вы вошли. Облачная синхронизация появится в следующей версии.</div>`;
+      <div class="auth-hint">Вы вошли. Нажмите «Синхронизировать» в Словаре, чтобы перенести данные в облако.</div>`;
     document.getElementById('btnSignOut').onclick=authSignOut;
   }else{
     box.innerHTML=`<div class="auth-line"><span class="auth-hint" style="margin:0">Вы не вошли.</span><span class="spacer"></span>
@@ -3360,6 +3610,7 @@ async function renderAuth(){
       <div class="auth-hint">Вход по email: пришлём письмо со ссылкой для входа. Без пароля.</div>`;
     document.getElementById('btnOpenAuth').onclick=openAuthModal;
   }
+  refreshSyncUI();
 }
 function openAuthModal(){
   const m=document.getElementById('modalAuth');
@@ -3392,6 +3643,7 @@ function openAuthModal(){
 async function authSignOut(){
   const c=sbClient();
   if(c){ const {error}=await c.auth.signOut(); if(error){ toast('Ошибка выхода: '+error.message); return; } }
+  _syncUser=null;
   renderAuth();
   toast('Вы вышли из аккаунта');
 }
@@ -3422,7 +3674,11 @@ async function boot(){
   if(!settings.updated_at) settings.updated_at=now();
   if(!stats.updated_at) stats.updated_at=now();
   _sigSet=settingsSig(settings); _sigStats=statsSig(stats);   // базовые сигнатуры текущей сессии
+  // восстанавливаем кэш последней синхронизации (для «В сети · синхр.» и «Изменено: N»)
+  const _meta=await DB.get(META);
+  if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=_meta.recs||{}; cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||0; }
   await persist();
+  refreshSyncUI();
   bindSettings();
   bindAudioSlot();
   bindAudioLifecycle();
