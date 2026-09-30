@@ -23,13 +23,14 @@
 
 ```
 languages      (code PK, name, rtl bool, has_strokes bool, sort_order)
-profiles       (id PK → auth.users, email, ui_lang, active_lang)
-cards          (id text PK, user_id → auth.users, lang, data jsonb, updated_at tz)
-user_settings  (user_id PK → auth.users, data jsonb, updated_at tz)
-user_stats     (user_id, lang PK, data jsonb, updated_at tz)
+profiles       (id PK → auth.users, email, ui_lang, active_lang, updated_at bigint)
+cards          (id text PK, user_id → auth.users, lang, data jsonb, updated_at bigint)
+user_settings  (user_id PK → auth.users, data jsonb, updated_at bigint)
+user_stats     (user_id, lang PK, data jsonb, updated_at bigint)
 catalog_items  (id, lang, kind, text, pinyin, translation jsonb, tag)
 ```
 
+- `updated_at` во всех таблицах — **bigint (epoch-миллисекунды)**, ровно как `Date.now()` в браузере: LWW-сравнение делается обычным `>` над целыми числами, без конвертаций и часовых поясов (в черновике был `timestamptz` — заменён осознанно).
 - `cards.data` = объект карточки как есть (`item` из IndexedDB) + поля `lang`, `updated_at`.
 - RLS: для всех пользовательских таблиц `auth.uid() = user_id`; `catalog_items` — `select` всем.
 - Аудио: bucket `recordings`, путь `user_id/<card_id>/<speed>.mp3`; в карточке только ссылка.
@@ -47,27 +48,29 @@ catalog_items  (id, lang, kind, text, pinyin, translation jsonb, tag)
 - [x] Topics + Website + Description в About репозитория
 - [x] GitHub Pages включён (ссылка работает)
 
-### Фаза 1 — Невидимый фундамент в коде (index.html)
+### Фаза 1 — Невидимый фундамент в коде (index.html) ✅ ВЫПОЛНЕНА (1.1.0)
 Цель: подготовить данные, чтобы синхронизация и мультиязычность не стали переделкой.
-- [ ] Добавить поле `lang` (default `'zh'`) в структуру `item`.
-- [ ] Добавить поле `updated_at = Date.now()` в структуру `item`; обновлять при **каждом** изменении карточки (SRS-ответ, правка полей, звёздочка, бокс).
-- [ ] Миграция при загрузке: существующим карточкам без `lang`/`updated_at` проставить `'zh'` и `now()` (один раз, в `boot()`).
-- [ ] `settings` и `stats` тоже получают метку времени последнего изменения (для LWW).
-- [ ] Версия: подтвердить у пользователя (невидимое изменение → третья цифра +1).
+- [x] Добавить поле `lang` (default `'zh'`) в структуру `item`.
+- [x] Добавить поле `updated_at = Date.now()` в структуру `item`; обновлять при изменении содержимого карточки (SRS-ответ, правка полей, звёздочка, бокс) — через подпись содержимого `itemSig()`.
+- [x] Миграция при загрузке: существующим карточкам без `lang`/`updated_at` проставить `'zh'` и `now()` (один раз, в `boot()`).
+- [x] `settings` и `stats` тоже получают метку времени последнего изменения (для LWW).
+- [x] Версия: подтвердить у пользователя (невидимое изменение → третья цифра +1).
 
-### Фаза 2 — Supabase: схема и аутентификация (пользователь в дашборде, я даю SQL)
-- [ ] Создать/открыть проект Supabase (бесплатный тариф).
-- [ ] Я готовлю единый SQL: таблицы `languages`, `profiles`, `cards`, `user_settings`, `user_stats`, `catalog_items`; RLS-политики; сиды `languages` (zh/en/tr/ar с флагами rtl/has_strokes) и 5–8 стартовых слов `catalog_items` (zh).
-- [ ] Пользователь выполняет SQL в Supabase → SQL Editor → Run.
-- [ ] Создать Storage bucket `recordings` (private), RLS на него.
-- [ ] Включить Auth → Email → **Magic Link / OTP**; добавить redirect `https://refolit.github.io/Lang-trainer/**`.
+### Фаза 2 — Supabase: схема и аутентификация (пользователь в дашборде, я даю SQL) ✅ ВЫПОЛНЕНА
+- [x] Создать/открыть проект Supabase (бесплатный тариф). Проект: `njlxtfonhzqhxuklrfxs`.
+- [x] Я готовлю единый SQL: таблицы `languages`, `profiles`, `cards`, `user_settings`, `user_stats`, `catalog_items`; RLS-политики; сиды `languages` (zh/en/tr/ar с флагами rtl/has_strokes) и 5–8 стартовых слов `catalog_items` (zh). Файлы: `supabase/phase2.sql`, `supabase/phase2-storage.sql`.
+- [x] Пользователь выполняет SQL в Supabase → SQL Editor → Run («Success. No rows returned»).
+- [x] Создать Storage bucket `recordings` (private), RLS на него (`phase2-storage.sql`).
+- [x] Включить Auth → Email → **Magic Link / OTP**; добавить redirect `https://refolit.github.io/Lang-trainer/**`.
+  - ⚠️ Пользователю осталось проверить: Auth → Email — выключен ли `Confirm email`?
 
-### Фаза 3 — Подключение клиента + вход по email
-- [ ] `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">` перед кодом приложения.
-- [ ] Конфиг: `SB_URL` + `SB_ANON` (из Settings → API). Ключ публичный — это нормально.
-- [ ] Экран/модалка «Войти»: ввод email → отправка OTP/magic link → автоподхват сессии из URL.
-- [ ] `onAuthStateChange` + `getSession()` на старте; кнопка «Выйти».
-- [ ] Сессия хранится в localStorage самим CLI ✅.
+### Фаза 3 — Подключение клиента + вход по email ✅ ГОТОВА В КОДЕ (ждёт проверки входа + утверждения версии)
+- [x] `<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">` перед кодом приложения.
+- [x] Конфиг: `SB_URL` + `SB_ANON` (из Settings → API). Ключ публичный — это нормально.
+- [x] Модалка «Войти»: ввод email → отправка magic-link → автоподхват сессии из URL (`signInWithOtp` + `emailRedirectTo`).
+- [x] `onAuthStateChange` на старте; кнопка «Выйти»; блок «Аккаунт» в Настройках.
+- [x] Сессия хранится в localStorage самим CLI ✅.
+- [ ] Проверка входа по реальной ссылке из письма (нужен запуск на GitHub Pages + клик по письму).
 - [ ] Версия: подтвердить у пользователя.
 
 ### Фаза 4 — Кнопка «Синхронизировать» + LWW-merge

@@ -176,7 +176,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .tr-btn.minus{color:var(--mut)}
 
 /* Forms */
-input[type=text],textarea,select{
+input[type=text],input[type=email],textarea,select{
   width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 12px; font-size:15px; background:#fff; font-family:inherit;
 }
 input[type=text].zh{font-family:var(--font-cjk); font-size:22px}
@@ -327,6 +327,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .ver-item .vh .vnum{color:var(--red)}
 .ver-item .vt{font-size:12.5px; color:var(--mut); line-height:1.5; margin-top:3px}
 .ver-now{margin-top:12px; padding-top:11px; border-top:2px solid var(--line); font-size:12.5px; color:var(--mut); text-align:center; font-weight:700}
+
+/* Аккаунт / Supabase (экран «Ещё» → Настройки) */
+.auth-line{display:flex; align-items:center; gap:10px}
+.auth-line .mail{font-size:13px; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.auth-hint{font-size:12px; color:var(--mut); line-height:1.5; margin-top:8px}
 /* Выбор ответов: равные карточки, перенос, многоточие */
 .exam-opt .opt-txt{display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; max-width:100%}
 .prev-note{font-size:11px;color:var(--mut);margin-top:6px;line-height:1.5}
@@ -575,6 +580,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         </div>
 
         <div class="card">
+          <div class="card-h">Аккаунт</div>
+          <div id="authBox"></div>
+        </div>
+
+        <div class="card">
           <div class="card-h">Данные</div>
           <div class="btn-row">
             <button class="btn sec" id="btnExport">Экспорт JSON</button>
@@ -614,12 +624,14 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 <div class="modal hidden" id="modalItem"></div>
 <div class="modal hidden" id="modalBatch"></div>
+<div class="modal hidden" id="modalAuth"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
 
 <script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.6/dist/hanzi-writer.min.js" onerror="this.remove();loadLibFallback()"></script>
 <script src="https://cdn.jsdelivr.net/npm/pinyin-pro@3.29.4/dist/index.min.js" onerror="this.remove();loadLibFallback2()"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============================== LIB FALLBACK ==============================
 function loadLibFallback(){
@@ -659,7 +671,14 @@ let stats = { streak:0, lastDay:'', activity:{} };
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.1.1';
+
+// ============================== SUPABASE (облачная синхронизация) ==============================
+// Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
+const SB_URL='https://njlxtfonhzqhxuklrfxs.supabase.co';
+const SB_ANON='sb_publishable_FiGJ9WPvbmBDPqaJj5NZnA_HPhIyYAs';
+let SB=null;                                   // клиент Supabase (создаётся лениво, после загрузки SDK)
+const SB_OFFLINE=window.__NO_SUPABASE__===true; // в офлайн-сборке SDK заменён заглушкой
 
 // ============================== SRS (5 коробок, интервалы в сессиях) ==============================
 const BOX_INT=[0,1,2,4,6,8]; // сессий до следующего показа; индекс = коробка (1..5)
@@ -2371,6 +2390,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.1.1','30.09.26','Фаза 3 (синхронизация): вход по email в Supabase — блок «Аккаунт» в Настройках, вход по magic-link без пароля, автоподхват сессии из ссылки письма, кнопка «Выйти»; офлайн-сборка — без Supabase (честная заглушка)'],
   ['1.1.0','29.09.26','Фаза 1 — фундамент синхронизации: у карточек, настроек и статистики появились поля lang и updated_at; миграция старых данных; updated_at обновляется только при реальном изменении содержимого (подпись содержимого). Внешне ничего не изменилось'],
   ['1.0.19','27.09.26','Экзамен: кнопки результатов переименованы («Начать экзамен заново», «Перейти в режим «Учить»»); «Учить» — кнопка «Вперёд ▶» в 1,5 раза выше; экспорт JSON сохраняется как «hanzi-backup <дата>»; офлайн-файл называется «hanzi-trainer-offline <версия>»'],
   ['1.0.18','26.09.26','Словарь: кнопка ↑ (повысить уровень) вместо ✎, ↑ и ↓ теперь меняют уровень на 1; одно аудио на карточку (кнопка «Прикрепить аудио» целиком, старые скорости удалены); новые слова вверху списка; в карточке «Уровень N»; «Учить» — кнопки Вперёд/Назад/Повторить столбиком; уведомление «Подключитесь к интернету, иероглиф недоступен»'],
@@ -3306,6 +3326,81 @@ function stopAllAudio(){
   if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
 }
 
+// ============================== AUTH (Supabase: вход по email-ссылке) ==============================
+function sbReady(){ return !SB_OFFLINE && !!window.supabase && typeof window.supabase.createClient==='function'; }
+function sbClient(){
+  if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON); }
+  return SB;
+}
+async function currentUser(){
+  const c=sbClient(); if(!c) return null;
+  try{ const r=await c.auth.getUser(); return r && r.data && r.data.user ? r.data.user : null; }
+  catch(e){ return null; }
+}
+async function renderAuth(){
+  const box=document.getElementById('authBox'); if(!box) return;
+  if(SB_OFFLINE){
+    box.innerHTML='<div class="auth-hint">Офлайн-версия — без облачной синхронизации. Откройте онлайн-версию, чтобы войти.</div>';
+    return;
+  }
+  if(!sbReady()){
+    box.innerHTML='<div class="auth-hint">Не удалось загрузить Supabase — проверьте подключение к интернету.</div>';
+    return;
+  }
+  const u=await currentUser();
+  if(u){
+    box.innerHTML=`<div class="auth-line"><span class="mail">${escapeHtml(u.email||'')}</span><span class="spacer"></span>
+      <button class="btn sec" style="width:auto; padding:9px 14px" id="btnSignOut">Выйти</button></div>
+      <div class="auth-hint">Вы вошли. Облачная синхронизация появится в следующей версии.</div>`;
+    document.getElementById('btnSignOut').onclick=authSignOut;
+  }else{
+    box.innerHTML=`<div class="auth-line"><span class="auth-hint" style="margin:0">Вы не вошли.</span><span class="spacer"></span>
+      <button class="btn" style="width:auto; padding:9px 14px" id="btnOpenAuth">Войти</button></div>
+      <div class="auth-hint">Вход по email: пришлём письмо со ссылкой для входа. Без пароля.</div>`;
+    document.getElementById('btnOpenAuth').onclick=openAuthModal;
+  }
+}
+function openAuthModal(){
+  const m=document.getElementById('modalAuth');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Вход по email</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
+    <div class="auth-hint" style="margin-top:6px">Введите email — пришлём письмо со ссылкой для входа. Пароль не нужен.</div>
+    <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px">
+    <button class="btn" id="authSend" style="margin-top:10px">Отправить ссылку</button>
+    <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
+  </div>`;
+  m.classList.remove('hidden');
+  const inp=document.getElementById('authEmail');
+  const send=document.getElementById('authSend');
+  const msg=document.getElementById('authMsg');
+  send.onclick=async ()=>{
+    const email=inp.value.trim();
+    if(!email){ msg.textContent='Введите email.'; return; }
+    const c=sbClient();
+    if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
+    send.disabled=true; send.textContent='Отправляем…';
+    const {error}=await c.auth.signInWithOtp({
+      email,
+      options:{ emailRedirectTo: location.origin + location.pathname }
+    });
+    send.disabled=false; send.textContent='Отправить ссылку';
+    if(error){ msg.textContent='Ошибка: '+error.message; }
+    else{ msg.textContent='Готово! Проверьте почту и откройте ссылку из письма.'; }
+  };
+}
+async function authSignOut(){
+  const c=sbClient();
+  if(c){ const {error}=await c.auth.signOut(); if(error){ toast('Ошибка выхода: '+error.message); return; } }
+  renderAuth();
+  toast('Вы вышли из аккаунта');
+}
+function initAuthState(){
+  renderAuth();
+  if(!sbReady()) return;
+  const c=sbClient();
+  c.auth.onAuthStateChange(()=>renderAuth());
+}
+
 // ============================== BOOT ==============================
 async function boot(){
   await DB.open();
@@ -3331,6 +3426,7 @@ async function boot(){
   bindAudioSlot();
   bindAudioLifecycle();
   refreshAll();
+  initAuthState();
 }
 boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
 

@@ -34,6 +34,12 @@ out = out.replace(
   /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/hanzi-writer@3\.6\/dist\/hanzi-writer\.min\.js"[^>]*><\/script>\s*<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/pinyin-pro@3\.29\.4\/dist\/index\.min\.js"[^>]*><\/script>/,
   injected
 );
+// Supabase SDK НЕ вшиваем: офлайн-версия не синхронизируется. Заменяем <script src=@supabase/supabase-js@2>
+// на заглушку — приложение честно покажет «офлайн-версия, вход недоступен».
+out = out.replace(
+  /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2"><\/script>/,
+  '<script>window.__NO_SUPABASE__=true;</script>'
+);
 // Убираем фолбэки загрузки внешних библиотек
 out = out.replace(/\/\/ ============================== LIB FALLBACK ==============================[\s\S]*?\n}\n\);\n/, '');
 out = out.replace(/\/\/ ============================== LIB FALLBACK ==============================[\s\S]*?document\.head\.appendChild\(s\);\n}\n/, '');
