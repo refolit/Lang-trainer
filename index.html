@@ -765,6 +765,7 @@ async function setLang(lang){
   if('speechSynthesis' in window) loadVoices(); // заново подбираем голоса под язык
   await persist();
   refreshAll();
+  maybeOfferSamples();
   // в фоне: сохраняем выбор языка в профиль (не блокируем интерфейс)
   if(SB_OFFLINE || !sbReady() || !_syncUser) return;
   try{
@@ -3478,14 +3479,28 @@ const SAMPLES={
     ['sentence','اسمي آنا','','Меня зовут Анна']
   ]
 };
-function sampleData(){
+function sampleData(skipConfirm){
   // примеры добавляются для АКТИВНОГО языка; предупреждаем только если в нём уже есть карточки
-  if(langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
+  if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
   const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
     items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
+}
+// Разовая оферта на первом входе в пустой язык (boot и setLang): спросить и, если
+// согласились, добавить стартовый набор. Показывается только когда у языка ещё нет слов.
+async function maybeOfferSamples(){
+  const S=SAMPLES[activeLang]||SAMPLES.zh;
+  if(!S || !S.length) return;
+  if(settings.samplesOffered && settings.samplesOffered[activeLang]) return;
+  if(!settings.samplesOffered) settings.samplesOffered={};
+  settings.samplesOffered[activeLang]=true; // спрашиваем один раз на язык (даже если «Нет»)
+  await persist();
+  if(langItems().length || !SAMPLES[activeLang] || !SAMPLES[activeLang].length) return;
+  if(confirm('Добавить стартовый набор слов для '+langInfo().name+'?')){
+    sampleData(true);
+  }
 }
 async function wipeAll(){
   if(!confirm('Удалить ВСЕ слова, аудио и статистику? Это необратимо.')) return;
@@ -3943,6 +3958,7 @@ async function boot(){
   applyDir();
   renderLangSeg();
   await persist();
+  maybeOfferSamples();
   refreshSyncUI();
   bindSettings();
   bindAudioSlot();
