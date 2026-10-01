@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#c62828">
-<title>汉语 — тренажёр</title>
+<title>Language Trainer</title>
 <link rel="manifest" href='data:application/manifest+json,{"name":"汉语 тренажёр","short_name":"汉语","start_url":".","display":"standalone","background_color":"%23faf8f5","theme_color":"%23c62828","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E'>
 
@@ -149,6 +149,14 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 #writeCenter{width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; max-width:620px; margin:0 auto}
 /* Окно письма — на всю ширину телефона, строгий квадрат 1:1; боковой отступ даёт padding экрана */
 #writeArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); margin:0 auto; touch-action:none; background:#fff; border-radius:12px}
+/* Письмо для языков без иероглифов (en/tr/ar) — клавиатурный ввод вместо кисти */
+#writeArea.type{aspect-ratio:auto; max-width:min(620px,100%); min-height:64px; display:flex; align-items:center; justify-content:center}
+.type-card{width:100%; text-align:center; padding:26px 16px}
+.type-word{font-size:34px; font-weight:700; letter-spacing:.4px; margin-bottom:6px; line-height:1.3}
+#writePy.type-py{font-size:17px; margin-top:8px; min-height:1.3em}
+#writeTr.type-tr{font-size:18px; max-width:100%}
+.type-in{width:88%; max-width:340px; padding:12px 14px; font-size:18px; text-align:center; border-radius:12px; border:1.5px solid var(--line); margin-top:12px; background:#fff}
+.type-btn{margin-top:12px; width:auto; padding:10px 24px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:#fff; border-radius:12px}
 #writeTr{font-size:15px; color:var(--mut); text-align:center; margin-top:2px; line-height:1.4; max-width:92%}
 #writeList{max-width:560px; margin:14px auto 0; display:flex; flex-wrap:wrap; gap:7px; align-items:center; justify-content:flex-start}
@@ -404,7 +412,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <body>
 
 <header class="top">
-  <div class="title"><span class="zh">汉语</span> · тренажёр</div>
+  <div class="title">Language Trainer</div>
   <div class="sub"><span class="ver" id="appVer">Версия</span></div>
 </header>
 
@@ -549,6 +557,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <!-- ВКЛАДКА: НАСТРОЙКИ -->
       <div id="moreTabSettings" class="hidden">
         <div class="card">
+          <label class="lbl">Язык</label>
+          <div class="seg" id="langSeg"></div>
+        </div>
+        <div class="card">
           <label class="lbl">Размер иероглифа</label>
           <div class="seg" id="hanziSizeSeg">
             <button data-v="1.35">Крупнее</button>
@@ -682,10 +694,22 @@ let settings = {
   repeats:3, hint:2, voiceURI:'', mulH:1, mulP:1, mulT:1, studySpeed:'all'
 };
 let stats = { streak:0, lastDay:'', activity:{} };
+// Активный язык (Фаза 5): справочник языков; у каждого — свои карточки и статистика.
+// rtl — зеркальная раскладка экрана (арабский); has_strokes — режим «Письмо» кистью (китайский).
+// Для остальных языков «Письмо» — печать на клавиатуре.
+const LANGS=[
+  {code:'zh', name:'中文',      flag:'🇨🇳', rtl:false, has_strokes:true,  tts:'zh-CN'},
+  {code:'en', name:'English',  flag:'🇬🇧', rtl:false, has_strokes:false, tts:'en-US'},
+  {code:'tr', name:'Türkçe',   flag:'🇹🇷', rtl:false, has_strokes:false, tts:'tr-TR'},
+  {code:'ar', name:'العربية',  flag:'🇸🇦', rtl:true,  has_strokes:false, tts:'ar-SA'}
+];
+const LANG_MAP={}; LANGS.forEach(l=>LANG_MAP[l.code]=l);
+let activeLang='zh';        // текущий язык (подтягивается из settings.activeLang в boot)
+// Карточки/статистика фильтруются по языку — см. langItems()/langOf() ниже.
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.1.3';
+const APP_VERSION='1.2.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -701,6 +725,53 @@ let SESS=0;                 // номер текущей сессии (Учит�
 let SHOW_N=0;               // глобальный порядковый номер показа (для правила «между показами были другие слова»)
 
 function uid(){ return 'i'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+// ============================== ЯЗЫКИ (Фаза 5) ==============================
+// Активный язык у карточки (миграция проставила 'zh' старым записям); незнакомые коды → 'zh'.
+function langOf(it){ return LANG_MAP[it&&it.lang] ? it.lang : 'zh'; }
+// Карточки активного языка (порядок items не меняем — только копия для чтения).
+function langItems(){ return items.filter(it=>langOf(it)===activeLang); }
+function langInfo(){ return LANG_MAP[activeLang]||LANGS[0]; }
+function hasStrokes(){ return !!langInfo().has_strokes; }
+function ttsLang(){ return langInfo().tts||'zh-CN'; }
+function applyDir(){
+  const code=langInfo().rtl?'rtl':'ltr';
+  document.documentElement.setAttribute('dir', code);
+  const inp=document.getElementById('typeInput');
+  if(inp) inp.setAttribute('dir', langInfo().rtl?'rtl':'auto');
+}
+// Переключатель языка (сегмент в Настройках). Меняет активный язык, подменяет
+// статистику (stats — ссылка на statsByLang[activeLang]) и перерисовывает всё.
+function renderLangSeg(){
+  const seg=document.getElementById('langSeg'); if(!seg) return;
+  seg.innerHTML='';
+  LANGS.forEach(l=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.dataset.code=l.code;
+    b.textContent=l.flag+' '+l.name;
+    if(l.code===activeLang) b.classList.add('active');
+    b.onclick=()=>setLang(l.code);
+    seg.appendChild(b);
+  });
+}
+async function setLang(lang){
+  if(activeLang===lang) return;
+  activeLang=lang;
+  settings.activeLang=lang;
+  stats=statsFor(lang);               // stats — теперь статистика выбранного языка
+  renderLangSeg();
+  applyDir();
+  if('speechSynthesis' in window) loadVoices(); // заново подбираем голоса под язык
+  await persist();
+  refreshAll();
+  // в фоне: сохраняем выбор языка в профиль (не блокируем интерфейс)
+  if(SB_OFFLINE || !sbReady() || !_syncUser) return;
+  try{
+    const c=sbClient();
+    if(c) await c.from('profiles').upsert({id:_syncUser.id, active_lang:lang}, {onConflict:'id'});
+  }catch(e){}
+}
 function now(){ return Date.now(); }
 function dayStr(d){
   d=d||new Date();
@@ -774,7 +845,17 @@ function itemSig(it){
 // (локальный счётчик сессий — меняется при каждом входе в режим, но это не пользовательская настройка).
 function settingsSig(s){ const o={}; for(const k in s){ if(k==='updated_at'||k==='sessN') continue; o[k]=s[k]; } return JSON.stringify(o); }
 function statsSig(s){ const o={}; for(const k in s){ if(k==='updated_at') continue; o[k]=s[k]; } return JSON.stringify(o); }
-let _sigSet=null, _sigStats=null;   // базовые сигнатуры, проставляются в boot()
+let _sigSet=null;   // базовая сигнатура настроек, проставляется в boot()
+
+// Статистика разделена по языкам (Фаза 5): карта {lang → stats}. Переменная `stats`
+// — это статистика АКТИВНОГО языка (для совместимости со всем остальным кодом).
+const DB_STATS_ALL='stats-all';
+let statsByLang={};                // {code → {streak,lastDay,activity,words,...}}
+let _sigStatsMap={};               // сигнатуры каждой языковой статистики (для persist)
+function statsFor(lang){
+  if(!statsByLang[lang]) statsByLang[lang]={streak:0,lastDay:'',activity:{}};
+  return statsByLang[lang];
+}
 
 async function persist(){
   const t=now();
@@ -787,11 +868,12 @@ async function persist(){
   // settings/stats: двигаем updated_at только при изменении содержимого
   const ss=settingsSig(settings);
   if(_sigSet!==ss){ settings.updated_at=t; _sigSet=ss; }
+  // статистика активного языка живёт в statsByLang[activeLang] (stats — та же ссылка)
   const st=statsSig(stats);
-  if(_sigStats!==st){ stats.updated_at=t; _sigStats=st; }
+  if(_sigStatsMap[activeLang]!==st){ stats.updated_at=t; _sigStatsMap[activeLang]=st; }
   await DB.put(ITEMS, items);
   await DB.put(SET, settings);
-  await DB.put(STATS, stats);
+  await DB.put(DB_STATS_ALL, statsByLang);
 }
 
 // ============================== HELPERS ==============================
@@ -828,9 +910,11 @@ function toPinyin(s){
 // ============================== TTS ==============================
 let VOICES=[], audioUnlocked=false;
 function loadVoices(){
-  VOICES=speechSynthesis.getVoices().filter(v=>/zh|cmn|chinese/i.test(v.lang));
+  // голоса только активного языка (Фаза 5); «Авто (xx-XX)» — без ручного выбора, берём best-fit
+  const prefix=(ttsLang()||'zh-CN').replace('-','').split('-')[0].toLowerCase(); // zh/en/tr/ar
+  VOICES=speechSynthesis.getVoices().filter(v=>new RegExp('^'+prefix,'i').test(v.lang));
   const sel=document.getElementById('voiceSel');
-  sel.innerHTML='<option value="">Авто (zh-CN)</option>';
+  sel.innerHTML='<option value="">Авто ('+ttsLang()+')</option>';
   VOICES.forEach(v=>{ const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=v.name+' ('+v.lang+')'; sel.appendChild(o); });
   if(settings.voiceURI) sel.value=settings.voiceURI;
 }
@@ -839,7 +923,8 @@ if('speechSynthesis' in window){
   speechSynthesis.onvoiceschanged=loadVoices;
 }
 function pickVoice(){
-  return VOICES.find(v=>v.voiceURI===settings.voiceURI) || VOICES.find(v=>/zh-CN|cmn-Hans/i.test(v.lang)) || VOICES[0] || null;
+  const pref=ttsLang();
+  return VOICES.find(v=>v.voiceURI===settings.voiceURI) || VOICES.find(v=>v.lang===pref) || VOICES[0] || null;
 }
 // страховочный таймаут для TTS: если onend/onerror не пришли (зависание очереди),
 // обещание завершаем принудительно — речь не «висит» в фоне.
@@ -853,7 +938,7 @@ function speak(text,rate){
     if(!text||!String(text).trim()){ res(); return; }
     speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(text);
-    u.lang='zh-CN'; u.rate=rate||1;
+    u.lang=ttsLang(); u.rate=rate||1;
     const v=pickVoice(); if(v) u.voice=v;
     let done=false, tmo=null;
     const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
@@ -915,7 +1000,7 @@ const Player={
       if(t.kind==='tts'){
         if(!('speechSynthesis' in window)){ res(); return; }
         const u=new SpeechSynthesisUtterance(t.text);
-        u.lang='zh-CN'; u.rate=t.rate||1;
+        u.lang=ttsLang(); u.rate=t.rate||1;
         const v=pickVoice(); if(v) u.voice=v;
         u.onend=finish; u.onerror=finish;
         try{ speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){ finish(); return; }
@@ -1088,7 +1173,7 @@ function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;'
 let dictFilter='all';
 function dictFiltered(){
   const q=(document.getElementById('dictSearch').value||'').trim().toLowerCase();
-  let arr=items.slice(); // копия: сортируем только здесь, не меняя порядок в items
+  let arr=langItems().slice(); // копия карточек активного языка: сортируем только здесь
   if(dictFilter==='star') arr=arr.filter(it=>it.starred);
   else if(dictFilter==='learned') arr=arr.filter(isLearned);
   else if(dictFilter==='due') arr=arr.filter(it=>it.translation && isDue(it));
@@ -1100,8 +1185,8 @@ function dictFiltered(){
 }
 // подписи-счётчики «N выучено» и «M повторить» + подсветка активной кнопки
 function updateDictFilterChips(){
-  const learned=items.filter(isLearned).length;
-  const due=items.filter(it=>it.translation && isDue(it)).length;
+  const learned=langItems().filter(isLearned).length;
+  const due=langItems().filter(it=>it.translation && isDue(it)).length;
   document.getElementById('dictFilterLearned').innerHTML='<b>'+learned+'</b> выучено';
   document.getElementById('dictFilterDue').innerHTML='<b>'+due+'</b> повторить';
   document.querySelectorAll('[data-dict-filter]').forEach(b=>b.classList.toggle('active', b.dataset.dictFilter===dictFilter));
@@ -1185,7 +1270,7 @@ function openItemModal(id){
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
     isNewItem=true;
-    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:'zh',updated_at:now()};
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()};
   }else{
     hydrateRecordings(editingItem);
   }
@@ -1196,10 +1281,10 @@ function openItemModal(id){
   const m=document.getElementById('modalItem');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>${title}</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalItem')">✕</button></div>
-    <label class="lbl">Китайский текст</label>
-    <input type="text" class="zh" id="fHanzi" value="${escapeHtml(it.hanzi)}" placeholder="你好">
-    <label class="lbl">Пиньинь</label>
-    <input type="text" id="fPinyin" value="${escapeHtml(it.pinyin||'')}" placeholder="nǐ hǎo">
+    <label class="lbl">${hasStrokes()?'Китайский текст':'Слово'}</label>
+    <input type="text" class="${hasStrokes()?'zh':''}" id="fHanzi" dir="${langInfo().rtl?'rtl':'auto'}" value="${escapeHtml(it.hanzi)}" placeholder="${hasStrokes()?'你好':'hello'}">
+    ${hasStrokes()?`<label class="lbl">Пиньинь</label>
+    <input type="text" id="fPinyin" value="${escapeHtml(it.pinyin||'')}" placeholder="nǐ hǎo">`:''}
     <div class="row" style="margin-top:6px">
       <label class="lbl" style="margin:0">Перевод</label><span class="spacer"></span>
       <a href="#" class="autolink" id="fAutoTr" onclick="event.preventDefault();autoTranslate()">Яндекс.Перевод</a>
@@ -1224,7 +1309,8 @@ function openItemModal(id){
   // автопиньинь: при вводе китайского сразу подставляем пиньинь (можно поправить вручную)
   m.querySelector('#fHanzi').oninput=()=>{
     const h=m.querySelector('#fHanzi').value.trim();
-    m.querySelector('#fPinyin').value=toPinyin(h);
+    const p=m.querySelector('#fPinyin');
+    if(p) p.value=toPinyin(h);
   };
 }
 // Альтернативные переводы: «Перевод», «Перевод 2» … «Перевод 5» (максимум 5 полей).
@@ -1459,8 +1545,8 @@ function saveBatch(){
       if(sep){ hanzi=line.slice(0,sep.index).trim(); tr=line.slice(sep.index+sep[0].length).trim(); }
     }
     if(!hanzi) return;
-    if(!pinyin) pinyin=toPinyin(hanzi);
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:'zh',updated_at:now()});
+    if(!pinyin && hasStrokes()) pinyin=toPinyin(hanzi);
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
     n++;
   });
   persist().then(()=>{ closeModal('modalBatch'); renderDict(); updateChips(); toast('Добавлено: '+n); });
@@ -1528,7 +1614,7 @@ function shuffle(a){
 }
 // Приоритет: звёзды наверху; внутри — «давно не видел — первым» (меньше lastSeen первым).
 function studyPool(){
-  const due=items.filter(it=>it.translation && isDue(it));
+  const due=langItems().filter(it=>it.translation && isDue(it));
   const seen=it=>(it.lastSeen||it.nextDue||0);
   return [].concat(
     due.filter(it=>it.starred).sort((a,b)=>seen(a)-seen(b)),
@@ -1709,9 +1795,17 @@ function applyWriteToggles(){
   const b=(id,on)=>document.getElementById(id)&&document.getElementById(id).classList.toggle('on',on);
   b('writeAudio',writeAudioOn); b('writeOutline',writeOutlineOn); b('writeAnim',writeAnimOn);
   b('writeRand', writeRandOn());
+  // языки без кисти (en/tr/ar): Контур и Анимация не имеют смысла — скрываем
+  const hide=!hasStrokes();
+  ['writeOutline','writeAnim'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display=hide?'none':'';
+  });
 }
 function writableItems(){
-  return items.filter(it=>/[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi));
+  // языки без иероглифов (en/tr/ar): «Письмо» — это все карточки с переводом
+  if(!hasStrokes()) return langItems().filter(it=>it.translation && trList(it).length);
+  return langItems().filter(it=>/[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi));
 }
 function startWrite(){
   Player.stop();
@@ -1720,8 +1814,17 @@ function startWrite(){
   const all=writableItems();
   if(!all.length){
     document.getElementById('writeWord').innerHTML='';
-    document.getElementById('writeArea').innerHTML='<div class="empty">Нет слов с иероглифами.<br>Добавьте их в «Словаре».</div>';
+    document.getElementById('writeArea').innerHTML='<div class="empty">Нет слов для письма.<br>Добавьте их в «Словаре».</div>';
     document.getElementById('writePy').textContent=''; document.getElementById('writeTr').textContent='';
+    document.getElementById('writeList').innerHTML='';
+    return;
+  }
+  // языки без кисти (en/tr/ar) — клавиатурный ввод целого слова
+  if(!hasStrokes()){
+    applyWriteToggles();
+    rebuildWriteSeq();
+    if(writeCurItem && langOf(writeCurItem)===activeLang) setWriteItemTyping(writeCurItem, true);
+    else setWriteItemTyping(all[0], true);
     return;
   }
   // самое последнее добавленное слово — первое в списке ниже
@@ -1745,6 +1848,67 @@ function renderWriteWord(){
   el.classList.remove('hidden');
   el.innerHTML=writeChars.map((c,i)=>`<span class="wch ${i===writeCharIdx?'cur':''}">${c}</span>`).join('');
 }
+// ===== ПИСЬМО: КЛАВИАТУРНЫЙ ВВОД (en/tr/ar — языки без кисти) =====
+function writeTypeSeq(){ return writeSeq.length?writeSeq:writeWordList(); }
+function setWriteItemTyping(it, speakNow){
+  if(!it) return;
+  writeCurItem=it;
+  writeChars=Array.from(it.hanzi);
+  markShown(it);
+  writeToken++;
+  const area=document.getElementById('writeArea');
+  area.classList.add('type');
+  const hintOn=writeHintOn();
+  area.innerHTML=`<div class="type-card">
+    <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
+    ${hintOn?`<div class="type-word">${escapeHtml(it.hanzi)}</div>`:''}
+    <input type="text" id="typeInput" class="type-in" dir="${langInfo().rtl?'rtl':'auto'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${hintOn?'введите слово':'слово / фраза'}">
+    <div><button class="btn type-btn" id="typeCheck">Проверить</button></div>
+  </div>`;
+  renderWriteList();
+  renderTypeCardsHint();
+  const inp=area.querySelector('#typeInput');
+  inp.onkeydown=e=>{
+    if(e.key==='Enter'){ e.preventDefault(); checkTyped(inp); }
+    else { if(area._err){ area._err=''; area.animate([{opacity:1},{opacity:.75},{opacity:1}],{duration:140}); } }
+  };
+  area.querySelector('#typeCheck').onclick=()=>checkTyped(inp);
+  if(speakNow!==false && writeAudioOn){ if(it.hanzi) speak(it.hanzi,1); }
+  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },0);
+}
+function typeNormalize(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function checkTyped(inp){
+  const it=writeCurItem; if(!it) return;
+  const area=document.getElementById('writeArea');
+  const val=typeNormalize(inp.value);
+  const want=typeNormalize(it.hanzi);
+  // арабский/турецкий: допускаем пропущенные диакритики в слове пользователя? нет — сравниваем
+  // по нормализации (регистр/лишние пробелы); точное совпадение для всех языков
+  if(val===want){
+    good(it); newGood(it); persist(); updateChips();
+    // автопиньинь ни при чём — сразу следующее слово
+    writeNextTyping();
+  }else{
+    area._err=true;
+    area.animate([{opacity:1},{opacity:.7},{opacity:1}],{duration:180});
+    if(writeAudioOn && it.hanzi) speak(it.hanzi,1); // повторяем слово вслух
+    inp.value='';
+    setTimeout(()=>{ try{ inp.focus(); }catch(e){} },0);
+  }
+}
+function renderTypeCardsHint(){
+  const el=document.getElementById('writeWord');
+  // в режиме печати подсказка-слово не нужна: слово уже целиком показано в карточке
+  el.innerHTML=''; el.classList.add('hidden');
+}
+function writeNextTyping(){
+  const btn=document.getElementById('writeNext'); // подсветим кнопку «Вперёд ▶», как в китайском режиме
+  const L=writeTypeSeq(); if(!L.length) return;
+  const i=L.findIndex(x=>x.id===writeCurItem.id);
+  let nx=i<0?L[0]:(i>=L.length-1?L[0]:L[i+1]);
+  if(i>=L.length-1){ rebuildWriteSeq(); }
+  setWriteItemTyping(nx);
+}
 function renderWriteLabels(){
   const ch=writeChars[writeCharIdx];
   document.getElementById('writePy').textContent=ch?toPinyin(ch):'';
@@ -1760,7 +1924,7 @@ function renderWriteList(){
     return `<span class="wl-zh-pill ${cur?'cur':''}" data-id="${it.id}">${escapeHtml(it.hanzi)}</span>`;
   }).join('');
   el.querySelectorAll('.wl-zh-pill').forEach(pill=>{
-    pill.onclick=()=>{ const it=items.find(x=>x.id===pill.dataset.id); if(it){ setWriteItem(it, false); } };
+    pill.onclick=()=>{ const it=items.find(x=>x.id===pill.dataset.id); if(it){ if(hasStrokes()) setWriteItem(it, false); else setWriteItemTyping(it, true); } };
   });
 }
 function writeGoto(idx){
@@ -1779,12 +1943,14 @@ function rebuildWriteSeq(){
   writeSeq=writeWordList();
 }
 function writePrev(){ // предыдущее слово/предложение (по списку ниже); внутри — к его ПЕРВОМУ иероглифу
+  if(!hasStrokes()){ writeNavTyping(-1); return; }
   const L=writeSeq.length?writeSeq:writeWordList(); if(!L.length) return;
   let i=L.findIndex(x=>x.id===writeCurItem.id);
   i=(i<=0)?L.length-1:i-1;
   setWriteItem(L[i]);
 }
 function writeNext(){ // следующее слово/предложение; после последнего — снова первое
+  if(!hasStrokes()){ writeNavTyping(1); return; }
   let L=writeSeq.length?writeSeq:writeWordList();
   if(!L.length) return;
   let i=L.findIndex(x=>x.id===writeCurItem.id);
@@ -1792,6 +1958,17 @@ function writeNext(){ // следующее слово/предложение; �
   if(i>=L.length-1){ rebuildWriteSeq(); L=writeSeq; i=0; }  // конец — очередь зацикливается
   else i=i+1;
   setWriteItem(L[i]);
+}
+function writeNavTyping(dir){ // прокрутка слов в режиме печати (клавишный ввод)
+  let L=writeTypeSeq(); if(!L.length) return;
+  let i=L.findIndex(x=>x.id===writeCurItem.id);
+  if(i<0){ setWriteItemTyping(L[0]); return; }
+  if(dir<0){ i=(i<=0)?L.length-1:i-1; }
+  else {
+    if(i>=L.length-1){ rebuildWriteSeq(); L=writeTypeSeq(); i=0; }
+    else i=i+1;
+  }
+  setWriteItemTyping(L[i]);
 }
 
 function stopWriteAnim(){ writeToken++; } // прерывает отложенную перестройку
@@ -1821,8 +1998,9 @@ function startWriteChar(quiet){
   if(!writeChars.length) return;
   writeLastMove=0; initWriteResume();
   renderWriteWord(); renderWriteLabels(); renderWriteList();
-  const ch=writeChars[writeCharIdx];
   const area=document.getElementById('writeArea');
+  area.classList.remove('type');
+  const ch=writeChars[writeCharIdx];
   area.innerHTML=''; area.style.opacity='';
   writer=null;
   hwCharData(ch).then(async data=>{
@@ -2161,7 +2339,7 @@ function renderExamTF(q){
   const showOk=Math.random()<0.5;
   let tr=examPickTr(it);
   if(!showOk){
-    const others=items.filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
+    const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
     if(others.length) tr=others[Math.floor(Math.random()*others.length)];
   }
   const body=document.getElementById('examBody');
@@ -2215,7 +2393,7 @@ function renderExamChoice(q){
   function drawOpts(N){
     const correct=examPickTr(it);
     const opts=[correct];
-    const others=items.filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
+    const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
     shuffle(others);
     for(const o of others){
       if(opts.length>=N) break;
@@ -2251,8 +2429,8 @@ function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
 let matchRound=[], matchSelLeft=null, matchSelRight=null, matchSelRightEl=null;
 function matchDeck(){
   // звёздные в первую очередь, всё в полном рандоме
-  const star=items.filter(it=>it.translation&&it.starred);
-  const rest=items.filter(it=>it.translation&&!it.starred);
+  const star=langItems().filter(it=>it.translation&&it.starred);
+  const rest=langItems().filter(it=>it.translation&&!it.starred);
   return shuffle(star).concat(shuffle(rest));
 }
 function matchDraw(arr, n){
@@ -2394,8 +2572,8 @@ function showExamResult(){
 
 // ============================== STATS / MORE ==============================
 function updateChips(){
-  const learned=items.filter(isLearned).length;
-  const due=items.filter(it=>it.translation && isDue(it)).length;
+  const learned=langItems().filter(isLearned).length;
+  const due=langItems().filter(it=>it.translation && isDue(it)).length;
   const lb=document.getElementById('dictFilterLearned');
   const db=document.getElementById('dictFilterDue');
   if(lb) lb.innerHTML='<b>'+learned+'</b> выучено';
@@ -2558,11 +2736,12 @@ function renderMoreStats(){
   renderStStreaks();
 }
 function renderTiles(){
-  const learned=items.filter(isLearned).length;
-  const studying=items.filter(it=>!isLearned(it)).length;
+  const list=langItems();
+  const learned=list.filter(isLearned).length;
+  const studying=list.filter(it=>!isLearned(it)).length;
   const today=dayStr();
-  const addedToday=items.filter(it=>it.addedOn===today).length;
-  document.getElementById('stTotal').textContent=items.length;
+  const addedToday=list.filter(it=>it.addedOn===today).length;
+  document.getElementById('stTotal').textContent=list.length;
   document.getElementById('stToday').textContent=addedToday;
   document.getElementById('stLearned').textContent=learned;
   document.getElementById('stStudying').textContent=studying;
@@ -2572,7 +2751,7 @@ function renderMemoryBars(){
   const el=document.getElementById('stBars'); if(!el) return;
   const labels=['Уровень 1 — новое','Уровень 2 — раз в 2 сессии','Уровень 3 — раз в 4 сессии','Уровень 4 — раз в 6 сессий','Уровень 5 — выучено'];
   const counts=[0,0,0,0,0];
-  items.forEach(it=>{ const b=normBox(it)-1; counts[b]=(counts[b]||0)+1; });
+  langItems().forEach(it=>{ const b=normBox(it)-1; counts[b]=(counts[b]||0)+1; });
   const max=Math.max(1,...counts);
   el.innerHTML=counts.map((c,i)=>`
     <div class="hmbar">
@@ -3179,7 +3358,14 @@ function syncWriteOrderSeg(){
   seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.v===(writeRandOn()?'rand':'seq')));
 }
 function onWriteHintChange(){
-  // показать/скрыть слово над окном письма
+  // режим печати (en/tr/ar): перестраиваем карточку, чтобы слово-подсказка появилось/исчезло
+  if(!hasStrokes()){
+    if(document.getElementById('scr-write').classList.contains('active') && writeCurItem){
+      setWriteItemTyping(writeCurItem, false);
+    }
+    return;
+  }
+  // показать/скрыть слово над окном письма (китайский)
   const el=document.getElementById('writeWord');
   if(!el) return;
   if(writeHintOn()){ el.classList.remove('hidden'); renderWriteWord(); }
@@ -3194,9 +3380,9 @@ async function doExport(){
       const rec=await DB.get('aud:'+it.id+':'+r.speed);
       recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
     }
-    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,recordings:recs};
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,lang:langOf(it),recordings:recs};
   }));
-  const blob=new Blob([JSON.stringify({items:out,settings,stats},null,1)],{type:'application/json'});
+  const blob=new Blob([JSON.stringify({items:out,settings,statsByLang},null,1)],{type:'application/json'});
   downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
 }
 function blobToB64(blob){ return new Promise(res=>{ const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.readAsDataURL(blob); }); }
@@ -3219,16 +3405,19 @@ async function doImportFile(file){
       items.push(it);
     }
     if(j.settings) settings={...settings,...j.settings};
-    if(j.stats) stats={...stats,...j.stats};
+    // статистика: новый формат — карта по языкам; старый — объект stats активного языка
+    if(j.statsByLang){ statsByLang=j.statsByLang; }
+    else if(j.stats){ statsByLang={}; statsByLang['zh']=j.stats; }
+    if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
+    stats=statsByLang[activeLang];
     await persist(); await refreshAll();
     toast('Импортировано: '+items.length);
   }catch(e){ toast('Ошибка импорта'); console.error(e); }
 }
 
 // ============================== SAMPLE DATA ==============================
-function sampleData(){
-  if(items.length && !confirm('Добавить примеры к уже существующим словам?')) return;
-  const S=[
+const SAMPLES={
+  zh:[
     ['char','你','nǐ','ты'],
     ['char','我','wǒ','я'],
     ['char','好','hǎo','хороший'],
@@ -3242,16 +3431,67 @@ function sampleData(){
     ['word','学习','xué xí','учёба, учиться'],
     ['sentence','我爱学汉语','wǒ ài xué hàn yǔ','Я люблю учить китайский'],
     ['sentence','你好，我叫安娜','nǐ hǎo, wǒ jiào ān nà','Здравствуйте, меня зовут Анна']
-  ];
+  ],
+  en:[
+    ['word','hello','','привет'],
+    ['word','thank you','','спасибо'],
+    ['word','goodbye','','до свидания'],
+    ['word','please','','пожалуйста'],
+    ['word','yes','','да'],
+    ['word','no','','нет'],
+    ['word','friend','','друг'],
+    ['word','family','','семья'],
+    ['word','water','','вода'],
+    ['word','food','','еда'],
+    ['word','book','','книга'],
+    ['sentence','I love learning English','','Я люблю учить английский'],
+    ['sentence','My name is Anna','','Меня зовут Анна']
+  ],
+  tr:[
+    ['word','merhaba','','здравствуй'],
+    ['word','teşekkürler','','спасибо'],
+    ['word','hoşça kal','','до свидания'],
+    ['word','lütfen','','пожалуйста'],
+    ['word','evet','','да'],
+    ['word','hayır','','нет'],
+    ['word','arkadaş','','друг'],
+    ['word','aile','','семья'],
+    ['word','su','','вода'],
+    ['word','yemek','','еда'],
+    ['word','kitap','','книга'],
+    ['sentence','Türkçe öğrenmeyi seviyorum','','Я люблю учить турецкий'],
+    ['sentence','Benim adım Anna','','Меня зовут Анна']
+  ],
+  ar:[
+    ['word','مرحبا','','здравствуй'],
+    ['word','شكرا','','спасибо'],
+    ['word','مع السلامة','','до свидания'],
+    ['word','من فضلك','','пожалуйста'],
+    ['word','نعم','','да'],
+    ['word','لا','','нет'],
+    ['word','صديق','','друг'],
+    ['word','عائلة','','семья'],
+    ['word','ماء','','вода'],
+    ['word','طعام','','еда'],
+    ['word','كتاب','','книга'],
+    ['sentence','أحب تعلم العربية','','Я люблю учить арабский'],
+    ['sentence','اسمي آنا','','Меня зовут Анна']
+  ]
+};
+function sampleData(){
+  // примеры добавляются для АКТИВНОГО языка; предупреждаем только если в нём уже есть карточки
+  if(langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
+  const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:'zh',updated_at:now()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
 }
 async function wipeAll(){
   if(!confirm('Удалить ВСЕ слова, аудио и статистику? Это необратимо.')) return;
   for(const it of items) for(const r of (it.recordings||[])){ if(r.url)URL.revokeObjectURL(r.url); await DB.del('aud:'+it.id+':'+r.speed); }
-  items=[]; stats={streak:0,lastDay:'',activity:{}};
+  items=[];
+  statsByLang={}; stats=statsFor(activeLang);
   await persist(); await refreshAll(); toast('Всё очищено');
 }
 
@@ -3347,15 +3587,17 @@ function stopAllAudio(){
 // Кнопка «Синхронизировать» на экране Словаря. Только для вошедшего пользователя, только онлайн.
 // Модель: каждая строка (карточка / настройки / статистика) побеждает по updated_at (epoch-мс).
 // Календарь activity и «дни» words склеиваются по датам (union), а не побеждают одной стороной.
-const SYNC_LANG='zh';                 // активный язык (пока один; Фаза 5 добавит переключение)
+const SYNC_LANG='zh';                 // метка языка в кэше sync-meta (для совместимости старых записей)
 let syncBusy=false;                   // идёт синхронизация (блокирует повторный клик)
 let lastSyncAt=0;                     // момент последней успешной синхронизации
 let _syncUser=null;                   // вошедший пользователь (обновляется в renderAuth)
 
 // --- кэш облака после последней синхронизации (для «Изменено: N» и «В сети · синхр.») ---
-let cloudRecs={};                     // id карточки → updated_at в облаке
+let cloudRecs={};                     // id карточки → updated_at в облаке (все языки)
 let cloudSettingsU=0;                 // updated_at настроек в облаке
-let cloudStatsU=0;                    // updated_at статистики в облаке
+let cloudStatsU={};                   // {lang → updated_at} статистики в облаке (Фаза 5)
+
+function cloudStatsUOf(lang){ return cloudStatsU && cloudStatsU[lang] || 0; }
 
 function syncStatus(text, cls){
   const el=document.getElementById('syncStatus'); if(!el) return;
@@ -3385,13 +3627,16 @@ function fmtHM(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2
 // Локальных строк свежее облака — для подсказки «Изменено: N».
 function dirtyCount(){
   let n=0;
+  // карточки всех языков (облако теперь синхронизирует всё)
   for(const it of items){
-    if(it.lang!==SYNC_LANG) continue;
     const c=cloudRecs[it.id];
     if(c===undefined || (it.updated_at||0)>c) n++;
   }
   if((settings.updated_at||0)>cloudSettingsU) n++;
-  if((stats.updated_at||0)>cloudStatsU) n++;
+  // статистика: каждый язык сверяем со своим облачным updated_at
+  for(const lg of Object.keys(statsByLang)){
+    if((statsByLang[lg].updated_at||0)>cloudStatsUOf(lg)) n++;
+  }
   return Math.min(n,100);
 }
 // Сериализация карточки для облака: только JSON-значения, без blob-ссылок аудио (аудио — отдельной фазой).
@@ -3402,7 +3647,7 @@ function cloudCard(it){
     const v=it[k], t=typeof v;
     if(t==='string'||t==='number'||t==='boolean'||v===null) o[k]=v;
   }
-  if(!o.lang) o.lang=SYNC_LANG;
+  if(!o.lang) o.lang=langOf(it);
   return o;
 }
 // Восстановление карточки из облака: числовые поля приводим к числам, recordings — локально.
@@ -3458,34 +3703,34 @@ async function doSync(){
   if(syncBusy || syncNetDown()) return;
   syncBusy=true; setSyncEnabled(false); syncStatus('Синхронизация…','spin');
   // Снапшот для отката: если сеть оборвётся на полпути, локальные данные не должны пострадать.
-  const snap={items:items.slice(), settings:{...settings}, stats:{...stats}, sigSet:_sigSet, sigStats:_sigStats};
+  const snap={items:items.slice(), settings:{...settings}, statsByLang:JSON.parse(JSON.stringify(statsByLang)), sigSet:_sigSet, sigStats:{..._sigStatsMap}};
   let pulledN=0, pushedN=0;
   try{
     const u=_syncUser;
     if(!u) throw new Error('Сначала войдите в аккаунт');
     const cloud=await pullCloudRows(u);
-    const cloudById={};
-    for(const row of cloud.cards){ if(row.lang===SYNC_LANG) cloudById[row.id]={u:row.updated_at||0, data:row.data}; }
+    const cloudById={};                 // облачные карточки ВСЕХ языков
+    for(const row of cloud.cards) cloudById[row.id]={u:row.updated_at||0, data:row.data, lang:row.lang};
 
-    // --- карточки ---
+    // --- карточки (все языки) ---
     const localSeen={};
     for(let i=0;i<items.length;i++){
       const it=items[i];
-      if(it.lang!==SYNC_LANG) continue;
       localSeen[it.id]=1;
       const rec=cloudById[it.id];
       const locU=it.updated_at||0;
+      const lang=langOf(it);
       if(!rec){
         // локальна, в облаке нет → push
         const ts=locU||now(); it.updated_at=ts;
-        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang:SYNC_LANG, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
+        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
         if(r.error) throw r.error;
         pushedN++;
         cloudRecs[it.id]=ts;
       }else if(locU>rec.u){
         // локальное новее → push
         const ts=locU;
-        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang:SYNC_LANG, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
+        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
         if(r.error) throw r.error;
         pushedN++;
         cloudRecs[it.id]=ts;
@@ -3530,33 +3775,42 @@ async function doSync(){
     }
     cloudSettingsU=Math.max(locSU,remSU);
 
-    // --- статистика (на активный язык; глобальный stats = статистика этого языка, пока язык один) ---
-    const stCloud=cloud.stats.find(s=>s.lang===SYNC_LANG)||null;
-    const stLoc=stats;
-    const slU=stLoc.updated_at||0, sRU=stCloud?(stCloud.updated_at||0):0;
-    if(sRU>slU){
-      const d=stCloud.data||{};
-      stLoc.activity=mergeCalendars(stLoc.activity||{}, d.activity||{});
-      stLoc.words=mergeCalendars(stLoc.words||{}, d.words||{});
-      for(const k of Object.keys(d)){ if(k==='activity'||k==='words'||k==='updated_at') continue; stLoc[k]=d[k]; }
-      stLoc.updated_at=sRU;
-      pulledN++;
-    }else if(slU>sRU){
-      const r=await sbClient().from('user_stats').upsert({user_id:u.id, lang:SYNC_LANG, data:cleanStats(), updated_at:slU},{onConflict:'user_id,lang'});
-      if(r.error) throw r.error;
-      pushedN++;
+    // --- статистика: по одному LWW-мержу на каждый язык (Фаза 5) ---
+    const stByLang={};                                  // code → {loc, cloud}
+    for(const lg of Object.keys(statsByLang)) stByLang[lg]={loc:statsByLang[lg]};
+    for(const row of cloud.stats){
+      const c=row.lang||'zh';
+      if(stByLang[c]) stByLang[c].cloud=row; else stByLang[c]={loc:statsFor(c), cloud:row};
     }
-    cloudStatsU=Math.max(slU,sRU);
+    for(const lg of Object.keys(stByLang)){
+      const stLoc=stByLang[lg].loc;
+      const stCloud=stByLang[lg].cloud||null;
+      const slU=stLoc.updated_at||0, sRU=stCloud?(stCloud.updated_at||0):0;
+      if(sRU>slU){
+        const d=stCloud.data||{};
+        stLoc.activity=mergeCalendars(stLoc.activity||{}, d.activity||{});
+        stLoc.words=mergeCalendars(stLoc.words||{}, d.words||{});
+        for(const k of Object.keys(d)){ if(k==='activity'||k==='words'||k==='updated_at') continue; stLoc[k]=d[k]; }
+        stLoc.updated_at=sRU;
+        pulledN++;
+      }else if(slU>sRU){
+        const r=await sbClient().from('user_stats').upsert({user_id:u.id, lang:lg, data:cleanStatsOf(lg), updated_at:slU},{onConflict:'user_id,lang'});
+        if(r.error) throw r.error;
+        pushedN++;
+      }
+      cloudStatsU[lg]=Math.max(slU,sRU);
+    }
 
     // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул updated_at) ---
-    _sigSet=settingsSig(settings); _sigStats=statsSig(stats);
+    _sigSet=settingsSig(settings);
+    for(const lg of Object.keys(statsByLang)) _sigStatsMap[lg]=statsSig(statsByLang[lg]);
     await persist(); await refreshAll();
     lastSyncAt=now();
     await saveMeta();
     syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
   }catch(e){
     // откат к снапшоту — локальные данные не тронуты
-    items=snap.items; settings=snap.settings; stats=snap.stats; _sigSet=snap.sigSet; _sigStats=snap.sigStats;
+    items=snap.items; settings=snap.settings; statsByLang=snap.statsByLang; stats=statsByLang[activeLang]; _sigSet=snap.sigSet; _sigStatsMap=snap.sigStats;
     const msg=String(e&&e.message||e);
     if(/fetch|network|Failed to fetch/i.test(msg)) syncStatus('Нет соединения — не синхронизировано','off');
     else if(/войдите|Сначала/i.test(msg)) syncStatus('Войдите, чтобы синхронизировать','');
@@ -3571,10 +3825,11 @@ function cleanSettings(){
   for(const k of Object.keys(settings)){ if(k==='updated_at'||k==='sessN') continue; if(settings[k]!==undefined) o[k]=settings[k]; }
   return o;
 }
-// Статистика без метки updated_at — то, что уходит в облако.
-function cleanStats(){
+// Статистика языка без метки updated_at — то, что уходит в облако.
+function cleanStatsOf(lang){
+  const s=statsByLang[lang]||{};
   const o={};
-  for(const k of Object.keys(stats)){ if(k==='updated_at') continue; if(stats[k]!==undefined) o[k]=stats[k]; }
+  for(const k of Object.keys(s)){ if(k==='updated_at') continue; if(s[k]!==undefined) o[k]=s[k]; }
   return o;
 }
 function sbReady(){ return !SB_OFFLINE && !!window.supabase && typeof window.supabase.createClient==='function'; }
@@ -3658,13 +3913,20 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{repeats:3,hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,studySpeed:'all',examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,sessN:0}, ...((await DB.get(SET))||{})};
+  settings={...{repeats:3,hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,studySpeed:'all',examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  activeLang=LANG_MAP[settings.activeLang]?settings.activeLang:'zh';
+  // Статистика по языкам (Фаза 5): если ещё нет карты — мигрируем старую статистику в язык activeLang.
+  statsByLang=(await DB.get(DB_STATS_ALL))||{};
+  const _legacy=await DB.get(STATS);
+  if(_legacy){ if(!statsByLang[activeLang] || !statsByLang[activeLang].updated_at) statsByLang[activeLang]=_legacy; }
+  if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
+  if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
+  stats=statsByLang[activeLang];
   examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, match:false};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
   document.getElementById('examAudio').classList.toggle('on', examAudioOn);
   document.getElementById('examAllTr').classList.toggle('on', examAllTr);
-  stats={...{streak:0,lastDay:'',activity:{}}, ...((await DB.get(STATS))||{})};
   SESS=settings.sessN||0;
   for(const it of items) migrateItem(it);
   for(const it of items) await migrateNormAudio(it);
@@ -3672,11 +3934,14 @@ async function boot(){
   for(const it of items) await hydrateRecordings(it);
   // миграция: у настроек/статистики должна быть начальная метка синхронизации
   if(!settings.updated_at) settings.updated_at=now();
-  if(!stats.updated_at) stats.updated_at=now();
-  _sigSet=settingsSig(settings); _sigStats=statsSig(stats);   // базовые сигнатуры текущей сессии
+  for(const lg of Object.keys(statsByLang)) if(!statsByLang[lg].updated_at) statsByLang[lg].updated_at=now();
+  _sigSet=settingsSig(settings);
+  for(const lg of Object.keys(statsByLang)) _sigStatsMap[lg]=statsSig(statsByLang[lg]);
   // восстанавливаем кэш последней синхронизации (для «В сети · синхр.» и «Изменено: N»)
   const _meta=await DB.get(META);
-  if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=_meta.recs||{}; cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||0; }
+  if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=_meta.recs||{}; cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||{}; }
+  applyDir();
+  renderLangSeg();
   await persist();
   refreshSyncUI();
   bindSettings();
