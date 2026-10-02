@@ -13,4 +13,4 @@ Exam_result.html
 hanzi-trainer-offline*.html
 
 # Актуальная офлайн-сборка — загружаем, поэтому исключаем из запрета
-!hanzi-trainer-offline 1.3.0.html
+!hanzi-trainer-offline 1.4.0.html

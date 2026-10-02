@@ -39,7 +39,7 @@ header.top .sub{display:flex; gap:6px}
   padding:4px 11px; font-size:12px; color:var(--mut); box-shadow:var(--shadow-sm);
 }
 .chip b{color:var(--ink); font-weight:800}
-header.top .ver{font-size:12px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
+header.top .ver{font-size:13px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
 
 /* Screens */
 main{flex:1 1 auto; overflow:hidden; position:relative}
@@ -173,7 +173,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .dc-cols{flex:1; display:grid; grid-template-columns:1.1fr .9fr 1.6fr; gap:8px; align-items:baseline; min-width:0}
 .dc{min-width:0; overflow-wrap:anywhere}
 .dc.zh{font-family:var(--font-cjk); font-size:22px; font-weight:600}
-.dc.py{color:var(--amber); font-size:14px; font-weight:700}
+.dc.py{color:#1565c0; font-size:14px; font-weight:700}
 .dc.tr{color:#5f5a51; font-size:14px; font-weight:600; text-align:right}
 .dc-side{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto}
 .dc-btns{display:flex; gap:4px}
@@ -181,6 +181,10 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
 .dc-stat{font-size:11px; color:var(--mut); white-space:nowrap}
+/* Телефон: кнопки карточки в 2 ряда (★ ↑ / 🔊 ↓), чтобы не сжимать иероглиф и перевод */
+@media (max-width:480px){
+  .dc-btns{display:grid; grid-template-columns:34px 34px; grid-auto-rows:34px; gap:4px}
+}
 .autolink{font-size:12px; color:var(--red); text-decoration:none; font-weight:600}
 .tr-row{display:flex; align-items:center; gap:8px; margin-top:6px}
 .tr-row input{flex:1; margin:0}
@@ -201,11 +205,19 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Словарь: строка фильтров — сегмент слева, кнопки-счётчики справа (по правому краю блока) */
 .dict-filter-row{display:flex; align-items:stretch; gap:6px; margin-bottom:10px}
 .dict-filter-row .seg{flex:1}
+/* активная вкладка «Все слова / Избранное» — явная подсветка (белая на бежевом была едва заметна) */
+#dictFilterSeg button.active{background:var(--red); color:#fff}
 .dict-filter{flex:0 0 auto; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:12px; padding:8px 11px; font-size:13px; font-weight:700; white-space:nowrap}
 .dict-filter b{font-weight:800; color:var(--ink)}
 .dict-filter.active{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 4px 0 var(--red-d),0 4px 10px rgba(198,40,40,.18)}
 .dict-filter.active b{color:#fff}
 .dict-filter:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d)}
+/* Окно «Фильтр»: секции, чипы-переключатели (уровни/метки) */
+.flt-sec{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
+.flt-chip{border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:999px; padding:7px 12px; font-size:13px; font-weight:700; white-space:nowrap}
+.flt-chip.on{background:var(--red); color:#fff; border-color:var(--red)}
+.flt-badge{display:none; background:var(--red); color:#fff; border-radius:999px; padding:0 7px; font-size:12px; margin-left:4px}
+.flt-badge.show{display:inline-block}
 
 /* Синхронизация: поиск слева (половина ширины), кнопка справа, статус-строка под ними */
 .sync-row{display:flex; align-items:stretch; gap:8px; margin-bottom:6px}
@@ -442,10 +454,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="dict-filter-row">
         <div class="seg" id="dictFilterSeg">
           <button data-dict-filter="all" class="active">Все слова</button>
-          <button data-dict-filter="star">★ Слова с *</button>
+          <button data-dict-filter="star">★ Избранное</button>
         </div>
         <button class="dict-filter" data-dict-filter="learned" id="dictFilterLearned">выучено</button>
-        <button class="dict-filter" data-dict-filter="due" id="dictFilterDue">повторить</button>
+        <button class="dict-filter" id="dictFilterBtn">Фильтр<span class="flt-badge" id="fltBadge"></span></button>
       </div>
       <div class="btn-row" style="margin-bottom:10px">
         <button class="btn" id="btnAdd">＋ Слово</button>
@@ -660,6 +672,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalItem"></div>
 <div class="modal hidden" id="modalBatch"></div>
 <div class="modal hidden" id="modalAuth"></div>
+<div class="modal hidden" id="modalFilter"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
@@ -718,7 +731,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.4.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1199,20 +1212,72 @@ function dictFiltered(){
   let arr=langItems().slice(); // копия карточек активного языка: сортируем только здесь
   if(dictFilter==='star') arr=arr.filter(it=>it.starred);
   else if(dictFilter==='learned') arr=arr.filter(isLearned);
-  else if(dictFilter==='due') arr=arr.filter(it=>it.translation && isDue(it));
+  // расширенные фильтры (окно «Фильтр») применяются поверх «Все слова / Избранное»
+  if(fltActive()) arr=arr.filter(passesFilter);
   if(q) arr=arr.filter(it=> it.hanzi.toLowerCase().includes(q) || (it.pinyin&&it.pinyin.toLowerCase().includes(q)) || (trJoined(it)&&trJoined(it).toLowerCase().includes(q)) || (it.tag&&it.tag.toLowerCase().includes(q)));
   // Новые слова вверху: сортировка по дате добавления (addedOn) по убыванию.
   // Формат 'YYYY-MM-DD' сортируется как строка; при равной дате сохраняем прежний порядок.
   arr.sort((a,b)=>(b.addedOn||'').localeCompare(a.addedOn||''));
   return arr;
 }
-// подписи-счётчики «N выучено» и «M повторить» + подсветка активной кнопки
+// подписи-счётчики «N выучено» + подсветка активной кнопки + бейдж «Фильтра»
 function updateDictFilterChips(){
   const learned=langItems().filter(isLearned).length;
-  const due=langItems().filter(it=>it.translation && isDue(it)).length;
   document.getElementById('dictFilterLearned').innerHTML='<b>'+learned+'</b> выучено';
-  document.getElementById('dictFilterDue').innerHTML='<b>'+due+'</b> повторить';
   document.querySelectorAll('[data-dict-filter]').forEach(b=>b.classList.toggle('active', b.dataset.dictFilter===dictFilter));
+  updateFilterBadge();
+}
+// ====== Окно «Фильтр» (уровни + метки + «повторить сейчас») ======
+// flt = {lvls:Set<1..5>, tags:Set<string>, due:bool}
+let flt={lvls:new Set(), tags:new Set(), due:false};
+function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due; }
+function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0); }
+function passesFilter(it){
+  if(flt.lvls.size && !flt.lvls.has(normBox(it))) return false;
+  if(flt.tags.size){
+    const t=(it.tag||'').trim();
+    if(!t || !flt.tags.has(t)) return false;
+  }
+  if(flt.due && !(it.translation && isDue(it))) return false;
+  return true;
+}
+function allTags(){
+  const set=new Set();
+  for(const it of langItems()){ const t=(it.tag||'').trim(); if(t) set.add(t); }
+  return Array.from(set).sort((a,b)=>a.localeCompare(b));
+}
+function openFilterModal(){
+  const m=document.getElementById('modalFilter');
+  const tags=allTags();
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Фильтр</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalFilter')">✕</button></div>
+    <label class="lbl">Уровни</label>
+    <div class="flt-sec" id="fltLvls">
+      ${[1,2,3,4,5].map(l=>`<button class="flt-chip ${flt.lvls.has(l)?'on':''}" data-flt-lvl="${l}">Уровень ${l}</button>`).join('')}
+    </div>
+    <label class="lbl">Метки</label>
+    <div class="flt-sec" id="fltTags">
+      ${tags.length?tags.map(t=>`<button class="flt-chip ${flt.tags.has(t)?'on':''}" data-flt-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(''):'<div class="auth-hint" style="margin:0">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
+    </div>
+    <label class="lbl">Другое</label>
+    <div class="flt-sec" id="fltDue">
+      <button class="flt-chip ${flt.due?'on':''}" data-flt-due="1">Повторить сейчас</button>
+    </div>
+    <button class="btn sec" id="fltReset" style="margin-top:14px">Сбросить фильтр</button>
+  </div>`;
+  m.classList.remove('hidden');
+  const afterChange=()=>{ renderDict(); updateFilterBadge(); };
+  m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(flt.lvls, +b.dataset.fltLvl); b.classList.toggle('on', flt.lvls.has(+b.dataset.fltLvl)); afterChange(); });
+  m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(flt.tags, b.dataset.fltTag); b.classList.toggle('on', flt.tags.has(b.dataset.fltTag)); afterChange(); });
+  m.querySelector('[data-flt-due]').onclick=e=>{ flt.due=!flt.due; e.currentTarget.classList.toggle('on', flt.due); afterChange(); };
+  m.querySelector('#fltReset').onclick=()=>{ flt={lvls:new Set(), tags:new Set(), due:false}; m.querySelectorAll('.flt-chip').forEach(c=>c.classList.remove('on')); afterChange(); };
+}
+function toggleSet(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
+function updateFilterBadge(){
+  const el=document.getElementById('fltBadge'); if(!el) return;
+  const n=fltCount();
+  if(n){ el.classList.add('show'); el.textContent=n; }
+  else el.classList.remove('show');
 }
 function toggleStar(id){
   const it=items.find(x=>x.id===id); if(!it) return;
@@ -1261,8 +1326,8 @@ function renderDict(){
         <div class="dc-side">
           <div class="dc-btns">
             <button class="icon-btn star ${it.starred?'starred':''}" data-act="star" title="Звезда">★</button>
-            <button class="icon-btn" data-act="play" title="Произнести">🔊</button>
             <button class="icon-btn" data-act="up" title="Повысить уровень">↑</button>
+            <button class="icon-btn" data-act="play" title="Произнести">🔊</button>
             <button class="icon-btn" data-act="down" title="Понизить уровень">↓</button>
           </div>
           <div class="dc-stat">${stat}</div>
@@ -2626,11 +2691,8 @@ function showExamResult(){
 // ============================== STATS / MORE ==============================
 function updateChips(){
   const learned=langItems().filter(isLearned).length;
-  const due=langItems().filter(it=>it.translation && isDue(it)).length;
   const lb=document.getElementById('dictFilterLearned');
-  const db=document.getElementById('dictFilterDue');
   if(lb) lb.innerHTML='<b>'+learned+'</b> выучено';
-  if(db) db.innerHTML='<b>'+due+'</b> повторить';
 }
 
 // ---------- История версий ----------
@@ -3579,6 +3641,7 @@ document.querySelectorAll('[data-dict-filter]').forEach(b=>{
     renderDict();
   };
 });
+document.getElementById('dictFilterBtn').onclick=openFilterModal;
 document.getElementById('studyAgain').onclick=studyRepeat;
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
@@ -3998,10 +4061,14 @@ function sbClient(){
   if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON); }
   return SB;
 }
-async function currentUser(){
+async function localSessionUser(){
   const c=sbClient(); if(!c) return null;
-  try{ const r=await c.auth.getUser(); return r && r.data && r.data.user ? r.data.user : null; }
-  catch(e){ return null; }
+  try{
+    // getSession читает локальную сессию (без запроса к серверу): вход переживает
+    // перезагрузку страницы и не «теряется» при кратком отсутствии сети на старте.
+    const {data}=await c.auth.getSession();
+    return data && data.session && data.session.user ? data.session.user : null;
+  }catch(e){ return null; }
 }
 async function renderAuth(){
   const box=document.getElementById('authBox'); if(!box) return;
@@ -4013,28 +4080,32 @@ async function renderAuth(){
     box.innerHTML='<div class="auth-hint">Не удалось загрузить Supabase — проверьте подключение к интернету.</div>';
     return;
   }
-  const u=await currentUser();
+  const u=await localSessionUser();
   _syncUser=u;
   if(u){
-    box.innerHTML=`<div class="auth-line"><span class="mail">${escapeHtml(u.email||'')}</span><span class="spacer"></span>
+    const shown=settings.userName || u.email || '';
+    box.innerHTML=`<div class="auth-line"><span class="mail">${escapeHtml(shown)}</span><span class="spacer"></span>
       <button class="btn sec" style="width:auto; padding:9px 14px" id="btnSignOut">Выйти</button></div>
+      ${settings.userName?`<div class="auth-hint">${escapeHtml(u.email||'')}</div>`:''}
       <div class="auth-hint">Вы вошли. Нажмите «Синхронизировать» в Словаре, чтобы перенести данные в облако.</div>`;
     document.getElementById('btnSignOut').onclick=authSignOut;
   }else{
     box.innerHTML=`<div class="auth-line"><span class="auth-hint" style="margin:0">Вы не вошли.</span><span class="spacer"></span>
       <button class="btn" style="width:auto; padding:9px 14px" id="btnOpenAuth">Войти</button></div>
-      <div class="auth-hint">Вход по email: пришлём письмо со ссылкой для входа. Без пароля.</div>`;
+      <div class="auth-hint">Вход по email: пришлём письмо с одноразовым кодом. Без пароля.</div>`;
     document.getElementById('btnOpenAuth').onclick=openAuthModal;
   }
   refreshSyncUI();
 }
+let authStepEmail='';      // email, на который уже запрошен код (для шага «код из письма»)
 function openAuthModal(){
   const m=document.getElementById('modalAuth');
+  authStepEmail='';
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Вход по email</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
-    <div class="auth-hint" style="margin-top:6px">Введите email — пришлём письмо со ссылкой для входа. Пароль не нужен.</div>
-    <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px">
-    <button class="btn" id="authSend" style="margin-top:10px">Отправить ссылку</button>
+    <div class="auth-hint" style="margin-top:6px">Введите email — пришлём на него одноразовый код. Пароль не нужен.</div>
+    <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px" inputmode="email" autocomplete="email">
+    <button class="btn" id="authSend" style="margin-top:10px">Получить код</button>
     <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
   </div>`;
   m.classList.remove('hidden');
@@ -4047,13 +4118,64 @@ function openAuthModal(){
     const c=sbClient();
     if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
     send.disabled=true; send.textContent='Отправляем…';
-    const {error}=await c.auth.signInWithOtp({
-      email,
-      options:{ emailRedirectTo: location.origin + location.pathname }
-    });
-    send.disabled=false; send.textContent='Отправить ссылку';
+    const {error}=await c.auth.signInWithOtp({ email });
+    send.disabled=false; send.textContent='Получить код';
     if(error){ toastShort('Ошибка: '+error.message); msg.textContent='Ошибка: '+error.message; }
-    else{ toast('✅ Проверьте почту и откройте ссылку из письма'); msg.textContent='Готово! Проверьте почту и откройте ссылку из письма.'; }
+    else{ authStepEmail=email; renderAuthCodeStep(m); }
+  };
+}
+function renderAuthCodeStep(m){
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Код из письма</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
+    <div class="auth-hint" style="margin-top:6px">Мы отправили код на <b>${escapeHtml(authStepEmail)}</b>. Введите его сюда.</div>
+    <input type="text" id="authCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="margin-top:10px; letter-spacing:6px; font-size:20px; text-align:center">
+    <button class="btn" id="authVerify" style="margin-top:10px">Войти</button>
+    <button class="btn ghost" id="authBack" style="margin-top:4px">← Другой email</button>
+    <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
+  </div>`;
+  const inp=m.querySelector('#authCode');
+  const verify=m.querySelector('#authVerify');
+  const msg=m.querySelector('#authMsg');
+  m.querySelector('#authBack').onclick=()=>{ authStepEmail=''; openAuthModal(); };
+  if(inp) setTimeout(()=>inp.focus(),60);
+  verify.onclick=async ()=>{
+    const code=(inp.value||'').trim();
+    if(!code){ msg.textContent='Введите код из письма.'; return; }
+    const c=sbClient();
+    if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
+    verify.disabled=true; verify.textContent='Проверяем…';
+    const {error}=await c.auth.verifyOtp({ email:authStepEmail, token:code, type:'email' });
+    verify.disabled=false; verify.textContent='Войти';
+    if(error){ msg.textContent='Неверный код или он истёк. Попробуйте ещё раз.'; }
+    else{
+      closeModal('modalAuth');
+      toast('✅ Вы вошли');
+      renderAuth();
+      if(!settings.userName) maybeAskName();
+    }
+  };
+}
+// Мягкий вопрос имени после первого входа (необязательно, показываем в аккаунте)
+function maybeAskName(){
+  const m=document.getElementById('modalAuth');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Как к вам обращаться?</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
+    <div class="auth-hint" style="margin-top:6px">Необязательно. Имя покажем в аккаунте и приветствии.</div>
+    <input type="text" id="authName" placeholder="Ваше имя" style="margin-top:10px" maxlength="40">
+    <div style="display:flex; gap:8px; margin-top:12px">
+      <button class="btn sec" id="authNameSkip" style="flex:1">Пропустить</button>
+      <button class="btn" id="authNameSave" style="flex:1">Сохранить</button>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+  const inp=m.querySelector('#authName');
+  m.querySelector('#authNameSkip').onclick=()=>closeModal('modalAuth');
+  m.querySelector('#authNameSave').onclick=async ()=>{
+    settings.userName=(inp.value||'').trim()||null;
+    await persist();
+    closeModal('modalAuth');
+    renderAuth();
+    toast('Имя сохранено');
   };
 }
 async function authSignOut(){
@@ -4067,7 +4189,28 @@ function initAuthState(){
   renderAuth();
   if(!sbReady()) return;
   const c=sbClient();
-  c.auth.onAuthStateChange(()=>renderAuth());
+  // ВАЖНО: TOKEN_REFRESHED обновляет сессию в фоне раз в час — это НЕ действия пользователя,
+  // поэтому не дёргаем renderAuth/refreshSyncUI, иначе при простое всплывает
+  // «Изменено: N · не синхронизировано» без причины. Рендерим только на SIGNED_IN/SIGNED_OUT.
+  c.auth.onAuthStateChange((event)=>{
+    if(event==='SIGNED_IN' || event==='SIGNED_OUT') renderAuth();
+  });
+}
+
+// ============================== АВТО-СИНК (вариант 2: при открытии и возврате) ==============================
+// Тихий синк при старте/возврате в приложение и при восстановлении сети. Без дебаунса правок:
+// только если вошёл, онлайн и синк не идёт. Кнопка «Синхронизировать» остаётся для ручного контроля.
+let lastAutoSyncTry=0;
+function autoSyncIfIdle(){
+  if(syncBusy || syncNetDown() || !_syncUser) return;
+  const t=now();
+  if(t-lastAutoSyncTry < 30000) return;   // не чаще раза в 30 секунд
+  lastAutoSyncTry=t;
+  doSync().catch(()=>{});
+}
+function bindAutoSync(){
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) autoSyncIfIdle(); });
+  window.addEventListener('online', autoSyncIfIdle);
 }
 
 // ============================== BOOT ==============================
@@ -4109,8 +4252,11 @@ async function boot(){
   bindSettings();
   bindAudioSlot();
   bindAudioLifecycle();
+  bindAutoSync();
   refreshAll();
   initAuthState();
+  // автосинк при открытии: сессия подхватится в renderAuth, затем — тихий синк после первого входа/по сети
+  setTimeout(autoSyncIfIdle, 2500);
 }
 boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
 
