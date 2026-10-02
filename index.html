@@ -718,7 +718,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.2.1';
+const APP_VERSION='1.3.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -809,17 +809,17 @@ function sweepNewStage(){
     }
   }
 }
-// Миграция на одну аудио-дорожку (обычная скорость): записи slow/fast удаляем из данных и из БД.
+// Миграция на актуальные слоты аудио (norm/alt2/alt3): устаревшие записи slow/fast удаляем из данных и из БД.
 async function migrateNormAudio(it){
   const kept=[];
   for(const r of (it.recordings||[])){
-    if(r.speed==='norm'){ kept.push(r); }
+    if(AUDIO_SLOTS.includes(r.speed)){ kept.push(r); }
     else{
       if(r.url && r.url.startsWith('blob:')) URL.revokeObjectURL(r.url);
       await DB.del('aud:'+it.id+':'+r.speed);
     }
   }
-  it.recordings=kept.length?kept:(it.recordings||[]).filter(r=>r.speed==='norm');
+  it.recordings=kept;
 }
 // Миграция старых карточек (Leitner 0..5 → коробки 1..5) + проставка lang/updated_at.
 // Поля lang/updated_at проставляются ДО раннего выхода по __v3: старые карточки
@@ -844,11 +844,14 @@ function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; sta
 // view-маркеры (lastShowN/lastSeen/nextDue), аудио-ссылки и служебные флаги исключены,
 // чтобы простой просмотр карточки не делал её «новее» настоящего ответа на другом устройстве.
 function itemSig(it){
+  // Аудио в сигнатуре — по слотам (speed+имя файла), без blob/cloud-URL:
+  // прикрепление/удаление записи делает карточку «новее», а смена URL — нет.
+  const recSig=(it.recordings||[]).filter(r=>r&&r.speed).map(r=>r.speed+':'+(r.name||'')).sort().join('|');
   return JSON.stringify([
     it.lang, it.kind, it.hanzi, it.pinyin, it.translation, it.trs, it.note, it.tag, it.starred,
     it.box, it.dueSess, it.newDone, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow,
     it.correct, it.wrong, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
-    it.learnedOn, it.addedOn
+    it.learnedOn, it.addedOn, recSig
   ]);
 }
 // Сигнатуры settings/stats для LWW. Исключаем updated_at (сама метка) и sessN
@@ -1038,12 +1041,13 @@ function tracksFor(it, opts){
   const R=opts.reps ?? 1;                          // одно проговаривание на скорость
   const labelMap={slow:'медленно', norm:'обычно', fast:'быстро'};
   const rateMap={slow:0.55, norm:1, fast:1.18};
-  const rec=(sp)=> it.recordings.find(r=>r.speed===sp);
+  const rec=(sp)=> (it.recordings||[]).find(r=>r.speed===sp);
   const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
   const out=[];
   for(const sp of speeds){
     const r=rec(sp);
-    if(r) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
+    // пустая ссылка (слёт blob: напр. после восстановления БД) — не ломаем плейлист
+    if(r && r.url) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
   }
   if(out.length) return out;
   return speeds.map(sp=>({kind:'tts',text:it.hanzi,rate:rateMap[sp],reps:R,label:labelMap[sp]}));
@@ -1060,23 +1064,29 @@ function playItem(it, opts){
   Player.play(tracksFor(it,opts));
 }
 function stopPlayer(){ Player.stop(); }
-function playWordNorm(it){
+async function playWordNorm(it){
   // проигрывание слова в обычной скорости (из карточки словаря и в экзамене)
   if(!it) return;
   Player.stop();
   Player.onSpeedChange=null;
-  const rec=it.recordings.find(r=>r.speed==='norm');
-  if(rec) Player.play([{kind:'file',url:rec.url}]);
-  else speak(it.hanzi,1);
+  const rec=liveRec(it,'norm');
+  if(rec){
+    if(!rec.url && rec.path) await cacheRemoteAudio(it,'norm');
+    if(rec.url) Player.play([{kind:'file',url:rec.url}]);
+    else speak(it.hanzi,1);
+  }else speak(it.hanzi,1);
 }
 
 // ============================== RECORDINGS / AUDIO FILES ==============================
-let audioTargetSpeed=null; // 'slow'|'norm'|'fast' — для какой скорости берём файл
-const AUDIO_SPEEDS=['norm'];
+// Слоты аудио: norm — основное, alt2/alt3 — задел под «Аудио 2/3» (UI появится отдельной фазой,
+// но схема хранения уже под массив слотов, чтобы не делать миграцию потом).
+const AUDIO_SLOTS=['norm','alt2','alt3'];
+const AUDIO_SLOT_LABEL={norm:'Аудио', alt2:'Аудио 2', alt3:'Аудио 3'};
+let audioTargetSpeed=null; // slot ('norm'|'alt2'|'alt3'), к которому прикрепляем файл
 // Выбранное, но ещё не сохранённое аудио живёт здесь (в памяти формы) до нажатия «Сохранить».
 // В БД ничего не пишется; при закрытии карточки без сохранения — отбрасывается.
-let pendingRec={};   // speed -> {name,type,buf,url}
-let pendingDrop={};  // speed -> true (уже сохранённую запись убрали, но ещё не «Сохранить»)
+let pendingRec={};   // slot -> {name,type,buf,url}
+let pendingDrop={};  // slot -> true (уже сохранённую запись убрали, но ещё не «Сохранить»)
 function bindAudioSlot(){
   const fi=document.getElementById('fileAudio');
   fi.onchange=async ()=>{
@@ -1105,13 +1115,20 @@ function formRec(speed){
   if(!editingItem) return null;
   return (editingItem.recordings||[]).find(r=>r.speed===speed)||null;
 }
-// Восстанавливает blob-URL из IndexedDB после перезагрузки страницы
+// Восстанавливает аудио после перезагрузки страницы:
+// - локальная запись: из IndexedDB в blob-URL (как раньше);
+// - remote-запись (path из облака): оставляем path, blob-кэш подтянется лениво при проигрывании.
 async function hydrateRecordings(it){
-  if(!it.recordings) return;
-  for(const r of it.recordings){
-    if(!r.url || !r.url.startsWith('blob:')) continue;
-    const rec=await DB.get('aud:'+it.id+':'+r.speed);
-    if(rec){ URL.revokeObjectURL(r.url); r.url=URL.createObjectURL(new Blob([rec.buf],{type:rec.type})); r.name=rec.name; }
+  for(const r of (it.recordings||[])){
+    if(!r.speed) continue;
+    // пустой blob: url — значение от старого «пустого» аудио; вычищаем мусор из записи
+    if(r.url && r.url.startsWith('blob:')){
+      const rec=await DB.get('aud:'+it.id+':'+r.speed);
+      if(rec){ URL.revokeObjectURL(r.url); r.url=URL.createObjectURL(new Blob([rec.buf],{type:rec.type})); r.name=rec.name; }
+    }else if(r.path && !r.url){
+      const local=await DB.get('aud:'+it.id+':'+r.speed);
+      if(local){ r.url=URL.createObjectURL(new Blob([local.buf],{type:local.type})); }
+    }
   }
 }
 async function revokeAll(it){ (it.recordings||[]).forEach(r=>{ if(r.url&&r.url.startsWith('blob:')){ URL.revokeObjectURL(r.url); } }); }
@@ -1461,11 +1478,15 @@ function autoTranslate(){
     else toast('Не удалось открыть переводчик — вставьте перевод сами');
   }
 }
-function playSlot(speed){
+async function playSlot(speed){
   const r=formRec(speed);
-  if(r && r.url){ const a=new Audio(r.url); a.play(); }
-  else{ const t=(editingItem&&editingItem.hanzi)||document.getElementById('fHanzi').value; if(t) speak(t,0.7); }
+  if(r){
+    if(!r.url && r.path){ await cacheRemoteAudio(editingItem, speed); return playSlotAfter(r); }
+    if(r.url){ const a=new Audio(r.url); a.play(); return; }
+  }
+  const t=(editingItem&&editingItem.hanzi)||document.getElementById('fHanzi').value; if(t) speak(t,0.7);
 }
+function playSlotAfter(r){ if(r && r.url){ const a=new Audio(r.url); a.play(); } }
 function rmSlot(speed){
   if(!editingItem) return;
   if(pendingRec[speed]){ URL.revokeObjectURL(pendingRec[speed].url); delete pendingRec[speed]; renderSlots(); return; }
@@ -1491,7 +1512,7 @@ async function saveItem(){
   editingItem.starred=document.getElementById('fStarred').checked;
   editingItem.kind='word';
   // --- пишем в БД только при «Сохранить» (аудио из памяти формы + снятые записи) ---
-  for(const s of AUDIO_SPEEDS){
+  for(const s of AUDIO_SLOTS){
     const p=pendingRec[s];
     if(p){
       await DB.put('aud:'+editingItem.id+':'+s, {name:p.name, type:p.type, buf:p.buf});
@@ -1503,6 +1524,12 @@ async function saveItem(){
     if(old&&old.url) URL.revokeObjectURL(old.url);
     editingItem.recordings=(editingItem.recordings||[]).filter(r=>r.speed!==s);
     await DB.del('aud:'+editingItem.id+':'+s);
+    // Фаза 6: снятую запись убираем и из облака (если вошли), чтобы не болтался осиротевший файл.
+    removeAudioRemote(editingItem, s);
+  }
+  // Фаза 6: если вошли и онлайн — свежие mp3 сразу уходят в облако (иначе отложатся до «Синхронизировать»).
+  if(_syncUser && sbReady()){
+    for(const s of AUDIO_SLOTS){ if(pendingRec[s]) uploadAudio(editingItem, s).catch(()=>{}); }
   }
   if(isNewItem){ items.push(editingItem); isNewItem=false; }
   await persist();
@@ -3678,7 +3705,9 @@ function dirtyCount(){
   }
   return Math.min(n,100);
 }
-// Сериализация карточки для облака: только JSON-значения, без blob-ссылок аудио (аудио — отдельной фазой).
+// Сериализация карточки для облака: только JSON-значения. Аудио уходит как метаданные
+// (speed + имя файла + путь в Storage); blob-URL и служебные флаги исключаются, сам mp3
+// хранится в Supabase Storage (Фаза 6), а не в JSON.
 function cloudCard(it){
   const o={};
   for(const k of Object.keys(it)){
@@ -3687,12 +3716,27 @@ function cloudCard(it){
     if(t==='string'||t==='number'||t==='boolean'||v===null) o[k]=v;
   }
   if(!o.lang) o.lang=langOf(it);
+  o.recordings=cloudRecordings(it);
   return o;
 }
-// Восстановление карточки из облака: числовые поля приводим к числам, recordings — локально.
+// Метаданные аудио для облака: слот + имя файла + путь в Storage (без blob-URL и без base64).
+// path тут НЕ выдумывается: файл ссылается на Storage только после реальной выгрузки (r.path ставит uploadAudio).
+function cloudRecordings(it){
+  const out=[];
+  for(const r of (it.recordings||[])){
+    if(!r || !r.speed) continue;
+    out.push({speed:r.speed, name:r.name||'', path:r.path||null});
+  }
+  return out;
+}
+// Путь файла в bucket: user_id/<card_id>/<slot>.mp3. Без user_id (не вошли) — файл пока не в облаке (path=null).
+function audioPathOf(cardId, slot){ return _syncUser?(_syncUser.id+'/'+cardId+'/'+slot+'.mp3'):null; }
+// Восстановление карточки из облака: числовые поля приводим к числам; аудио — как метаданные
+// со ссылкой-путём (blob-кэш подтянется локально при hydrateRecordings, если файл есть на устройстве).
 function cardFromCloud(data){
+  const recs=(data.recordings||[]).map(r=>({speed:r.speed, name:r.name||'', path:r.path||null, url:null}));
   return {...data,
-    recordings:[],
+    recordings:recs,
     box:Math.max(1,Math.min(5,+data.box||1)),
     dueSess:+data.dueSess||0, correct:+data.correct||0, wrong:+data.wrong||0,
     correctStreak:+data.correctStreak||0, correctStreakDays:+data.correctStreakDays||0,
@@ -3737,6 +3781,73 @@ async function pullCloudRows(u){
   if(stR.error) throw stR.error;
   return {cards, settings:sR.data||null, stats:stR.data||[]};
 }
+// ---------- АУДИО В Storage (Фаза 6): upload/download + перенос локальных записей ----------
+// Модель: публичный bucket `recordings`, путь user_id/<card_id>/<slot>.mp3. В карточке — только
+// строка path (постоянный URL), сам mp3 кэшируется локально в IndexedDB (aud:<id>:<slot>).
+function publicAudioUrl(it, slot){
+  const r=(it.recordings||[]).find(x=>x.speed===slot&&x.path);
+  return r && r.path && sbClient() ? sbClient().storage.from('recordings').getPublicUrl(r.path).data.publicUrl : null;
+}
+// Текущая запись слота (если есть).
+function liveRec(it, slot){
+  return (it.recordings||[]).find(x=>x.speed===slot) || null;
+}
+// Кэшируем файл из Storage локально (играет офлайн и без повторной скачки).
+async function cacheRemoteAudio(it, slot){
+  const rec=liveRec(it, slot);
+  if(!rec || rec.url) return;
+  const url=publicAudioUrl(it, slot);
+  if(!url) return;
+  const local=await DB.get('aud:'+it.id+':'+slot);
+  if(local){ rec.url=URL.createObjectURL(new Blob([local.buf],{type:local.type})); return; }
+  try{
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const buf=new Uint8Array(await resp.arrayBuffer());
+    const type=resp.headers.get('content-type')||'audio/mpeg';
+    await DB.put('aud:'+it.id+':'+slot, {name:rec.name||'audio', type, buf});
+    rec.url=URL.createObjectURL(new Blob([buf],{type}));
+  }catch(e){ /* офлайн или нет файла — останется TTS */ }
+}
+// Поднимаем локальную запись в Storage (если ещё не там) и проставляем path карточке.
+async function uploadAudio(it, slot){
+  const rec=liveRec(it, slot);
+  if(!rec || !_syncUser || !sbClient()) return;
+  const path=audioPathOf(it.id, slot);
+  if(!path) return;
+  if(rec.path) return;                    // уже выгружена (на этом или другом устройстве)
+  if(!rec.url || !rec.url.startsWith('blob:')) return;  // локального файла нет — нечего грузить
+  let buf=null;
+  try{ const resp=await fetch(rec.url); buf=new Uint8Array(await resp.arrayBuffer()); }
+  catch(e){ return; }
+  if(!buf) return;
+  const {error}=await sbClient().storage.from('recordings').upload(path, buf, {
+    contentType:'audio/mpeg', cacheControl:'3600', upsert:true
+  });
+  if(error) throw error;
+  rec.path=path;
+}
+// Обходим карточки: локальные записи без path и с файлом на устройстве — в облако
+// (перенос существующих mp3 владельца). Вызывается до LWW-мержа; updated_at и __sig НЕ трогаем,
+// чтобы сам факт выгрузки не делал карточку победителем над облачной версией.
+async function uploadPendingAudio(){
+  if(!_syncUser || !sbClient()) return;
+  for(const it of items){
+    for(const r of (it.recordings||[])){
+      if(!r || !r.speed || !AUDIO_SLOTS.includes(r.speed)) continue;
+      if(r.path || it.id.startsWith('_tmp')) continue;
+      try{ await uploadAudio(it, r.speed); }
+      catch(e){ /* не выгрузился — попробуем в следующую синхронизацию */ }
+    }
+  }
+}
+// Удаляем файл из Storage (когда запись снята с карточки).
+async function removeAudioRemote(it, slot){
+  if(!_syncUser || !sbClient()) return;
+  const path=audioPathOf(it.id, slot);
+  if(!path) return;
+  try{ await sbClient().storage.from('recordings').remove([path]); }catch(e){}
+}
 // ---------- MERGE + PUSH ----------
 async function doSync(){
   if(syncBusy || syncNetDown()) return;
@@ -3748,6 +3859,10 @@ async function doSync(){
     const u=_syncUser;
     if(!u) throw new Error('Сначала войдите в аккаунт');
     const cloud=await pullCloudRows(u);
+    // Фаза 6: локальные mp3 без path выгружаем ДО мержа, чтобы пуш шёл уже со ссылкой на файл.
+    // Локальная запись при выгрузке получит path, но НЕ updated_at — карточка не должна
+    // «победить» облачную лишь из-за того, что на этом устройстве оказался файл.
+    await uploadPendingAudio();
     const cloudById={};                 // облачные карточки ВСЕХ языков
     for(const row of cloud.cards) cloudById[row.id]={u:row.updated_at||0, data:row.data, lang:row.lang};
 
@@ -3774,10 +3889,14 @@ async function doSync(){
         pushedN++;
         cloudRecs[it.id]=ts;
       }else if(locU<rec.u){
-        // облако новее → pull (своё аудио оставляем: оно живёт только локально)
-        const keepRec=(it.recordings||[]).slice();
+        // облако новее → pull. Аудио берём из облака (path), но локальный blob-кэш
+        // (если файл уже есть на этом устройстве) сохраняем поверх, чтобы играть офлайн.
+        const keepLocal=(it.recordings||[]).filter(r=>r&&r.url&&r.url.startsWith('blob:')); // локальные файлы
         const merged=cardFromCloud(rec.data||{});
-        merged.recordings=keepRec;
+        const localBySlot={}; for(const r of keepLocal){ localBySlot[r.speed]=r; }
+        for(const r of merged.recordings){
+          if(localBySlot[r.speed]) r.url=localBySlot[r.speed].url; // поверх path — живой локальный кэш
+        }
         merged.updated_at=rec.u;
         merged.__sig=itemSig(merged);
         items[i]=merged;
@@ -3839,6 +3958,9 @@ async function doSync(){
       }
       cloudStatsU[lg]=Math.max(slU,sRU);
     }
+
+    // --- аудио (Фаза 6): записи, пришедшие из облака с path, но без локального кэша, подтянут файл
+    // по требованию (при проигрывании) — массовую предзагрузку не делаем, чтобы синхронизация была быстрой.
 
     // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул updated_at) ---
     _sigSet=settingsSig(settings);

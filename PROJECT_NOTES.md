@@ -397,10 +397,21 @@
 
   - Ключевые функции/CSS: `studySpeeds / tracksFor / startStudyIdle / studyTouch / clearStudyIdle / updateStudySize / srsBadSoft / srsGoodSoft / examCorrect / matchDone / matchNextRound / markShown`, CSS `.study-wrap / .bigsize / @keyframes badShake / .btn.bad`.
 
+- Двадцать шестая партия: **1.2.2? «Фаза 6 — аудио в облако (Storage)» от 02.10.2026** (версия НЕ утверждена — ждёт подтверждения пользователя; согласно [SYNC_PLAN.md](SYNC_PLAN.md)). По варианту C (подтверждён пользователем): аудио — сгенерированные mp3 произношений, не приватные → bucket `recordings` переведён в `public = true`, чтение по постоянному URL без подписи (мгновенно, без лишнего сетевого круга), запись/удаление — только владельцу `user_id/...`.
+  - **(1) Схема записи** — карточка хранит только метаданные `recordings:[{speed,name,path}]` (без base64 в JSON): `cloudCard()`/`cloudRecordings()`/`cardFromCloud()` вырезают blob-URL и `__sig` из облачной записи, `path` проставляется только после реальной выгрузки. `itemSig()` включает слоты аудио по `speed:name` (прикрепил/удалил — карточка «моложе» для LWW), но не URL.
+  - **(2) Storage-функции** — `audioPathOf(cardId,slot)` (`_syncUser.id/cardId/slot.mp3`), `publicAudioUrl(it,slot)` (постоянный публичный URL), `uploadAudio` (blob → `storage.from('recordings').upload(...,{contentType:'audio/mpeg',cacheControl:'3600',upsert:true})`, после успеха `rec.path=path`), `uploadPendingAudio` (проход по всем карточкам со слотами без `path`), `removeAudioRemote`, `cacheRemoteAudio` (ленивое восстановление blob: IndexedDB `aud:<id>:<slot>` → иначе fetch публичного URL; при неудаче — офлайн, останется TTS).
+  - **(3) Перенос существующих локальных записей** — `doSync()` после pull и до merge зовёт `await uploadPendingAudio()`: у локально прикреплённых файлов появляется `path`, но `updated_at` НЕ трогается — наличие файла не делает карточку победителем LWW.
+  - **(4) Чтение** — `playWordNorm()`, `playSlot()` и `tracksFor()` через `liveRec`/`cacheRemoteAudio`: если есть blob — играем файл, иначе TTS по языку; при LWW-pull с облака blob-URL от локального кэша сохраняется поверх облачного `path` (`localBySlot`).
+  - **(5) Резерв слотов** — `AUDIO_SLOTS=['norm','alt2','alt3']` + `AUDIO_SLOT_LABEL` на будущее «Аудио 2/3» (местá под альтернативные произношения заложены в схему путей сразу; кнопки добавим позже без миграции). `migrateNormAudio()` чистит старые `slow`/`fast`.
+  - **(6) SQL** — `supabase/phase2-storage.sql` переписан: `update/insert ... storage.buckets set public = true` (idemпотентный upsert), политики `insert` (только `.mp3` в свою папку), `update`/`delete` (только владелец `storage.foldername(name)[1]`); старая `select_own`-политика удаляется (публичное чтение даёт флаг `public`, а не RLS). Выполняется отдельным запросом после `phase2.sql` — либо вручную включить галочку «Public bucket» в дашборде.
+  - Проверено: синтаксис `SYNTAX_OK`; в превью `AUDIO_SLOTS=['norm','alt2','alt3']`, функции `uploadAudio/uploadPendingAudio/audioPathOf/removeAudioRemote/cacheRemoteAudio` определены, версия на экране 1.2.1; офлайн-сборка пересобрана (`hanzi-trainer-offline 1.2.1.html`, 565 547 байт).
+  - Ключевые функции: `cloudRecordings / cardFromCloud / audioPathOf / publicAudioUrl / liveRec / cacheRemoteAudio / uploadAudio / uploadPendingAudio / removeAudioRemote / migrateNormAudio / AUDIO_SLOTS / AUDIO_SLOT_LABEL / itemSig`.
+
 **Не сделано / возможные следующие шаги** (дальше по [SYNC_PLAN.md](SYNC_PLAN.md)):
 - Пользователю: проверить реальный вход по ссылке из письма на GitHub Pages (Фаза 3, пункт «Проверка входа»).
-- Фаза 4 — кнопка «Синхронизировать» + LWW-слияние по `updated_at`.
-- Фазы 6–8 — аудио в Storage, каталог, полировка/I18N.
+- Пользователю: выполнить `supabase/phase2-storage.sql` в дашборде (либо включить галочку «Public bucket» у `recordings`) — иначе аудио в облако не выгрузится (Фаза 6, часть 2/2).
+- Фаза 7 — каталог-пример + «Добавить из каталога».
+- Фаза 8 — полировка, лимиты Storage, I18N.
 - Публикация свежего офлайн-файла по live-ссылке (Cloudflare quick tunnel) — не выполнена, предложена.
 
 ---

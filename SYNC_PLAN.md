@@ -97,10 +97,12 @@ catalog_items  (id, lang, kind, text, pinyin, translation jsonb, tag)
 - [x] Версия: подтверждена пользователем (1.2.0).
 - [x] Стартовые наборы слов по запросу при первом входе в пустой язык (`maybeOfferSamples`).
 
-### Фаза 6 — Аудио в облако (Storage)
-- [ ] Загрузка/выгрузка записей `aud:<id>:<speed>` в bucket `recordings` (путь `user_id/<card_id>/<speed>.mp3`).
-- [ ] В карточке — ссылка на файл вместо base64 в JSON.
-- [ ] Перенос уже существующих локальных записей на устройстве-владельце.
+### Фаза 6 — Аудио в облако (Storage) ✅ ВЫПОЛНЕНА (версию утверждает пользователь)
+- [x] Загрузка записей `aud:<id>:<speed>` в bucket `recordings` (путь `user_id/<card_id>/<slot>.mp3`, slot = nom/alt2/alt3): `uploadAudio`/`uploadPendingAudio`/`removeAudioRemote`/`audioPathOf`.
+- [x] В карточке — `recordings:[{speed,name,path}]` вместо base64 в JSON (`cloudRecordings`/`cardFromCloud`).
+- [x] Перенос уже существующих локальных записей на устройстве-владельце — `uploadPendingAudio()` в `doSync()` (путь задаётся без «толчка» `updated_at`, чтобы файл не делал карточку победителем LWW); path хранится отдельно, blob остаётся локальным кэшем.
+- [x] Чтение по постоянному публичному URL (`publicAudioUrl` + `cacheRemoteAudio` — ленивое восстановление blob из IndexedDB/сети) — bucket `recordings` переведён в `public = true` (вариант C), запись/удаление только владельцу.
+- [x] Резерв слотов `AUDIO_SLOTS=['norm','alt2','alt3']` — на будущее «Аудио 2/3» (пути уже слот-ориентированные; кнопки добавим позже, без миграции).
 - [ ] Версия: подтвердить у пользователя.
 
 ### Фаза 7 — Каталог-пример + «добавить из каталога»
