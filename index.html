@@ -39,7 +39,7 @@ header.top .sub{display:flex; gap:6px}
   padding:4px 11px; font-size:12px; color:var(--mut); box-shadow:var(--shadow-sm);
 }
 .chip b{color:var(--ink); font-weight:800}
-header.top .ver{font-size:11px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
+header.top .ver{font-size:12px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
 
 /* Screens */
 main{flex:1 1 auto; overflow:hidden; position:relative}
@@ -109,8 +109,12 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .big.sent{font-size:calc(14vmin * var(--mul-h,1)); line-height:1.35}
 .bigpy{font-size:calc(9vmin * var(--mul-p,1)); color:var(--amber); min-height:1.2em; font-family:system-ui,-apple-system,var(--font-cjk),sans-serif}
 .bigtr{font-size:calc(7.5vmin * var(--mul-t,1)); color:var(--mut); min-height:1.3em; line-height:1.4}
+/* Фактический размер иероглифа в пикселях (+ проценты от ширины экрана) */
+.bigsize{font-size:11px; color:var(--mut); opacity:.8; min-height:1.2em; line-height:1.3}
 .speaker{font-size:13px; color:var(--mut); letter-spacing:1px}
 .speaker .speed{font-weight:800; color:var(--red)}
+/* Блок «Учить» — по центру на любом экране (как Письмо/Экзамен) */
+.study-wrap{width:100%; max-width:620px; margin:0 auto; height:100%; display:flex; flex-direction:column}
 
 /* Подсветка текущего иероглифа (экзамен-письмо / письмо) */
 .char-strip{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px; margin:2px 0 8px}
@@ -362,10 +366,21 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 }
 .toast.show{opacity:1}
 
-/* Мигание при ошибке — одинаковое во всех подрежимах экзамена */
-@keyframes badBlink{
-  0%,100%{opacity:1; filter:none}
-  50%{opacity:.3; filter:brightness(1.35)}
+/* Ошибка: красная заливка + тряска (заменяет едва заметное затухание) */
+@keyframes badShake{
+  0%,100%{transform:translateX(0)}
+  15%{transform:translateX(-7px)}
+  30%{transform:translateX(6px)}
+  45%{transform:translateX(-5px)}
+  60%{transform:translateX(4px)}
+  75%{transform:translateX(-2px)}
+  90%{transform:translateX(1px)}
+}
+.btn.bad, .match-pair.bad, .exam-opt.bad, .match-col button.bad{
+  animation:badShake .4s ease;
+  background-color:var(--red) !important;
+  border-color:var(--red) !important;
+  color:#fff !important;
 }
 
 .empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
@@ -396,7 +411,6 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .match-pair.match-txt{font-family:system-ui,-apple-system,var(--font-cjk),sans-serif; font-size:14px; font-weight:600}
 .match-pair.sel{background:var(--amber); border-color:#d6930b; color:#3b2f00; transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
 .match-pair.done{opacity:.18; pointer-events:none; transform:none; box-shadow:none}
-.btn.bad, .match-pair.bad{animation:badBlink .45s}
 
 /* Десктоп/ноутбук (≥1024px): крупнее карточки «Выбора ответов» и «Подбора».
    Телефоны и планшеты (<1024px) — размеры прежние. */
@@ -443,7 +457,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
   <!-- ИЗУЧЕНИЕ -->
   <section class="screen" id="scr-study">
-    <div id="studyWrap" style="height:100%; display:flex; flex-direction:column">
+    <div id="studyWrap" class="study-wrap">
       <div class="row" style="justify-content:space-between; margin-bottom:4px">
         <span class="chip" id="studyProgress">0 / 0</span>
         <span class="speaker" id="studySpeed"></span>
@@ -452,6 +466,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <div class="big" id="studyHanzi"></div>
         <div class="bigpy" id="studyPinyin"></div>
         <div class="bigtr" id="studyTr"></div>
+        <div class="bigsize" id="studySize"></div>
       </div>
       <div class="btn-col">
         <button class="btn ok" id="studyKnow">Вперёд ▶</button>
@@ -579,12 +594,6 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
             <button data-v="1" class="active">Обычно</button>
             <button data-v="0.7">Меньше</button>
           </div>
-          <label class="lbl">Повторов озвучки на каждой скорости</label>
-          <div class="seg" id="repeatSeg">
-            <button data-v="1">1</button>
-            <button data-v="3" class="active">3</button>
-            <button data-v="5">5</button>
-          </div>
           <label class="lbl">Подсказка в письме после промахов</label>
           <div class="seg" id="hintSeg">
             <button data-v="0">Сразу</button>
@@ -691,7 +700,7 @@ const DB = {
 // ============================== STATE ==============================
 let items = [];            // array of item
 let settings = {
-  repeats:3, hint:2, voiceURI:'', mulH:1, mulP:1, mulT:1, studySpeed:'all'
+  hint:2, voiceURI:'', mulH:1, mulP:1, mulT:1
 };
 let stats = { streak:0, lastDay:'', activity:{} };
 // Активный язык (Фаза 5): справочник языков; у каждого — свои карточки и статистика.
@@ -709,7 +718,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.2.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -892,6 +901,7 @@ function toastShort(msg){
 function go(scrId){
   stopPlayer();
   clearExamIdle();
+  clearStudyIdle();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(scrId).classList.add('active');
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.scr===scrId));
@@ -1025,11 +1035,11 @@ const Player={
 // study: speeds = выбранная скорость (или все подряд); exam: всегда ['norm'].
 function tracksFor(it, opts){
   opts=opts||{};
-  const R=opts.reps ?? (settings.repeats||3);
+  const R=opts.reps ?? 1;                          // одно проговаривание на скорость
   const labelMap={slow:'медленно', norm:'обычно', fast:'быстро'};
   const rateMap={slow:0.55, norm:1, fast:1.18};
   const rec=(sp)=> it.recordings.find(r=>r.speed===sp);
-  const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['slow','norm','fast']);
+  const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
   const out=[];
   for(const sp of speeds){
     const r=rec(sp);
@@ -1038,14 +1048,9 @@ function tracksFor(it, opts){
   if(out.length) return out;
   return speeds.map(sp=>({kind:'tts',text:it.hanzi,rate:rateMap[sp],reps:R,label:labelMap[sp]}));
 }
-// Какие скорости проигрывать в режиме учить (настройка studySpeed)
-function studySpeeds(){
-  const s=settings.studySpeed;
-  if(s==='slow') return ['slow'];
-  if(s==='norm') return ['norm'];
-  if(s==='fast') return ['fast'];
-  return ['slow','norm','fast'];
-}
+// В режиме «Учить» слово озвучивается один раз на обычной скорости.
+// Повтор — только при продолжительном простое (см. studyIdle) или кнопкой «Повторить».
+function studySpeeds(){ return ['norm']; }
 function playItem(it, opts){
   opts=opts||{};
   if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
@@ -1639,6 +1644,7 @@ function buildStudyQueue(){
 }
 function startStudy(){
   Player.stop();
+  clearStudyIdle();
   enterSession();
   resetStudyQueue();
 }
@@ -1662,11 +1668,43 @@ function showStudyCard(){
   big.textContent=it.hanzi;
   // размер подбирается автоматически: 1 символ — big, 2-4 — word, >=5 — sent
   big.className='big '+(it.hanzi.length===1?'':(it.hanzi.length<=4?'word':'sent'));
+  // фактический размер иероглифа в пикселях (после перерисовки)
+  requestAnimationFrame(()=>updateStudySize());
   // пиньинь и перевод видны сразу (и крупно)
   document.getElementById('studyPinyin').textContent=it.pinyin||'';
   document.getElementById('studyTr').textContent=trJoined(it)||'';
+  startStudyIdle();
   playItem(it);
 }
+function updateStudySize(){
+  const big=document.getElementById('studyHanzi');
+  const el=document.getElementById('studySize'); if(!el||!big) return;
+  const px=Math.round(big.getBoundingClientRect().height);
+  if(!px){ return; }
+  const pct=Math.round(px/innerWidth*1000)/10;
+  el.textContent=px+' px · '+pct+'%';
+}
+// пересчитывать размер иероглифа при повороте/изменении ширины
+window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
+// --- Повтор озвучки при простое (аналог examIdle): слово звучит один раз при показе,
+// потом повторяется, если пользователь задерживается на карточке без действий ---
+let studyIdleTimer=null, studyLastMove=0;
+function studyTouch(){ if(studyIdleTimer) studyLastMove=Date.now(); }
+function clearStudyIdle(){ if(studyIdleTimer){ clearInterval(studyIdleTimer); studyIdleTimer=null; } }
+function startStudyIdle(){
+  clearStudyIdle();
+  studyLastMove=Date.now();
+  studyIdleTimer=setInterval(()=>{
+    const scr=document.getElementById('scr-study');
+    if(!scr || !scr.classList.contains('active')) return;
+    if(Date.now()-studyLastMove>=5000){
+      studyLastMove=Date.now();            // перевзводим, чтобы не частить каждую секунду
+      const it=studyQueue[studyIdx];
+      if(it && studyQueue.length){ Player.stop(); playItem(it); }
+    }
+  },1000);
+}
+['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, studyTouch, {passive:true}));
 function studyRepeat(){
   // «Повторить» — перезапустить аудио текущего слова
   if(!studyQueue.length) return;
@@ -1689,20 +1727,6 @@ function studyBack(){
   Player.stop();
   studyIdx=Math.max(0,studyIdx-1);
   showStudyCard();
-}
-function studyAnswer(know){
-  const it=studyQueue[studyIdx]; if(!it) return;
-  Player.stop();
-  if(know){
-    it.correct=(it.correct||0)+1;
-    it.nextDue=now()+60000; // в «Учить» просто немного отодвигаем повтор
-  } else {
-    it.wrong=(it.wrong||0)+1;
-    it.nextDue=now();
-  }
-  touchStreak();
-  logActivity();
-  persist().then(()=>{ studyIdx++; showStudyCard(); updateChips(); });
 }
 // --- результат ответа (общий для «Письма» и всех подрежимов «Экзамена») ---
 // Верный ответ/написание → в следующую коробку. Ошибка → −2 коробки + повтор в текущей сессии.
@@ -1759,14 +1783,12 @@ function srsBad(it){
   }
   demoteBox(it);
 }
-// Лёгкая ошибка (Верно-неверно / Подбор): влияет на коробку и статистику,
-// но НЕ трогает счётчик 3+3 «нового» (требование 7).
+// Лёгкая ошибка (Верно-неверно / Подбор): как полная ошибка — влияет на коробку,
+// статистику и счётчик 3+3 «нового» (сбрасывает текущую тройку).
 function srsBadSoft(it){
-  it.wrong=(it.wrong||0)+1;
-  it.wrongStreak=(it.wrongStreak||0)+1;
-  demoteBox(it);
+  srsBad(it);
 }
-// Верный ответ → (для изученного) в следующую коробку; счётчик 3+3 не трогает.
+// Верный ответ → следующую коробку + счётчик 3+3 (как «Выбор ответов»).
 function srsGoodSoft(it){
   it.correct=(it.correct||0)+1;
   it.wrongStreak=0;
@@ -2275,11 +2297,11 @@ function examAdv(){
   updateExamScore();
   nextExamQ();
 }
-function examMistakeSoft(it){  // Верно-неверно / Подбор: ошибка НЕ трогает 3+3
+function examMistakeSoft(it){  // Верно-неверно / Подбор: ошибка тоже сбрасывает 3+3
   Player.stop();
   if(it===examCurrentIt) examWrong.push(it);
   if(it!==writeCurItem){ examCurrentIt=it; }
-  srsBadSoft(it);
+  srsBadSoft(it);         // = srsBad: коробка −2 + сброс текущей тройки
   requeueExam(it);        // ошибка → слово повторяется в текущей сессии
   persist();
 }
@@ -2290,11 +2312,12 @@ function examMistake(it){  // «Выбор ответов»: ошибка сбр
   requeueExam(it);        // ошибка → слово повторяется в текущей сессии
   persist();
 }
-function examCorrect(it){  // подрежимы ВН/Подбор: двигают коробку, НЕ кормят 3+3
+function examCorrect(it){  // ВН/Подбор: двигают коробку И кормят 3+3
   Player.stop();
   examRight++;
   if(it!==writeCurItem){ examCurrentIt=it; }
   srsGoodSoft(it);
+  newGood(it);
   persist();
 }
 function examCorrectCounted(it){  // «Выбор ответов»: кормим счётчик 3+3
@@ -2449,6 +2472,7 @@ function matchStart(){
   Player.stop();
   matchRound=[]; matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   matchNextRound();
+  if(examAudioOn && matchRound.length && matchRound[0]) examSpeakWord(matchRound[0]);
 }
 function matchNextRound(){
   const deck=matchDeck();
@@ -2459,6 +2483,7 @@ function matchNextRound(){
   }
   matchRound=matchDraw(deck, Math.min(need, deck.length));
   matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
+  matchRound.forEach(it=>markShown(it)); // каждое слово раунда — отдельный «показ» (для счёта 3+3)
   renderMatch();
 }
 function renderMatch(){
@@ -2506,7 +2531,7 @@ function matchPickRight(id, btn){
     if(matchSelLeft===id){
       matchDone(leftBtn, btn, id);
     }else{
-      // ошибка — моргает (коробка откатывается; 3+3 «нового» не трогаем)
+      // ошибка — красная вспышка + тряска (коробка −2, сброс тройки 3+3)
       flashBad(btn);
       flashBad(leftBtn);
       matchSelLeft=null;
@@ -2529,7 +2554,7 @@ function matchDone(leftBtn, rightBtn, id){
   rightBtn.classList.add('done'); rightBtn.disabled=true;
   matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   const it=matchRound.find(x=>x.id===id);
-  if(it){ examRight++; touchStreak(); logActivity(); updateExamScore(); srsGoodSoft(it); }
+  if(it){ examRight++; touchStreak(); logActivity(); updateExamScore(); srsGoodSoft(it); newGood(it); }
   persist();
   if(document.querySelectorAll('#matchLeft button:not(.done)').length===0){
     // раунд угадан — новая пятёрка
@@ -3339,7 +3364,6 @@ function bindSettings(){
   seg('hanziSizeSeg','mulH','float',applySizes);
   seg('pinyinSizeSeg','mulP','float',applySizes);
   seg('trSizeSeg','mulT','float',applySizes);
-  seg('repeatSeg','repeats','num');
   seg('hintSeg','hint','num');
   seg('writeOrderSeg','writeOrder','str',onWriteOrderChange);
   seg('writeHintSeg','writeHint','str',onWriteHintChange);
@@ -3928,7 +3952,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{repeats:3,hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,studySpeed:'all',examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   activeLang=LANG_MAP[settings.activeLang]?settings.activeLang:'zh';
   // Статистика по языкам (Фаза 5): если ещё нет карты — мигрируем старую статистику в язык activeLang.
   statsByLang=(await DB.get(DB_STATS_ALL))||{};

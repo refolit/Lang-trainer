@@ -72,6 +72,7 @@
 | 22 | Двадцать вторая (модалки по центру + toast) | 30.09.26 | **1.1.2** |
 | 23 | Двадцать третья — Фаза 4 (синхронизация) | 01.10.26 | **1.1.3** |
 | 24 | Двадцать четвёртая — Фаза 5 (мультиязычность) | 01.10.26 | **1.2.0** |
+| 25 | Двадцать пятая (Учить + лёгкие действия + моргание) | 02.10.26 14:54 | **1.2.1** |
 
 ---
 
@@ -384,6 +385,17 @@
   - Проверено в браузере: переключение en/ar, печать (неверно → остаться/очистить, верно → следующее), `dir=rtl` у `<html>`, словарь показывает только активный язык, плитки статистики в рамках языка, ошибок в консоли нет. Офлайн-сборка пересобрана: `hanzi-trainer-offline 1.2.0.html` (старый `hanzi-trainer-offline 1.1.3.html` остаётся в репозитории как архив).
   - **(7) Стартовый набор по запросу** — при первом входе в язык без слов (`boot()` и `setLang()`) приложение спрашивает «Добавить стартовый набор слов для …?» (`maybeOfferSamples`): «Да» → `sampleData(true)` вставляет 13 демо-карточек этого языка; флаг `settings.samplesOffered[lang]` запоминает — спрашиваем один раз на язык (даже если «Нет»). Автопосев не делается — только с согласия пользователя.
   - Ключевые функции/CSS: `LANGS / LANG_MAP / activeLang / langOf / langItems / langInfo / hasStrokes / ttsLang / applyDir / statsByLang / statsFor / renderLangSeg / setLang / maybeOfferSamples / writableItems / writeTypeSeq / setWriteItemTyping / renderTypeCardsHint / typeNormalize / checkTyped / writeNextTyping / writeNavTyping`, CSS `.type-card / .type-word / .type-in / .type-btn`.
+
+- Двадцать пятая партия: **1.2.1 «Учить + лёгкие действия + моргание» от 02.10.2026** (правки 02.10.26 14:54, версия утверждена пользователем). Шесть правок:
+  - **(1) Аудио в «Учить» — один раз на обычной скорости** — `studySpeeds()` возвращает только `['norm']`, `tracksFor()` по умолчанию `R=opts.reps ?? 1` (было `settings.repeats||3`); убраны повторы slow×3 + norm×3 + fast×3. Повтор озвучки — только при простое (5 с бездействия, `studyIdle`-механизм по образцу `examIdle`): `studyTouch/startStudyIdle/clearStudyIdle`, слушатели `pointerdown/keydown/touchstart`; или кнопкой «🔄 Повторить».
+  - **(2) Поле фактического размера иероглифа** — над иероглифом в «Учить» добавлен `#studySize`. `updateStudySize()` меряет `getBoundingClientRect().height` и пишет «N px · P%» (процент от ширины экрана); пересчитывается при `resize` и после отрисовки карточки (`requestAnimationFrame`).
+  - **(3) Блок «Учить» по центру** — обёртка `.study-wrap` с `max-width:620px; margin:0 auto` (как в «Письме»/«Экзамене»), весь контент внутри.
+  - **(4) Версия в шапке +1px** — `.header.top .ver` `font-size` 11px → 12px.
+  - **(5) Лёгкие действия теперь кормят 3+3** — `srsBadSoft()` = `srsBad()` (коробка −2, сброс тройки «нового»); `examCorrect()` (ВН) и `matchDone()` (Подбор) теперь вызывают `newGood(it)` наряду с `srsGoodSoft(it)`. Дополнительно `matchNextRound()` отмечает каждое слово раунда `markShown()` (отдельный «показ» для корректного счёта троек между раундами).
+  - **(6) Заметное моргание при ошибке** — единый `@keyframes badShake` (красная заливка `var(--red)` + тряска влево-вправо 0.4 с) вместо едва заметного `badBlink`; применяется к `.btn.bad / .match-pair.bad / .exam-opt.bad / .match-col button.bad`.
+  - Проверено вживую (сервер `lang-trainer-live:4873`): версия 1.2.0 → 12px; `studySize` = «58 px · 19%» на вьюпорте 305px; `max-width:620px` центрирует блок; аудио `play()` вызывается 1 раз с `reps=1, label 'обычно'`, при простое повторяется; «Выбор ответов» — клик по неверному ответу даёт `animation: badShake`, `background-color: rgb(198,40,40)`. Синтаксис `SYNTAX_OK`, офлайн-сборка пересобрана (558 846 байт).
+
+  - Ключевые функции/CSS: `studySpeeds / tracksFor / startStudyIdle / studyTouch / clearStudyIdle / updateStudySize / srsBadSoft / srsGoodSoft / examCorrect / matchDone / matchNextRound / markShown`, CSS `.study-wrap / .bigsize / @keyframes badShake / .btn.bad`.
 
 **Не сделано / возможные следующие шаги** (дальше по [SYNC_PLAN.md](SYNC_PLAN.md)):
 - Пользователю: проверить реальный вход по ссылке из письма на GitHub Pages (Фаза 3, пункт «Проверка входа»).
