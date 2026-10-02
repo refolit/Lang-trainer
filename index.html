@@ -731,7 +731,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.4.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4092,66 +4092,39 @@ async function renderAuth(){
   }else{
     box.innerHTML=`<div class="auth-line"><span class="auth-hint" style="margin:0">Вы не вошли.</span><span class="spacer"></span>
       <button class="btn" style="width:auto; padding:9px 14px" id="btnOpenAuth">Войти</button></div>
-      <div class="auth-hint">Вход по email: пришлём письмо с одноразовым кодом. Без пароля.</div>`;
+      <div class="auth-hint">Вход по email: пришлём письмо со ссылкой для входа. Без пароля.</div>`;
     document.getElementById('btnOpenAuth').onclick=openAuthModal;
   }
   refreshSyncUI();
 }
-let authStepEmail='';      // email, на который уже запрошен код (для шага «код из письма»)
 function openAuthModal(){
   const m=document.getElementById('modalAuth');
-  authStepEmail='';
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Вход по email</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
-    <div class="auth-hint" style="margin-top:6px">Введите email — пришлём на него одноразовый код. Пароль не нужен.</div>
+    <div class="auth-hint" style="margin-top:6px">Введите email — пришлём на него ссылку для входа. Пароль не нужен.</div>
     <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px" inputmode="email" autocomplete="email">
-    <button class="btn" id="authSend" style="margin-top:10px">Получить код</button>
+    <button class="btn" id="authSend" style="margin-top:10px">Отправить ссылку</button>
     <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
   </div>`;
   m.classList.remove('hidden');
   const inp=document.getElementById('authEmail');
   const send=document.getElementById('authSend');
   const msg=document.getElementById('authMsg');
+  if(inp) setTimeout(()=>inp.focus(),60);
   send.onclick=async ()=>{
     const email=inp.value.trim();
     if(!email){ msg.textContent='Введите email.'; return; }
     const c=sbClient();
     if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
     send.disabled=true; send.textContent='Отправляем…';
-    const {error}=await c.auth.signInWithOtp({ email });
-    send.disabled=false; send.textContent='Получить код';
+    const {error}=await c.auth.signInWithOtp({
+      email,
+      options:{ emailRedirectTo: location.origin + location.pathname }
+    });
+    send.disabled=false; send.textContent='Отправить ссылку';
     if(error){ toastShort('Ошибка: '+error.message); msg.textContent='Ошибка: '+error.message; }
-    else{ authStepEmail=email; renderAuthCodeStep(m); }
-  };
-}
-function renderAuthCodeStep(m){
-  m.innerHTML=`<div class="sheet">
-    <div class="row"><h2>Код из письма</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
-    <div class="auth-hint" style="margin-top:6px">Мы отправили код на <b>${escapeHtml(authStepEmail)}</b>. Введите его сюда.</div>
-    <input type="text" id="authCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6" style="margin-top:10px; letter-spacing:6px; font-size:20px; text-align:center">
-    <button class="btn" id="authVerify" style="margin-top:10px">Войти</button>
-    <button class="btn ghost" id="authBack" style="margin-top:4px">← Другой email</button>
-    <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
-  </div>`;
-  const inp=m.querySelector('#authCode');
-  const verify=m.querySelector('#authVerify');
-  const msg=m.querySelector('#authMsg');
-  m.querySelector('#authBack').onclick=()=>{ authStepEmail=''; openAuthModal(); };
-  if(inp) setTimeout(()=>inp.focus(),60);
-  verify.onclick=async ()=>{
-    const code=(inp.value||'').trim();
-    if(!code){ msg.textContent='Введите код из письма.'; return; }
-    const c=sbClient();
-    if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
-    verify.disabled=true; verify.textContent='Проверяем…';
-    const {error}=await c.auth.verifyOtp({ email:authStepEmail, token:code, type:'email' });
-    verify.disabled=false; verify.textContent='Войти';
-    if(error){ msg.textContent='Неверный код или он истёк. Попробуйте ещё раз.'; }
     else{
-      closeModal('modalAuth');
-      toast('✅ Вы вошли');
-      renderAuth();
-      if(!settings.userName) maybeAskName();
+      msg.textContent='Проверьте почту и откройте ссылку из письма — она вернёт вас в приложение уже вошедшим.';
     }
   };
 }
@@ -4193,7 +4166,16 @@ function initAuthState(){
   // поэтому не дёргаем renderAuth/refreshSyncUI, иначе при простое всплывает
   // «Изменено: N · не синхронизировано» без причины. Рендерим только на SIGNED_IN/SIGNED_OUT.
   c.auth.onAuthStateChange((event)=>{
-    if(event==='SIGNED_IN' || event==='SIGNED_OUT') renderAuth();
+    if(event==='SIGNED_IN'){
+      renderAuth();
+      // Мягкий вопрос имени — один раз, после первого входа/при первом открытии
+      // со входом. Флаг в localStorage, чтобы не спрашивать при каждом запуске.
+      if(!settings.userName && !localStorage.getItem('askedName')){
+        localStorage.setItem('askedName','1');
+        maybeAskName();
+      }
+    }
+    else if(event==='SIGNED_OUT') renderAuth();
   });
 }
 
