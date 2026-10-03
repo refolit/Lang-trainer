@@ -756,7 +756,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.6.0';
+const APP_VERSION='1.7.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -766,7 +766,9 @@ let SB=null;                                   // клиент Supabase (соз�
 const SB_OFFLINE=window.__NO_SUPABASE__===true; // в офлайн-сборке SDK заменён заглушкой
 
 // ============================== SRS (5 коробок, интервалы в сессиях) ==============================
-const BOX_INT=[0,1,2,4,6,8]; // сессий до следующего показа; индекс = коробка (1..5)
+const BOX_INT=[0,2,3,5,8,12]; // сессий до следующего показа; индекс = коробка (1..5)
+const SRS_NEW_NEED=4;         // верных ответов суммарно, чтобы новое слово покинуло коробку 1
+const SRS_NEW_PER_SESS=10;    // максимум новых слов в очереди одной сессии
 const SET='settings', ITEMS='items', STATS='stats';
 let SESS=0;                 // номер текущей сессии (Учить/Письмо/Экзамен)
 let SHOW_N=0;               // глобальный порядковый номер показа (для правила «между показами были другие слова»)
@@ -822,7 +824,7 @@ function dayStr(d){
   return y+'-'+m+'-'+dd;
 }
 function normBox(it){ let b=+it.box||1; return b<1?1:(b>5?5:b); }
-function isNewWord(it){ return !it.newDone; }            // «новое» = ещё не выполнило 3+3
+function isNewWord(it){ return !it.newDone; }            // «новое» = ещё не набрало 4 верных ответа
 function isLearned(it){ return normBox(it)>=5; }         // коробка 5 — выучено
 function markShown(it){ SHOW_N++; it.lastShowN=SHOW_N; it.lastSeen=now(); recordSeen(it); }
 
@@ -833,13 +835,10 @@ function enterSession(){
   sweepNewStage();
   persist();
 }
-// Если слово завершило первую тройку в сессии N, вторая тройка должна быть в сессии N+1.
-// Как только окно «следующая сессия» прошло без 3 верных — условие сбрасывается целиком.
+// Одноразовая зачистка служебного поля старой схемы «3+3» у слов, оставшихся между тройками.
 function sweepNewStage(){
   for(const it of items){
-    if(it.nsDoneSess!=null && SESS>(+it.nsDoneSess)+1){
-      it.nsDoneSess=null; it.nsStreak=0; it.nsSess=SESS;
-    }
+    if(it.nsDoneSess!=null){ it.nsDoneSess=null; }
   }
 }
 // Миграция на актуальные слоты аудио (norm/alt2/alt3): устаревшие записи slow/fast удаляем из данных и из БД.
@@ -867,6 +866,7 @@ function migrateItem(it){
     it.box = Math.max(1, Math.min(5, ob));
     it.dueSess = 0;
     it.nsStreak=0; it.nsSess=0; it.nsDoneSess=null; it.nsLastGoodShow=null;
+    it.nsGood=0;
     it.lastSeen = +it.nextDue||0;
   }
   it.__v3=1;
@@ -882,7 +882,7 @@ function itemSig(it){
   const recSig=(it.recordings||[]).filter(r=>r&&r.speed).map(r=>r.speed+':'+(r.name||'')).sort().join('|');
   return JSON.stringify([
     it.lang, it.kind, it.hanzi, it.pinyin, it.translation, it.trs, it.note, it.tag, it.starred,
-    it.box, it.dueSess, it.newDone, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow,
+    it.box, it.dueSess, it.newDone, it.nsGood, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow,
     it.correct, it.wrong, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
     it.learnedOn, it.addedOn, recSig
   ]);
@@ -1396,7 +1396,7 @@ function openItemModal(id){
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
     isNewItem=true;
-    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()};
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()};
   }else{
     hydrateRecordings(editingItem);
   }
@@ -1696,7 +1696,7 @@ function saveBatch(){
     }
     if(!hanzi) return;
     if(!pinyin && hasStrokes()) pinyin=toPinyin(hanzi);
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
     n++;
   });
   persist().then(()=>{ closeModal('modalBatch'); renderDict(); updateChips(); toast('Добавлено: '+n); });
@@ -1832,7 +1832,7 @@ function studyPool(){
 }
 function queueStudy(){
   const due=studyPool();
-  const newW=due.filter(it=>isNewWord(it));
+  const newW=due.filter(it=>isNewWord(it)).slice(0, SRS_NEW_PER_SESS); // лимит новых за сессию
   const oldW=due.filter(it=>!isNewWord(it));
   // 2 новых : 1 старое; если старых нет — новые подряд; если новых нет — цикл старых.
   const out=[]; let ni=0, oi=0;
@@ -1956,7 +1956,7 @@ function studyBack(){
 function srsGood(it){
   it.correct=(it.correct||0)+1;
   it.wrongStreak=0;
-  if(!it.newDone){ it.box=1; }                           // новое слово держится в коробке 1 до 3+3
+  if(!it.newDone){ it.box=1; it.dueSess=(SESS||0)+BOX_INT[1]; } // новое: коробка 1, повтор через BOX_INT[1] сессий (не каждую)
   else {
     const b=normBox(it);
     if(b>=5){ it.dueSess=(SESS||0)+BOX_INT[5]; }         // коробка 5 — навсегда, раз в 8 сессий
@@ -1967,26 +1967,23 @@ function srsGood(it){
     }
   }
 }
-// общий счётчик «нового»: 3 верных подряд в одной сессии → 3 верных подряд в следующей.
-// «написание верно с первого раза» = подряд без ошибки; «между показами были другие слова»
-// гарантируется очередью (слово повторяется в тесте только после других показов).
+// общий счётчик «нового»: SRS_NEW_NEED верных ответов СУММАРНО — не обязательно подряд
+// и не в рамках одной сессии. Ошибка счётчик не обнуляет, а просто не засчитывает показ.
+// «Между показами было другое слово» гарантируется очередью (слово повторяется в тесте
+// только после других показов); повторный зачёт того же показа срезаем по lastShowN.
 function newGood(it){
   if(it.newDone) return;
   const myShow=it.lastShowN||0;
   if(it.nsLastGoodShow!=null && (myShow - it.nsLastGoodShow) <= 1) return; // тот же показ — между не было другого слова
   it.nsLastGoodShow=myShow;
   it.nsSess=(SESS||0);
-  it.nsStreak=(it.nsStreak||0)+1;
-  if(it.nsDoneSess==null){
-    if(it.nsStreak>=3){ it.nsDoneSess=(SESS||0); it.nsStreak=0; } // первая тройка готова
-  }else if((SESS||0)===(+it.nsDoneSess)+1){
-    if(it.nsStreak>=3){
-      it.newDone=1;                                    // 3+3 выполнено
-      it.nsDoneSess=null; it.nsStreak=0;
-      it.box=Math.max(2, it.box||1);                    // покидает коробку 1 → коробка 2
-      it.dueSess=(SESS||0)+BOX_INT[2];
-      toast('✨ «'+it.hanzi+'» больше не новое');
-    }
+  it.nsGood=(it.nsGood||0)+1;
+  if(it.nsGood>=SRS_NEW_NEED){
+    it.newDone=1;                                       // накоплено нужное число верных — «не новое»
+    it.nsGood=0;
+    it.box=Math.max(2, it.box||1);                      // покидает коробку 1 → коробка 2
+    it.dueSess=(SESS||0)+BOX_INT[2];
+    toast('✨ «'+it.hanzi+'» больше не новое');
   }
 }
 // Ошибка → слово откатывается на 2 коробки (или в 3 из 5) и показывается в текущей сессии.
@@ -2001,21 +1998,21 @@ function srsBad(it){
   it.wrong=(it.wrong||0)+1;
   it.wrongStreak=(it.wrongStreak||0)+1;
   if(!it.newDone){
-    it.nsStreak=0;                                      // сброс текущей тройки («Выбор ответов»)
-    if(it.nsDoneSess!=null && (SESS||0)!==(+it.nsDoneSess)+1){ it.nsDoneSess=null; }
+    // счётчик верных НЕ сбрасывается: ошибка просто не засчитывает текущий показ.
+    if(it.nsDoneSess!=null){ it.nsDoneSess=null; }      // зачистка остатков старой схемы 3+3
   }
   demoteBox(it);
 }
 // Лёгкая ошибка (Верно-неверно / Подбор): как полная ошибка — влияет на коробку,
-// статистику и счётчик 3+3 «нового» (сбрасывает текущую тройку).
+// статистику и коробку нового слова (его счётчик верных НЕ сбрасывает).
 function srsBadSoft(it){
   srsBad(it);
 }
-// Верный ответ → следующую коробку + счётчик 3+3 (как «Выбор ответов»).
+// Верный ответ → следующую коробку + счётчик «нового» (как «Выбор ответов»).
 function srsGoodSoft(it){
   it.correct=(it.correct||0)+1;
   it.wrongStreak=0;
-  if(!it.newDone){ return; }                            // новое слово держится в коробке 1 до 3+3
+  if(!it.newDone){ it.dueSess=(SESS||0)+BOX_INT[1]; return; } // новое: коробка 1, повтор через BOX_INT[1] сессий
   srsGood(it);
 }
 // Звёздочка всегда в очереди (не зависит от dueSess), поэтому dueSess=0 не мешает.
@@ -2323,7 +2320,7 @@ function startWriteQuiz(){
 function onCharComplete(){
   if(writeAnimRunning) return;
   // слово засчитываем, когда дописан последний иероглиф целиком;
-  // тогда верное написание идёт в общий счётчик «нового» 3+3 и двигает коробку.
+  // тогда верное написание идёт в общий счётчик «нового» и двигает коробку.
   const isLast=writeCharIdx>=writeChars.length-1;
   if(isLast && writeCurItem){ good(writeCurItem); newGood(writeCurItem); persist(); updateChips(); }
   blinkWriteArea(()=>{ writeGoto(writeCharIdx+1); });
@@ -2547,22 +2544,22 @@ function examAdv(){
   updateExamScore();
   nextExamQ();
 }
-function examMistakeSoft(it){  // Верно-неверно / Подбор: ошибка тоже сбрасывает 3+3
+function examMistakeSoft(it){  // Верно-неверно / Подбор: ошибка двигает коробку, но не сбрасывает счётчик «нового»
   Player.stop();
   if(it===examCurrentIt) examWrong.push(it);
   if(it!==writeCurItem){ examCurrentIt=it; }
-  srsBadSoft(it);         // = srsBad: коробка −2 + сброс текущей тройки
+  srsBadSoft(it);         // = srsBad: коробка −2 (счётчик «нового» не трогает)
   requeueExam(it);        // ошибка → слово повторяется в текущей сессии
   persist();
 }
-function examMistake(it){  // «Выбор ответов»: ошибка сбрасывает тройку «нового»
+function examMistake(it){  // «Выбор ответов»: ошибка двигает коробку (счётчик «нового» не трогает)
   Player.stop();
   if(it===examCurrentIt) examWrong.push(it);
   wrong(it);
   requeueExam(it);        // ошибка → слово повторяется в текущей сессии
   persist();
 }
-function examCorrect(it){  // ВН/Подбор: двигают коробку И кормят 3+3
+function examCorrect(it){  // ВН/Подбор: двигают коробку И кормят счётчик «нового»
   Player.stop();
   examRight++;
   if(it!==writeCurItem){ examCurrentIt=it; }
@@ -2570,7 +2567,7 @@ function examCorrect(it){  // ВН/Подбор: двигают коробку �
   newGood(it);
   persist();
 }
-function examCorrectCounted(it){  // «Выбор ответов»: кормим счётчик 3+3
+function examCorrectCounted(it){  // «Выбор ответов»: кормим счётчик «нового»
   Player.stop();
   examRight++;
   good(it);
@@ -2733,7 +2730,7 @@ function matchNextRound(){
   }
   matchRound=matchDraw(deck, Math.min(need, deck.length));
   matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
-  matchRound.forEach(it=>markShown(it)); // каждое слово раунда — отдельный «показ» (для счёта 3+3)
+  matchRound.forEach(it=>markShown(it)); // каждое слово раунда — отдельный «показ» (для счётчика «нового»)
   renderMatch();
 }
 function renderMatch(){
@@ -2781,7 +2778,7 @@ function matchPickRight(id, btn){
     if(matchSelLeft===id){
       matchDone(leftBtn, btn, id);
     }else{
-      // ошибка — красная вспышка + тряска (коробка −2, сброс тройки 3+3)
+      // ошибка — красная вспышка + тряска (коробка −2)
       flashBad(btn);
       flashBad(leftBtn);
       matchSelLeft=null;
@@ -2855,6 +2852,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.7.0','03.10.26','SRS — переработка стратегии уровней: интервалы коробок 2/3/5/8/12 сессий (было 1/2/4/6/8); новое слово покидает уровень 1 после 4 верных ответов суммарно (было 3+3 подряд в соседних сессиях), ошибки счётчик не сбрасывают; новое слово повторяется через сессию, а не в каждой; в очереди не больше 10 новых слов за сессию'],
   ['1.6.0','03.10.26','Настройки → Данные: размер базы слов и базы аудио (штуки и КБ/МБ, активный язык); Экзамен — слово повторяется каждые 7 секунд, пока вопрос на экране; «Выбор ответов» — выше кнопки ответов (×1.5); «Учить» — тулбар заменён кнопкой ⚙ справа сверху: настройки Аудио/Пиньин/Перевод переехали в отдельное окно'],
   ['1.5.1','03.10.26','«Все переводы» честно работает во всех режимах (выкл — только главный перевод, вкл — все через «/»); «Учить» — тулбар настроек сверху (Аудио/Пиньин/Перевод); ошибка в Экзамене подсвечивается 1 сек без зелёной подсветки правильного; «Верно-неверно» — кнопки столбиком (Верно сверху); словарь — 4 одинаковых чипа-фильтра; крупнее поля карточки, кнопки действий всегда 2×2; окно фильтра — «Сбросить фильтр»/«Применить фильтр», фильтр применяется только по кнопке'],
   ['1.1.3','01.10.26','Фаза 4 — облачная синхронизация: кнопка «Синхронизировать» в Словаре (поиск слева, кнопка справа, строка статуса); LWW-merge карточек/настроек/статистики по updated_at; календарь и «дни» склеиваются по датам; сбой сети не трогает локальные данные'],
@@ -3700,7 +3698,7 @@ async function doExport(){
       const rec=await DB.get('aud:'+it.id+':'+r.speed);
       recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
     }
-    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,lang:langOf(it),recordings:recs};
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,lang:langOf(it),recordings:recs};
   }));
   const blob=new Blob([JSON.stringify({items:out,settings,statsByLang},null,1)],{type:'application/json'});
   downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
@@ -3717,7 +3715,7 @@ async function doImportFile(file){
     for(const each of items) revokeAll(each);
     items=[];
     for(const d of (j.items||[])){
-      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',updated_at:d.updated_at||now()};
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',updated_at:d.updated_at||now()};
       migrateItem(it);
       for(const r of (d.recordings||[])){
         if(r.data){ const {buf,mime}=b64ToBuf(r.data); await DB.put('aud:'+it.id+':'+r.speed,{name:r.name,type:mime,buf}); it.recordings.push({speed:r.speed,name:r.name,url:URL.createObjectURL(new Blob([buf],{type:mime}))}); }
@@ -3803,7 +3801,7 @@ function sampleData(skipConfirm){
   if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
   const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
 }
@@ -4015,6 +4013,7 @@ function cardFromCloud(data){
     dueSess:+data.dueSess||0, correct:+data.correct||0, wrong:+data.wrong||0,
     correctStreak:+data.correctStreak||0, correctStreakDays:+data.correctStreakDays||0,
     nsStreak:+data.nsStreak||0, nsSess:+data.nsSess||0,
+    nsGood:+data.nsGood||0,
     nsDoneSess:data.nsDoneSess==null?null:data.nsDoneSess,
     nsLastGoodShow:data.nsLastGoodShow==null?null:data.nsLastGoodShow,
     lastShowN:+data.lastShowN||0, lastSeen:+data.lastSeen||0, nextDue:+data.nextDue||0,
