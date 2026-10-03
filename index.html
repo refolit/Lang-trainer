@@ -212,6 +212,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .flt-chip.on{background:var(--red); color:#fff; border-color:var(--red)}
 .flt-badge{display:none; background:var(--red); color:#fff; border-radius:999px; padding:0 7px; font-size:12px; margin-left:4px}
 .flt-badge.show{display:inline-block}
+/* «Данные» в Настройках: размер баз слов и аудио */
+.data-stats{display:flex; flex-direction:column; gap:8px; margin-bottom:12px}
+.data-stats .ds-row{display:flex; justify-content:space-between; align-items:center; font-size:14px; color:var(--mut)}
+.data-stats .ds-row b{color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums}
+.data-stats-note{font-size:12px; color:var(--mut); opacity:.85; margin:-6px 0 12px; line-height:1.45}
 
 /* Синхронизация: поиск слева (половина ширины), кнопка справа, статус-строка под ними */
 .sync-row{display:flex; align-items:stretch; gap:8px; margin-bottom:6px}
@@ -392,10 +397,22 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
 .empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
 
-/* Изучение: тулбар настроек сверху (как в «Письме»/«Экзамене») */
-.study-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px}
-.study-toolbar .wbtn{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
-.study-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
+/* Изучение: маленькая кнопка настроек в правом верхнем углу экрана */
+.study-top{display:flex; justify-content:flex-end; margin:0 0 4px}
+.study-gear{
+  width:34px; height:34px; border:1.5px solid var(--line); border-radius:50%;
+  background:var(--card); color:var(--mut); font-size:17px; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
+  box-shadow:var(--shadow-sm);
+}
+.study-gear:active{transform:translateY(1px)}
+/* Строки-тумблеры в окне настроек «Учить» */
+.sn-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; font-weight:700}
+.sn-row:last-child{border-bottom:0}
+.sn-switch{width:50px; height:30px; border-radius:999px; border:0; background:#d8d2c6; position:relative; cursor:pointer; transition:background .15s; flex:0 0 auto}
+.sn-switch::after{content:''; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s}
+.sn-switch.on{background:var(--red)}
+.sn-switch.on::after{left:23px}
 
 /* Экзамен: верхний тулбар настроек */
 .exam-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
@@ -415,7 +432,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:10px 0 14px; align-items:start; width:100%}
 /* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
 .exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
-.exam-opt{font-size:14px; padding:12px 8px; word-break:break-word}
+.exam-opt{font-size:14px; padding:12px 8px; min-height:54px; word-break:break-word}
 
 .match-col{display:grid; grid-template-rows:repeat(5, minmax(64px, 1fr)); gap:8px; align-content:stretch}
 .match-pair{font-family:var(--font-cjk); font-size:18px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word}
@@ -427,7 +444,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
    Телефоны и планшеты (<1024px) — размеры прежние. */
 @media (min-width:1024px){
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
-  .exam-opt{font-size:19px; padding:18px 14px; word-break:break-word}
+  .exam-opt{font-size:19px; padding:18px 14px; min-height:70px; word-break:break-word}
   .match-pair{font-size:22px; line-height:1.3}
   .match-pair.match-txt{font-size:17px; line-height:1.35}
   .match-col{grid-template-rows:repeat(5, minmax(72px, 1fr)); gap:10px}
@@ -467,10 +484,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <!-- ИЗУЧЕНИЕ -->
   <section class="screen" id="scr-study">
     <div id="studyWrap" class="study-wrap">
-      <div class="study-toolbar">
-        <button class="btn sec wbtn on" id="studyAudio">🔊 Аудио</button>
-        <button class="btn sec wbtn on" id="studyPy">Пиньин</button>
-        <button class="btn sec wbtn on" id="studyTrBtn">Перевод</button>
+      <div class="study-top">
+        <button class="study-gear" id="studySettingsBtn" title="Настройки экрана">⚙</button>
       </div>
       <div class="row" style="justify-content:space-between; margin-bottom:4px">
         <span class="chip" id="studyProgress">0 / 0</span>
@@ -635,6 +650,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
         <div class="card">
           <div class="card-h">Данные</div>
+          <div class="data-stats">
+            <div class="ds-row"><span>📚 База слов</span><b id="dsWords">—</b></div>
+            <div class="ds-row"><span>🔊 База аудио</span><b id="dsAudio">—</b></div>
+          </div>
+          <div class="data-stats-note" id="dsNote"></div>
           <div class="btn-row">
             <button class="btn sec" id="btnExport">Экспорт JSON</button>
             <button class="btn sec" id="btnImport">Импорт JSON</button>
@@ -662,6 +682,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 <!-- ИСТОРИЯ ВЕРСИЙ -->
 <div class="modal hidden" id="modalVersions"></div>
+
+<!-- НАСТРОЙКИ ЭКРАНА «УЧИТЬ» -->
+<div class="modal hidden" id="modalStudySettings"></div>
 
 <nav class="tabs">
   <button data-scr="scr-dict" class="active"><span class="ic">📚</span>Словарь</button>
@@ -733,7 +756,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.5.1';
+const APP_VERSION='1.6.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1737,13 +1760,45 @@ function attachGuide(el, size){
 let studyQueue=[], studyIdx=0;
 // Настройки показа в «Учить»: аудио (озвучка + автоповтор), пиньинь, перевод.
 // Все три включены по умолчанию; состояние сохраняется в settings как у «Письма».
+// Живут в модалке «Настройки экрана» (кнопка ⚙ справа сверху экрана «Учить»).
 let studyAudioOn=true, studyPyOn=true, studyTrOn=true;
+const STUDY_SETTINGS_KEYS=[['studyAudio','Аудио','🔊 озвучка + автоповтор'],['studyPy','Пиньин','подпись под иероглифом'],['studyTr','Перевод','перевод под пиньинем']];
 function applyStudyToggles(){
-  const b=(id,on)=>{ const el=document.getElementById(id); if(el) el.classList.toggle('on',on); };
-  b('studyAudio',studyAudioOn); b('studyPy',studyPyOn); b('studyTrBtn',studyTrOn);
+  const gear=document.getElementById('studySettingsBtn');
+  if(gear) gear.style.color = (studyAudioOn&&studyPyOn&&studyTrOn) ? '' : 'var(--red)';
   const py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
   if(py) py.style.display=studyPyOn?'':'none';
   if(tr) tr.style.display=studyTrOn?'':'none';
+  renderStudySettings();
+}
+function openStudySettings(){
+  closeAllModals();
+  document.getElementById('modalStudySettings').classList.remove('hidden');
+  renderStudySettings();
+}
+function renderStudySettings(){
+  const m=document.getElementById('modalStudySettings');
+  if(!m || m.classList.contains('hidden')) return;
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Настройки экрана</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
+    <div style="margin-top:6px">
+    ${STUDY_SETTINGS_KEYS.map(([key,label,hint])=>{
+      const v=key==='studyAudio'?studyAudioOn:(key==='studyPy'?studyPyOn:studyTrOn);
+      return `<div class="sn-row">
+        <div><div style="font-weight:700">${label}</div><div style="font-size:12px;color:var(--mut);font-weight:400;margin-top:2px">${hint}</div></div>
+        <button class="sn-switch ${v?'on':''}" data-study-key="${key}"></button>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>`;
+  m.querySelectorAll('.sn-switch').forEach(b=>{
+    b.onclick=()=>{
+      const k=b.dataset.studyKey;
+      if(k==='studyAudio') toggleStudyAudio();
+      else if(k==='studyPy') toggleStudyPy();
+      else if(k==='studyTr') toggleStudyTr();
+    };
+  });
 }
 function toggleStudyAudio(){
   studyAudioOn=!studyAudioOn;
@@ -2420,11 +2475,32 @@ function nextExamQ(){
   else if(q.mode==='choice') renderExamChoice(q);
   else if(q.mode==='match'){ matchStart(); }
   else renderExamTF(q);
+  // в «Подборе» на экране 5 слов сразу и озвучка по клику — фиксированный повтор не нужен
+  if(q.mode!=='match') startExamRepeat(q.it);
 }
 function clearExamIdle(){
   if(examIdleTimer){ clearInterval(examIdleTimer); examIdleTimer=null; }
 }
-// повтор слова целиком (обычный темп) — используется при бездействии
+// Повтор озвучки в экзамене: слово звучало при показе, затем повторяется фиксированно
+// каждые 7 секунд, пока вопрос на экране. Прекращается ответом, уходом с режима,
+// сменой карточки (токен) или выключением «🔊 Аудио».
+const EXAM_REPEAT_MS=7000;
+let examRepeatGen=0;
+function startExamRepeat(it){
+  const my=++examRepeatGen;
+  clearExamIdle();
+  if(!examAudioOn) return;
+  if(!it || !it.hanzi) return;
+  examIdleTimer=setInterval(()=>{
+    if(my!==examRepeatGen) return;                  // ответ/уход/смена вопроса
+    const scr=document.getElementById('scr-exam');
+    if(!scr || !scr.classList.contains('active')) return;
+    if(!examAudioOn) return;
+    if(examCurrentIt && examCurrentIt.id!==it.id) return;
+    examSpeakWord(it);
+  }, EXAM_REPEAT_MS);
+}
+// повтор слова целиком (обычный темп)
 function examSpeakWord(it){
   if(!examAudioOn) return;
   if(!it||!it.hanzi) return;
@@ -2434,8 +2510,9 @@ function toggleExamAudio(){
   examAudioOn=!examAudioOn;
   settings.examAudio=examAudioOn; persist();
   document.getElementById('examAudio').classList.toggle('on', examAudioOn);
+  clearExamIdle();
   if(!examAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-  else { const it=examCurrentIt; if(it&&it.hanzi) speak(it.hanzi,1); }
+  else { const it=examCurrentIt; if(it&&it.hanzi){ speak(it.hanzi,1); startExamRepeat(it); } }
 }
 function toggleExamAllTr(){
   examAllTr=!examAllTr;
@@ -2778,6 +2855,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.6.0','03.10.26','Настройки → Данные: размер базы слов и базы аудио (штуки и КБ/МБ, активный язык); Экзамен — слово повторяется каждые 7 секунд, пока вопрос на экране; «Выбор ответов» — выше кнопки ответов (×1.5); «Учить» — тулбар заменён кнопкой ⚙ справа сверху: настройки Аудио/Пиньин/Перевод переехали в отдельное окно'],
   ['1.5.1','03.10.26','«Все переводы» честно работает во всех режимах (выкл — только главный перевод, вкл — все через «/»); «Учить» — тулбар настроек сверху (Аудио/Пиньин/Перевод); ошибка в Экзамене подсвечивается 1 сек без зелёной подсветки правильного; «Верно-неверно» — кнопки столбиком (Верно сверху); словарь — 4 одинаковых чипа-фильтра; крупнее поля карточки, кнопки действий всегда 2×2; окно фильтра — «Сбросить фильтр»/«Применить фильтр», фильтр применяется только по кнопке'],
   ['1.1.3','01.10.26','Фаза 4 — облачная синхронизация: кнопка «Синхронизировать» в Словаре (поиск слева, кнопка справа, строка статуса); LWW-merge карточек/настроек/статистики по updated_at; календарь и «дни» склеиваются по датам; сбой сети не трогает локальные данные'],
   ['1.1.2','30.09.26','Все модальные окна (вход, карточка, пакетный ввод, история версий) открываются по центру экрана, а не снизу; подтверждение входа — toast «Проверьте почту…» поверх окна'],
@@ -2917,6 +2995,47 @@ function switchMoreTab(tab){
   document.getElementById('moreTabSettings').classList.toggle('hidden', tab!=='settings');
   document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   if(tab==='stats') renderMoreStats();
+  else renderDataStats();
+}
+// Читаемый размер в байтах: до 1 МБ — в КБ (точнее для текста слов), дальше — в МБ с 1 знаком.
+function fmtBytes(n){
+  n=+n||0;
+  if(n<1048576) return (n/1024).toFixed(n<10240?1:0)+' КБ';
+  return (n/1048576).toFixed(1)+' МБ';
+}
+// Размер текста в utf-8 (без суррогатов: китайские иероглифы — 3 байта каждый).
+function utf8Bytes(s){
+  s=String(s||'');
+  let n=0;
+  for(let i=0;i<s.length;i++){
+    const c=s.codePointAt(i);
+    if(c>0xffff) i++;
+    n += c<=0x7f ? 1 : (c<=0x7ff ? 2 : (c<=0xffff ? 3 : 4));
+  }
+  return n;
+}
+// Размеры баз в «Данные» (активный язык, считаются на лету при открытии вкладки):
+// слова — карточки без аудио-файлов: размер сериализованных полей (текст/пиньинь/переводы и т.п.);
+// аудио — прикреплённые mp3: сумма буферов в IndexedDB.
+async function renderDataStats(){
+  const wEl=document.getElementById('dsWords'), aEl=document.getElementById('dsAudio'), nEl=document.getElementById('dsNote');
+  if(!wEl) return;
+  const list=langItems();
+  const auList=list.filter(it=>it.recordings && it.recordings.length);
+  let total=5; // JSON-обёртка [{items…}] — пара байт на пустую галерею
+  for(const it of list) total += (utf8Bytes(JSON.stringify(it))||0) + 1;
+  wEl.textContent=list.length+' шт · '+fmtBytes(total);
+  // аудио: сколько записей и сколько занимают; буферы читаем пакетно (не блокируя UI)
+  const slots=[];
+  for(const it of auList) for(const r of it.recordings) if(r && r.speed) slots.push(it.id+':'+r.speed);
+  aEl.textContent=slots.length+' шт · …';
+  let ab=0;
+  for(const k of slots){
+    const rec=await DB.get('aud:'+k);
+    if(rec && rec.buf) ab += rec.buf.byteLength||rec.buf.length||0;
+  }
+  aEl.textContent=slots.length+' шт · '+fmtBytes(ab);
+  nEl.textContent='Для активного языка · без учёта облака';
 }
 
 function renderMore(){
@@ -3736,9 +3855,7 @@ document.getElementById('studyAgain').onclick=()=>{
 };
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
-document.getElementById('studyAudio').onclick=toggleStudyAudio;
-document.getElementById('studyPy').onclick=toggleStudyPy;
-document.getElementById('studyTrBtn').onclick=toggleStudyTr;
+document.getElementById('studySettingsBtn').onclick=openStudySettings;
 document.getElementById('writeAudio').onclick=toggleWriteAudio;
 document.getElementById('writeAnim').onclick=toggleWriteAnim;
 document.getElementById('writeOutline').onclick=toggleWriteOutline;
