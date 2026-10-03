@@ -170,21 +170,18 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 /* Словарь: центрированный список, карточки в 3 столбца */
 #dictList{max-width:560px; margin:0 auto}
 .dict-card{display:flex; gap:10px; align-items:flex-start}
-.dc-cols{flex:1; display:grid; grid-template-columns:1.1fr .9fr 1.6fr; gap:8px; align-items:baseline; min-width:0}
+.dc-cols{flex:1; display:grid; grid-template-columns:1.1fr .9fr 1.6fr; gap:10px; align-items:baseline; min-width:0}
 .dc{min-width:0; overflow-wrap:anywhere}
-.dc.zh{font-family:var(--font-cjk); font-size:22px; font-weight:600}
-.dc.py{color:#1565c0; font-size:14px; font-weight:700}
-.dc.tr{color:#5f5a51; font-size:14px; font-weight:600; text-align:right}
+.dc.zh{font-family:var(--font-cjk); font-size:24px; font-weight:600}
+.dc.py{color:#1565c0; font-size:15px; font-weight:700}
+.dc.tr{color:#5f5a51; font-size:15px; font-weight:600; text-align:right}
 .dc-side{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto}
-.dc-btns{display:flex; gap:4px}
+/* Кнопки карточки всегда сеткой 2×2 (★ ↑ / 🔊 ↓) — ровный вид и больше места тексту на любой ширине */
+.dc-btns{display:grid; grid-template-columns:34px 34px; grid-auto-rows:34px; gap:4px}
 .icon-btn{border:0; background:#f0ece4; color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
 .dc-stat{font-size:11px; color:var(--mut); white-space:nowrap}
-/* Телефон: кнопки карточки в 2 ряда (★ ↑ / 🔊 ↓), чтобы не сжимать иероглиф и перевод */
-@media (max-width:480px){
-  .dc-btns{display:grid; grid-template-columns:34px 34px; grid-auto-rows:34px; gap:4px}
-}
 .autolink{font-size:12px; color:var(--red); text-decoration:none; font-weight:600}
 .tr-row{display:flex; align-items:center; gap:8px; margin-top:6px}
 .tr-row input{flex:1; margin:0}
@@ -202,12 +199,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .seg button{flex:1; border:0; background:none; padding:8px; border-radius:9px; font-size:13px; color:var(--mut); font-weight:600}
 .seg button.active{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
 
-/* Словарь: строка фильтров — сегмент слева, кнопки-счётчики справа (по правому краю блока) */
-.dict-filter-row{display:flex; align-items:stretch; gap:6px; margin-bottom:10px}
-.dict-filter-row .seg{flex:1}
-/* активная вкладка «Все слова / Избранное» — явная подсветка (белая на бежевом была едва заметна) */
-#dictFilterSeg button.active{background:var(--red); color:#fff}
-.dict-filter{flex:0 0 auto; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:12px; padding:8px 11px; font-size:13px; font-weight:700; white-space:nowrap}
+/* Словарь: строка фильтров — 4 одинаковых чипа в ряд (Все слова / Избранное / выучено / Фильтр) */
+.dict-filter-row{display:flex; align-items:stretch; gap:6px; margin-bottom:10px; flex-wrap:wrap}
+.dict-filter{flex:0 0 auto; cursor:pointer; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:12px; padding:8px 11px; font-size:13px; font-weight:700; white-space:nowrap}
 .dict-filter b{font-weight:800; color:var(--ink)}
 .dict-filter.active{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 4px 0 var(--red-d),0 4px 10px rgba(198,40,40,.18)}
 .dict-filter.active b{color:#fff}
@@ -389,7 +383,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   90%{transform:translateX(1px)}
 }
 .btn.bad, .match-pair.bad, .exam-opt.bad, .match-col button.bad{
-  animation:badShake .4s ease;
+  animation:badShake 1s ease;
   background-color:var(--red) !important;
   border-color:var(--red) !important;
   color:#fff !important;
@@ -397,6 +391,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 .empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
 .empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
+
+/* Изучение: тулбар настроек сверху (как в «Письме»/«Экзамене») */
+.study-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px}
+.study-toolbar .wbtn{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
+.study-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
 
 /* Экзамен: верхний тулбар настроек */
 .exam-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
@@ -452,10 +451,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       </div>
       <div class="sync-status" id="syncStatus"><span class="dot"></span><span id="syncStatusText">Войдите, чтобы синхронизировать</span></div>
       <div class="dict-filter-row">
-        <div class="seg" id="dictFilterSeg">
-          <button data-dict-filter="all" class="active">Все слова</button>
-          <button data-dict-filter="star">★ Избранное</button>
-        </div>
+        <button class="dict-filter" data-dict-filter="all" id="dictFilterAll">Все слова</button>
+        <button class="dict-filter" data-dict-filter="star" id="dictFilterStar">★ Избранное</button>
         <button class="dict-filter" data-dict-filter="learned" id="dictFilterLearned">выучено</button>
         <button class="dict-filter" id="dictFilterBtn">Фильтр<span class="flt-badge" id="fltBadge"></span></button>
       </div>
@@ -470,6 +467,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <!-- ИЗУЧЕНИЕ -->
   <section class="screen" id="scr-study">
     <div id="studyWrap" class="study-wrap">
+      <div class="study-toolbar">
+        <button class="btn sec wbtn on" id="studyAudio">🔊 Аудио</button>
+        <button class="btn sec wbtn on" id="studyPy">Пиньин</button>
+        <button class="btn sec wbtn on" id="studyTrBtn">Перевод</button>
+      </div>
       <div class="row" style="justify-content:space-between; margin-bottom:4px">
         <span class="chip" id="studyProgress">0 / 0</span>
         <span class="speaker" id="studySpeed"></span>
@@ -731,7 +733,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.5.0';
+const APP_VERSION='1.5.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1245,28 +1247,44 @@ function openFilterModal(){
   closeAllModals();
   const m=document.getElementById('modalFilter');
   const tags=allTags();
+  // tmp — рабочая копия фильтра в окне; в flt она попадает только по «Применить».
+  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due};
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Фильтр</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalFilter')">✕</button></div>
     <label class="lbl">Уровни</label>
     <div class="flt-sec" id="fltLvls">
-      ${[1,2,3,4,5].map(l=>`<button class="flt-chip ${flt.lvls.has(l)?'on':''}" data-flt-lvl="${l}">Уровень ${l}</button>`).join('')}
+      ${[1,2,3,4,5].map(l=>`<button class="flt-chip ${tmp.lvls.has(l)?'on':''}" data-flt-lvl="${l}">Уровень ${l}</button>`).join('')}
     </div>
     <label class="lbl">Метки</label>
     <div class="flt-sec" id="fltTags">
-      ${tags.length?tags.map(t=>`<button class="flt-chip ${flt.tags.has(t)?'on':''}" data-flt-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(''):'<div class="auth-hint" style="margin:0">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
+      ${tags.length?tags.map(t=>`<button class="flt-chip ${tmp.tags.has(t)?'on':''}" data-flt-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(''):'<div class="auth-hint" style="margin:0">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
     </div>
     <label class="lbl">Другое</label>
     <div class="flt-sec" id="fltDue">
-      <button class="flt-chip ${flt.due?'on':''}" data-flt-due="1">Повторить сейчас</button>
+      <button class="flt-chip ${tmp.due?'on':''}" data-flt-due="1">Повторить сейчас</button>
     </div>
-    <button class="btn sec" id="fltReset" style="margin-top:14px">Сбросить фильтр</button>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn sec" id="fltReset">Сбросить фильтр</button>
+      <button class="btn ok" id="fltApply">Применить фильтр</button>
+    </div>
   </div>`;
   m.classList.remove('hidden');
-  const afterChange=()=>{ renderDict(); updateFilterBadge(); };
-  m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(flt.lvls, +b.dataset.fltLvl); b.classList.toggle('on', flt.lvls.has(+b.dataset.fltLvl)); afterChange(); });
-  m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(flt.tags, b.dataset.fltTag); b.classList.toggle('on', flt.tags.has(b.dataset.fltTag)); afterChange(); });
-  m.querySelector('[data-flt-due]').onclick=e=>{ flt.due=!flt.due; e.currentTarget.classList.toggle('on', flt.due); afterChange(); };
-  m.querySelector('#fltReset').onclick=()=>{ flt={lvls:new Set(), tags:new Set(), due:false}; m.querySelectorAll('.flt-chip').forEach(c=>c.classList.remove('on')); afterChange(); };
+  // выбор чипов меняет только рабочую копию; к реальному flt ничего не применяется,
+  // пока пользователь не нажмёт «Применить фильтр» (или «Сбросить» очистит выбор).
+  m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.lvls, +b.dataset.fltLvl); b.classList.toggle('on', tmp.lvls.has(+b.dataset.fltLvl)); });
+  m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.tags, b.dataset.fltTag); b.classList.toggle('on', tmp.tags.has(b.dataset.fltTag)); });
+  m.querySelector('[data-flt-due]').onclick=e=>{ tmp.due=!tmp.due; e.currentTarget.classList.toggle('on', tmp.due); };
+  m.querySelector('#fltReset').onclick=()=>{
+    flt={lvls:new Set(), tags:new Set(), due:false};
+    tmp.lvls=new Set(); tmp.tags=new Set(); tmp.due=false;
+    m.querySelectorAll('.flt-chip').forEach(c=>c.classList.remove('on'));
+    renderDict(); updateFilterBadge();
+  };
+  m.querySelector('#fltApply').onclick=()=>{
+    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due};
+    renderDict(); updateFilterBadge();
+    closeModal('modalFilter');
+  };
 }
 function toggleSet(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
 function updateFilterBadge(){
@@ -1407,8 +1425,14 @@ function trList(it){
   for(const t of (it.trs||[])){ const v=t&&String(t).trim(); if(v) out.push(v); }
   return out;
 }
-// все заполненные переводы одной строкой через «/»
-function trJoined(it){ return trList(it).join(' / '); }
+// все заполненные переводы одной строкой через «/».
+// «Все переводы» (examAllTr) теперь честно работает и вне Экзамена:
+// выкл → только главный перевод, вкл → все переводы через «/».
+function trJoined(it){
+  const all=trList(it);
+  if(!all.length) return '';
+  return (examAllTr===false ? [all[0]] : all).join(' / ');
+}
 // заполненные переводы главный + альтернативные (внутренний массив окна)
 function trValArr(it){
   const a=[String(it.translation||'').trim(), ...(it.trs||[]).map(t=>String(t||'').trim())];
@@ -1711,6 +1735,33 @@ function attachGuide(el, size){
 
 // ============================== STUDY ==============================
 let studyQueue=[], studyIdx=0;
+// Настройки показа в «Учить»: аудио (озвучка + автоповтор), пиньинь, перевод.
+// Все три включены по умолчанию; состояние сохраняется в settings как у «Письма».
+let studyAudioOn=true, studyPyOn=true, studyTrOn=true;
+function applyStudyToggles(){
+  const b=(id,on)=>{ const el=document.getElementById(id); if(el) el.classList.toggle('on',on); };
+  b('studyAudio',studyAudioOn); b('studyPy',studyPyOn); b('studyTrBtn',studyTrOn);
+  const py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
+  if(py) py.style.display=studyPyOn?'':'none';
+  if(tr) tr.style.display=studyTrOn?'':'none';
+}
+function toggleStudyAudio(){
+  studyAudioOn=!studyAudioOn;
+  settings.studyAudio=studyAudioOn; persist();
+  applyStudyToggles();
+  if(!studyAudioOn){ Player.stop(); speechSynthesis.cancel(); studyTouch(); }
+  else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); }
+}
+function toggleStudyPy(){
+  studyPyOn=!studyPyOn;
+  settings.studyPy=studyPyOn; persist();
+  applyStudyToggles();
+}
+function toggleStudyTr(){
+  studyTrOn=!studyTrOn;
+  settings.studyTr=studyTrOn; persist();
+  applyStudyToggles();
+}
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   return a;
@@ -1742,6 +1793,7 @@ function buildStudyQueue(){
 function startStudy(){
   Player.stop();
   clearStudyIdle();
+  applyStudyToggles();
   enterSession();
   resetStudyQueue();
 }
@@ -1767,10 +1819,11 @@ function showStudyCard(){
   big.className='big '+(it.hanzi.length===1?'':(it.hanzi.length<=4?'word':'sent'));
   // фактический размер иероглифа в пикселях (после перерисовки)
   requestAnimationFrame(()=>updateStudySize());
-  // пиньинь и перевод видны сразу (и крупно)
+  // пиньинь и перевод видны сразу (и крупно); скрыты, если выключены в тулбаре
   document.getElementById('studyPinyin').textContent=it.pinyin||'';
   document.getElementById('studyTr').textContent=trJoined(it)||'';
-  studyPlayLoop(it);
+  if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
+  else studyPlayLoop(it);
 }
 function updateStudySize(){
   const big=document.getElementById('studyHanzi');
@@ -1823,6 +1876,8 @@ function studyPlayLoop(it){
 }
 ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, studyTouch, {passive:true}));
 function studyNext(){
+  studyTouch();
+  if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='';
   const it=studyQueue[studyIdx]; if(!it) return;
   Player.stop();
   it.nextDue=now(); // пометим как просмотренный, чтобы не блокировало повторение
@@ -1834,6 +1889,8 @@ function studyNext(){
   persist();
 }
 function studyBack(){
+  studyTouch();
+  if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='';
   const it=studyQueue[studyIdx]; if(!it) return;
   Player.stop();
   studyIdx=Math.max(0,studyIdx-1);
@@ -2401,7 +2458,9 @@ function flashBad(el, done){
   if(!el) return;
   el.classList.remove('bad'); void el.offsetWidth;
   el.classList.add('bad');
-  if(done) setTimeout(done, 460);
+  // ошибку держим заметной дольше (1 сек), затем аккуратно снимаем подсветку
+  setTimeout(()=>el.classList.remove('bad'), 1000);
+  if(done) setTimeout(done, 1000);
 }
 function examAdv(){
   Player.stop();
@@ -2487,9 +2546,9 @@ function renderExamTF(q){
       <div class="exam-py" style="font-size:20px; font-weight:700">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
       <div class="eq-tr" style="font-size:20px; font-weight:700">${escapeHtml(tr)}</div>
     </div>
-    <div class="btn-row" style="margin-top:18px; width:100%">
-      <button class="btn warn" data-v="0">Не верно</button>
+    <div class="btn-col" style="margin-top:18px; width:100%">
       <button class="btn ok" data-v="1">Верно</button>
+      <button class="btn warn" data-v="0">Не верно</button>
     </div>`;
   body.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{
     examTouch();
@@ -2719,6 +2778,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.5.1','03.10.26','«Все переводы» честно работает во всех режимах (выкл — только главный перевод, вкл — все через «/»); «Учить» — тулбар настроек сверху (Аудио/Пиньин/Перевод); ошибка в Экзамене подсвечивается 1 сек без зелёной подсветки правильного; «Верно-неверно» — кнопки столбиком (Верно сверху); словарь — 4 одинаковых чипа-фильтра; крупнее поля карточки, кнопки действий всегда 2×2; окно фильтра — «Сбросить фильтр»/«Применить фильтр», фильтр применяется только по кнопке'],
   ['1.1.3','01.10.26','Фаза 4 — облачная синхронизация: кнопка «Синхронизировать» в Словаре (поиск слева, кнопка справа, строка статуса); LWW-merge карточек/настроек/статистики по updated_at; календарь и «дни» склеиваются по датам; сбой сети не трогает локальные данные'],
   ['1.1.2','30.09.26','Все модальные окна (вход, карточка, пакетный ввод, история версий) открываются по центру экрана, а не снизу; подтверждение входа — toast «Проверьте почту…» поверх окна'],
   ['1.1.1','30.09.26','Фаза 3 (синхронизация): вход по email в Supabase — блок «Аккаунт» в Настройках, вход по magic-link без пароля, автоподхват сессии из ссылки письма, кнопка «Выйти»; офлайн-сборка — без Supabase (честная заглушка)'],
@@ -3676,6 +3736,9 @@ document.getElementById('studyAgain').onclick=()=>{
 };
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
+document.getElementById('studyAudio').onclick=toggleStudyAudio;
+document.getElementById('studyPy').onclick=toggleStudyPy;
+document.getElementById('studyTrBtn').onclick=toggleStudyTr;
 document.getElementById('writeAudio').onclick=toggleWriteAudio;
 document.getElementById('writeAnim').onclick=toggleWriteAnim;
 document.getElementById('writeOutline').onclick=toggleWriteOutline;
@@ -4231,7 +4294,11 @@ function bindAutoSync(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  studyAudioOn=settings.studyAudio!==false;
+  studyPyOn=settings.studyPy!==false;
+  studyTrOn=settings.studyTr!==false;
+  applyStudyToggles();
   activeLang=LANG_MAP[settings.activeLang]?settings.activeLang:'zh';
   // Статистика по языкам (Фаза 5): если ещё нет карты — мигрируем старую статистику в язык activeLang.
   statsByLang=(await DB.get(DB_STATS_ALL))||{};
