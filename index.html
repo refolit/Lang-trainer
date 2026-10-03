@@ -483,7 +483,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="btn-col">
         <button class="btn ok" id="studyKnow">Вперёд ▶</button>
         <button class="btn sec" id="studyBack">◀ Назад</button>
-        <button class="btn warn" id="studyAgain">🔄 Повторить</button>
+        <button class="btn warn" id="studyAgain">✍️ Писать это</button>
       </div>
     </div>
     <div class="empty hidden" id="studyEmpty">
@@ -550,7 +550,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div id="moreTabStats">
         <div class="stat-grid">
           <div class="stat"><div class="num" id="stTotal">0</div><div class="lbl">всего карточек</div></div>
-          <div class="stat"><div class="num" id="stToday">0</div><div class="lbl">добавлено сегодня</div></div>
+          <div class="stat"><div class="num" id="stToday">0</div><div class="lbl">добавлено недавно</div></div>
           <div class="stat"><div class="num" id="stLearned">0</div><div class="lbl">выучено</div></div>
           <div class="stat"><div class="num" id="stStudying">0</div><div class="lbl">изучаю</div></div>
         </div>
@@ -731,7 +731,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.4.1';
+const APP_VERSION='1.5.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -756,12 +756,8 @@ function langItems(){ return items.filter(it=>langOf(it)===activeLang); }
 function langInfo(){ return LANG_MAP[activeLang]||LANGS[0]; }
 function hasStrokes(){ return !!langInfo().has_strokes; }
 function ttsLang(){ return langInfo().tts||'zh-CN'; }
-function applyDir(){
-  const code=langInfo().rtl?'rtl':'ltr';
-  document.documentElement.setAttribute('dir', code);
-  const inp=document.getElementById('typeInput');
-  if(inp) inp.setAttribute('dir', langInfo().rtl?'rtl':'auto');
-}
+// Интерфейс всегда LTR и един для всех языков: зеркалить меню не нужно.
+// Арабский текст сам идёт справа налево внутри полей (у них dir="auto").
 // Переключатель языка (сегмент в Настройках). Меняет активный язык, подменяет
 // статистику (stats — ссылка на statsByLang[activeLang]) и перерисовывает всё.
 function renderLangSeg(){
@@ -783,7 +779,6 @@ async function setLang(lang){
   settings.activeLang=lang;
   stats=statsFor(lang);               // stats — теперь статистика выбранного языка
   renderLangSeg();
-  applyDir();
   if('speechSynthesis' in window) loadVoices(); // заново подбираем голоса под язык
   await persist();
   refreshAll();
@@ -914,7 +909,7 @@ function toastShort(msg){
   t.textContent=msg; t.classList.add('show');
   clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1000);
 }
-function go(scrId){
+function go(scrId, writeIt){
   stopPlayer();
   clearExamIdle();
   clearStudyIdle();
@@ -923,7 +918,7 @@ function go(scrId){
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.scr===scrId));
   if(scrId==='scr-dict') renderDict();
   if(scrId==='scr-study') startStudy();
-  if(scrId==='scr-write') startWrite();
+  if(scrId==='scr-write') startWrite(writeIt);
   if(scrId==='scr-exam') startExam();
   if(scrId==='scr-more') renderMore();
 }
@@ -1247,6 +1242,7 @@ function allTags(){
   return Array.from(set).sort((a,b)=>a.localeCompare(b));
 }
 function openFilterModal(){
+  closeAllModals();
   const m=document.getElementById('modalFilter');
   const tags=allTags();
   m.innerHTML=`<div class="sheet">
@@ -1354,6 +1350,7 @@ function renderDict(){
 let editingItem=null;      // живой объект карточки (уже в items)
 let isNewItem=false;       // черновик ещё не в items
 function openItemModal(id){
+  closeAllModals();
   isNewItem=false;
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
@@ -1510,6 +1507,13 @@ function closeModal(id){
   if(id==='modalItem') dropPendingRec(); // закрыли без «Сохранить» — несохранённое аудио отброшено
   m.classList.add('hidden');
 }
+// Закрывает все модалки. Вызывается первой строкой в каждом открывателе,
+// чтобы карточка/фильтр/список/вход никогда не ложились поверх друг друга.
+function closeAllModals(){
+  const item=document.getElementById('modalItem');
+  if(item && !item.classList.contains('hidden')) dropPendingRec();
+  document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));
+}
 // Клик по затемнённому фону или Esc закрывает любую модалку
 function bindModalDismiss(){
   document.querySelectorAll('.modal').forEach(m=>{
@@ -1614,6 +1618,7 @@ function attachRecordingPersist(it,speed,name,type,buf){
 
 // ============================== BATCH MODAL ==============================
 function openBatch(){
+  closeAllModals();
   const m=document.getElementById('modalBatch');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Добавить списком</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalBatch')">✕</button></div>
@@ -1765,8 +1770,7 @@ function showStudyCard(){
   // пиньинь и перевод видны сразу (и крупно)
   document.getElementById('studyPinyin').textContent=it.pinyin||'';
   document.getElementById('studyTr').textContent=trJoined(it)||'';
-  startStudyIdle();
-  playItem(it);
+  studyPlayLoop(it);
 }
 function updateStudySize(){
   const big=document.getElementById('studyHanzi');
@@ -1778,31 +1782,46 @@ function updateStudySize(){
 }
 // пересчитывать размер иероглифа при повороте/изменении ширины
 window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
-// --- Повтор озвучки при простое (аналог examIdle): слово звучит один раз при показе,
-// потом повторяется, если пользователь задерживается на карточке без действий ---
-let studyIdleTimer=null, studyLastMove=0;
-function studyTouch(){ if(studyIdleTimer) studyLastMove=Date.now(); }
-function clearStudyIdle(){ if(studyIdleTimer){ clearInterval(studyIdleTimer); studyIdleTimer=null; } }
-function startStudyIdle(){
-  clearStudyIdle();
-  studyLastMove=Date.now();
-  studyIdleTimer=setInterval(()=>{
-    const scr=document.getElementById('scr-study');
-    if(!scr || !scr.classList.contains('active')) return;
-    if(Date.now()-studyLastMove>=5000){
-      studyLastMove=Date.now();            // перевзводим, чтобы не частить каждую секунду
-      const it=studyQueue[studyIdx];
-      if(it && studyQueue.length){ Player.stop(); playItem(it); }
-    }
-  },1000);
+// --- Автоповтор озвучки в «Учить»: слово звучит один раз при показе, затем после
+// фактического КОНЦА озвучки повторяется ещё максимум STUDY_REPEAT_MAX раз с паузой,
+// зависящей от длины фразы. Повтор не стартует поверх ещё звучащей речи (это и было
+// причиной «чащения» на длинных предложениях) — отсчёт идёт от Player.onDone.
+const STUDY_REPEAT_MAX=3;                 // сколько раз дополнительно озвучить (после первого показа)
+let studyRepeats=0, studyRepeatTmo=null, studyGen=0;
+function studyRepeatDelay(text){
+  // пауза: 2с + 350мс за символ, в границах 2.5с..7с
+  const n=String(text||'').trim().length;
+  return Math.max(2500, Math.min(7000, 2000+n*350));
+}
+// любое действие пользователя прерывает цепочку автоповторов текущего показа
+function studyTouch(){ studyGen++; if(studyRepeatTmo){ clearTimeout(studyRepeatTmo); studyRepeatTmo=null; } }
+function clearStudyIdle(){ if(studyRepeatTmo){ clearTimeout(studyRepeatTmo); studyRepeatTmo=null; } }
+function studyPlayLoop(it){
+  studyGen++; clearStudyIdle();
+  studyRepeats=0;
+  const my=studyGen;
+  const step=()=>{
+    if(!it) return;
+    playItem(it, { onDone: ()=>{
+      if(studyGen!==my) return;                          // действие пользователя или уход с карточки
+      const scr=document.getElementById('scr-study');
+      if(!scr || !scr.classList.contains('active')) return;
+      const cur=studyQueue[studyIdx];
+      if(!cur || cur.id!==it.id) return;                 // карточка сменилась
+      if(studyRepeats>=STUDY_REPEAT_MAX) return;
+      studyRepeats++;
+      studyRepeatTmo=setTimeout(()=>{
+        if(studyGen!==my) return;
+        const cur2=studyQueue[studyIdx];
+        if(!cur2 || cur2.id!==it.id) return;
+        Player.stop();
+        step();
+      }, studyRepeatDelay(it.hanzi));
+    }});
+  };
+  step();
 }
 ['pointerdown','keydown','touchstart'].forEach(ev=>document.addEventListener(ev, studyTouch, {passive:true}));
-function studyRepeat(){
-  // «Повторить» — перезапустить аудио текущего слова
-  if(!studyQueue.length) return;
-  Player.stop();
-  playItem(studyQueue[studyIdx]);
-}
 function studyNext(){
   const it=studyQueue[studyIdx]; if(!it) return;
   Player.stop();
@@ -1922,7 +1941,7 @@ function writableItems(){
   if(!hasStrokes()) return langItems().filter(it=>it.translation && trList(it).length);
   return langItems().filter(it=>/[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi));
 }
-function startWrite(){
+function startWrite(focusIt){
   Player.stop();
   enterSession();
   loadWritePrefs(); applyWriteToggles();
@@ -1934,17 +1953,20 @@ function startWrite(){
     document.getElementById('writeList').innerHTML='';
     return;
   }
+  // «✍️ Писать это» из «Учить»: сразу с этим словом, не с начала очереди
+  const target=(focusIt && writableItems().find(x=>x.id===focusIt.id)) || null;
   // языки без кисти (en/tr/ar) — клавиатурный ввод целого слова
   if(!hasStrokes()){
     applyWriteToggles();
     rebuildWriteSeq();
-    if(writeCurItem && langOf(writeCurItem)===activeLang) setWriteItemTyping(writeCurItem, true);
+    if(target) setWriteItemTyping(target, true);
+    else if(writeCurItem && langOf(writeCurItem)===activeLang) setWriteItemTyping(writeCurItem, true);
     else setWriteItemTyping(all[0], true);
     return;
   }
   // самое последнее добавленное слово — первое в списке ниже
   rebuildWriteSeq();
-  setWriteItem(writeSeq[0]);
+  setWriteItem(target || writeSeq[0]);
 }
 function setWriteItem(it, keepIdx){
   if(!it) return;
@@ -2854,10 +2876,15 @@ function renderTiles(){
   const list=langItems();
   const learned=list.filter(isLearned).length;
   const studying=list.filter(it=>!isLearned(it)).length;
-  const today=dayStr();
-  const addedToday=list.filter(it=>it.addedOn===today).length;
+  // «Добавлено недавно»: последняя партия за 7 дней (по календарному дню добавления).
+  // Партия = самая свежая дата addedOn; если таких дней несколько — показываем только последнюю.
+  // addedOn — строка 'YYYY-MM-DD', поэтому сравнение строк корректно для дат.
+  const since=dayStr(new Date(Date.now()-7*86400000));
+  const recent=list.map(it=>it.addedOn).filter(d=>d && d>=since);
+  let addedRecent=0;
+  if(recent.length){ const last=recent.slice().sort().pop(); addedRecent=recent.filter(d=>d===last).length; }
   document.getElementById('stTotal').textContent=list.length;
-  document.getElementById('stToday').textContent=addedToday;
+  document.getElementById('stToday').textContent=addedRecent;
   document.getElementById('stLearned').textContent=learned;
   document.getElementById('stStudying').textContent=studying;
 }
@@ -3642,7 +3669,11 @@ document.querySelectorAll('[data-dict-filter]').forEach(b=>{
   };
 });
 document.getElementById('dictFilterBtn').onclick=openFilterModal;
-document.getElementById('studyAgain').onclick=studyRepeat;
+document.getElementById('studyAgain').onclick=()=>{
+  const it=studyQueue[studyIdx];
+  if(!it) return;
+  go('scr-write', it);
+};
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('writeAudio').onclick=toggleWriteAudio;
@@ -4098,6 +4129,7 @@ async function renderAuth(){
   refreshSyncUI();
 }
 function openAuthModal(){
+  closeAllModals();
   const m=document.getElementById('modalAuth');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Вход по email</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
@@ -4226,7 +4258,6 @@ async function boot(){
   // восстанавливаем кэш последней синхронизации (для «В сети · синхр.» и «Изменено: N»)
   const _meta=await DB.get(META);
   if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=_meta.recs||{}; cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||{}; }
-  applyDir();
   renderLangSeg();
   await persist();
   maybeOfferSamples();
