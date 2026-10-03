@@ -4308,9 +4308,11 @@ function modalSyncConflicts(rows){
       </div>`;
     };
     let html='<div class="sheet"><div class="row"><h2>Конфликты синхронизации</h2><div class="spacer"></div></div>';
-    html+='<div class="muted">Обе стороны меняли одни и те же карточки. Выберите, какую сторону оставить — для контента и прогресса отдельно.</div>';
-    html+=sideHTML('content','Контент (слова, переводы, аудио)');
-    html+=sideHTML('progress','Прогресс (уровень, ответы)');
+    html+='<div class="muted">Обе стороны меняли одни и те же карточки. Выберите, какую сторону оставить.</div>';
+    // Переключатель части показываем, только если по ней есть реальные конфликты
+    // (иначе блок с «0 карт.» выглядел бы пустым и вводил в заблуждение).
+    if(cnt.content.n) html+=sideHTML('content','Контент (слова, переводы, аудио)');
+    if(cnt.progress.n) html+=sideHTML('progress','Прогресс (уровень, ответы)');
     html+='<div class="cf-list-lbl">Детали для сравнения</div>';
     for(const row of rows){
       const loc=row.it, cl=row.cloudIt;
