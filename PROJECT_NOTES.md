@@ -80,6 +80,7 @@
 | 30 | Тридцатая («Все переводы», тулбар «Учить», фильтр | 03.10.26 3.01 | **1.5.1** |
 | 31 | Тридцать первая (данные, повтор в экзамене, кнопки, ⚙ «Учить») | 03.10.26 10.53 | **1.6.0** |
 | 32 | Тридцать вторая (переработка SRS-стратегии уровней) | 03.10.26 | **1.7.0** |
+| 33 | Тридцать третья — Фаза 8 (защита от затирания свежих данных) | 03.10.26 | **1.8.0** |
 
 ---
 
@@ -467,6 +468,15 @@
   - **(5) Совместимость** — `nsGood` проведён через все места: создание карточки (`editingItem`/два `items.push`), `migrateItem`, `itemSig` (LWW-подпись), экспорт JSON, импорт JSON, `normalizeAppItem`; `sweepNewStage` зачищает остатки `nsDoneSess` старой схемы.
   - Проверено: `node --check` → SYNTAX_OK; в превью `BOX_INT=[0,2,3,5,8,12]`, `SRS_NEW_NEED=4`, `SRS_NEW_PER_SESS=10`; симуляция `newGood` (верно→ошибка→верно→верно→верно) — счётчик доходит до 3, ошибка не обнуляет, на 4-м зачёте `newDone=1, box=2, dueSess=8`. Офлайн-сборка пересобрана (`hanzi-trainer-offline 1.7.0.html`, 584 532 байт).
   - Ключевые функции/константы: `BOX_INT / SRS_NEW_NEED / SRS_NEW_PER_SESS`, изменённые `newGood / srsGood / srsGoodSoft / srsBad / sweepNewStage / queueStudy / migrateItem / itemSig`; поле `it.nsGood`.
+
+- Тридцать третья партия: **1.8.0 «Фаза 8 — защита от затирания свежих данных» от 03.10.2026** (версия утверждена пользователем — 1.8.0). Инцидент: iPhone со старой базой синхронизировался и перезаписал свежий прогресс Android (единый `updated_at` перештамповывался на старте миграциями, отчего старая база «омолаживалась» и побеждала в LWW). Решения приняты с пользователем (без APP_VERSION-признака; свежесть только по таймстампам данных; доверяем часам устройств; защищаем слова+настройки+статистику; экран конфликтов; потерянное НЕ восстанавливаем):
+  - **(1) Контент/прогресс разъединены** — `itemSig` → `itemContentSig` (updated_at: lang,kind,hanzi,pinyin,translation,trs,note,tag,starred,recordings,addedOn) + `itemProgSig` (prog_at: box,dueSess,newDone,nsGood,nsStreak,nsSess,nsDoneSess,nsLastGoodShow,correct,wrong,wrongStreak,correctStreak,correctStreakDays,lastCorrectDay,learnedOn). `persist()` двигает каждую метку независимо, монотонно.
+  - **(2) Метка — только от реального действия** — `migrateItem` больше не ставит `now()`; `normalizeAppItem` сеет `__sigC/__sigP`, а отсутствующим меткам ставит `0` (= «возраст неизвестен», никогда не победит положительную). Порядок в `boot()`: migrateItem → migrateNormAudio → normalizeAppItem → seed settings/stats → persist (на старте no-op по меткам).
+  - **(3) Серверная защита** — `supabase/phase8-sync-fix.sql`: колонка `prog_at bigint default 0` + три guard-триггера (`cards_guard_lww`, `user_settings_guard_lww`, `user_stats_guard_lww`): запись с таймстампом меньше хранимого не проходит (карточка клампится по каждой метке, а если обе старее — отбрасывается целиком).
+  - **(4) Мерж по частям + экран конфликтов** — `doSync` решает каждую часть отдельно (push/pull/none/conflict); конфликт = обе стороны реально меняли часть с разным payload → модалка `modalSyncConflicts` («Локально / Облако» по каждой части + «Всё локально» / «Всё из облака»).
+  - **(5) Клоуд-формы** — `pullCloudRows` читает `prog_at`; `cloudCard`/`cardFromCloud(data,u,pu)` пробрасывают обе метки; `cloudRecs` стал `id→{u,pu}` (со сбросом старого кэша в `normalizeCloudRecs`); `dirtyCount` сверяет обе метки.
+  - Проверено: `node --check` → SYNTAX OK; офлайн-сборка `hanzi-trainer-offline 1.8.0.html` (595 714 байт) собрана; старая сборка 1.7.0 удалена; `.gitignore` whitelist → 1.8.0.
+  - Ключевые функции/константы: `C_FIELDS / P_FIELDS / itemContentSig / itemProgSig / seedCardSigs / normalizeAppItem / normalizeCloudRecs / pushCard / applyContentSrc / applyProgressSrc / decidePart / modalSyncConflicts`; переработанные `persist / migrateItem / boot / doSync / pullCloudRows / cloudCard / cardFromCloud / dirtyCount`. Осталось пользователю: выполнить `phase8-sync-fix.sql`; открыть новую версию на каждом устройстве один раз перед следующей синхронизацией.
 
 **Не сделано / возможные следующие шаги** (дальше по [SYNC_PLAN.md](SYNC_PLAN.md)):
 - Пользователю: (закрыто) bucket `recordings` переведён в public (Фаза 6).

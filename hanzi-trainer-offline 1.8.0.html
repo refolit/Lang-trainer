@@ -199,6 +199,14 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .seg button{flex:1; border:0; background:none; padding:8px; border-radius:9px; font-size:13px; color:var(--mut); font-weight:600}
 .seg button.active{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
 
+/* Экран конфликтов синхронизации (Фаза 8) */
+.muted{font-size:12px; color:var(--mut)}
+.conflict-card{border:1.5px solid var(--line); border-radius:12px; background:var(--card); padding:10px 12px; margin-bottom:10px}
+.conflict-face{font-size:24px; font-weight:600; font-family:var(--font-cjk)}
+.cf-seg-btn{flex:1; border:0; background:none; padding:6px 8px; border-radius:8px; font-size:12.5px; color:var(--mut); font-weight:600; cursor:pointer}
+.cf-seg-btn.on{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.cf-prev{margin-top:6px; line-height:1.45}
+
 /* Словарь: строка фильтров — 4 одинаковых чипа в ряд (Все слова / Избранное / выучено / Фильтр) */
 .dict-filter-row{display:flex; align-items:stretch; gap:6px; margin-bottom:10px; flex-wrap:wrap}
 .dict-filter{flex:0 0 auto; cursor:pointer; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:12px; padding:8px 11px; font-size:13px; font-weight:700; white-space:nowrap}
@@ -698,6 +706,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalBatch"></div>
 <div class="modal hidden" id="modalAuth"></div>
 <div class="modal hidden" id="modalFilter"></div>
+<div class="modal hidden" id="modalSyncConflicts"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
@@ -769,7 +778,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.7.0';
+const APP_VERSION='1.8.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -866,12 +875,12 @@ async function migrateNormAudio(it){
   }
   it.recordings=kept;
 }
-// Миграция старых карточек (Leitner 0..5 → коробки 1..5) + проставка lang/updated_at.
-// Поля lang/updated_at проставляются ДО раннего выхода по __v3: старые карточки
-// тоже должны получить актуальные версии метки синхронизации.
+// Миграция старых карточек (Leitner 0..5 → коробки 1..5) + проставка lang.
+// ВАЖНО (Фаза 8): метки updated_at/prog_at тут НЕ трогаем — иначе загрузка «омолодит»
+// всю старую базу и она затрёт свежие данные другого устройства. Нормализацию таймстампов
+// (отсутствующие → 0) делает normalizeAppItem ПОСЛЕ этой функции, тоже без реальных now().
 function migrateItem(it){
   if(!it.lang) it.lang='zh';
-  if(!it.updated_at) it.updated_at=now();
   if(it.__v3) return;
   if(!it.hasOwnProperty('newDone')){
     const ob=+it.box||0;
@@ -886,19 +895,56 @@ function migrateItem(it){
 }
 function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; stats.activity[t]=(stats.activity[t]||0)+1; }
 
-// Сигнатура карточки для LWW: только поля, которые реально синхронизируются.
-// view-маркеры (lastShowN/lastSeen/nextDue), аудио-ссылки и служебные флаги исключены,
-// чтобы простой просмотр карточки не делал её «новее» настоящего ответа на другом устройстве.
-function itemSig(it){
-  // Аудио в сигнатуре — по слотам (speed+имя файла), без blob/cloud-URL:
-  // прикрепление/удаление записи делает карточку «новее», а смена URL — нет.
+// ============================== СИГНАТУРЫ LWW (Фаза 8) ==============================
+// Карточка разбита на две независимо стареющие части: КОНТЕНТ (updated_at) и ПРОГРЕСС (prog_at).
+// Причина: раньше один updated_at перештамповывался при любой смене единой сигнатуры, и бутовая
+// миграция делала всю старую базу «свежей» — старая база затирала свежий прогресс другого устройства.
+// Теперь таймстамп двигается ТОЛЬКО при реальном действии пользователя, по своей части.
+const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn'];
+const P_FIELDS=['box','dueSess','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow',
+                'correct','wrong','wrongStreak','correctStreak','correctStreakDays','lastCorrectDay','learnedOn'];
+// Сигнатура контента: что пользователь ввёл/пометил/записал. Аудио — по слотам (speed+имя файла),
+// без blob/cloud-URL: прикрепление/удаление записи делает карточку «новее», а смена URL — нет.
+function itemContentSig(it){
   const recSig=(it.recordings||[]).filter(r=>r&&r.speed).map(r=>r.speed+':'+(r.name||'')).sort().join('|');
   return JSON.stringify([
-    it.lang, it.kind, it.hanzi, it.pinyin, it.translation, it.trs, it.note, it.tag, it.starred,
+    it.id, it.lang, it.kind, it.hanzi, it.pinyin, it.translation, it.trs, it.note, it.tag,
+    it.starred, it.addedOn, recSig
+  ]);
+}
+// Сигнатура прогресса: SRS-состояние (коробка, счётчики, повторы, даты заучивания).
+function itemProgSig(it){
+  return JSON.stringify([
     it.box, it.dueSess, it.newDone, it.nsGood, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow,
     it.correct, it.wrong, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
-    it.learnedOn, it.addedOn, recSig
+    it.learnedOn
   ]);
+}
+// Сеем подписи карточки: persist() не сдвинет ни одну метку, пока часть реально не изменится.
+function seedCardSigs(it){
+  it.__sigC=itemContentSig(it);
+  it.__sigP=itemProgSig(it);
+  delete it.__sig;   // старый комбинированный признак больше не используется
+}
+// Нормализация карточки, пришедшей из IndexedDB/облака/импорта: приводит скаляры, но НИКОГДА
+// не трогает таймстампы. Отсутствующей метке ставим 0 («возраст неизвестен»): такой контент/прогресс
+// никогда не победит сторону с положительной меткой при авто-мерже (защита от затирания).
+function normalizeAppItem(it){
+  it.updated_at=(+it.updated_at)||0;
+  it.prog_at=(+it.prog_at)||0;
+  it.box=Math.max(1, Math.min(5, +it.box||1));
+  it.dueSess=+it.dueSess||0; it.correct=+it.correct||0; it.wrong=+it.wrong||0;
+  it.correctStreak=+it.correctStreak||0; it.correctStreakDays=+it.correctStreakDays||0;
+  it.nsStreak=+it.nsStreak||0; it.nsSess=+it.nsSess||0; it.nsGood=+it.nsGood||0;
+  it.nsDoneSess=it.nsDoneSess==null?null:it.nsDoneSess;
+  it.nsLastGoodShow=it.nsLastGoodShow==null?null:it.nsLastGoodShow;
+  it.lastShowN=+it.lastShowN||0; it.lastSeen=+it.lastSeen||0; it.nextDue=+it.nextDue||0;
+  it.newDone=+it.newDone||0; it.starred=!!it.starred;
+  it.lastCorrectDay=it.lastCorrectDay||''; it.learnedOn=it.learnedOn||'';
+  it.addedOn=it.addedOn||''; it.lang=it.lang||'zh'; it.kind=it.kind||'word';
+  if(!Array.isArray(it.recordings)) it.recordings=[];
+  seedCardSigs(it);
+  return it;
 }
 // Сигнатуры settings/stats для LWW. Исключаем updated_at (сама метка) и sessN
 // (локальный счётчик сессий — меняется при каждом входе в режим, но это не пользовательская настройка).
@@ -912,17 +958,23 @@ const DB_STATS_ALL='stats-all';
 let statsByLang={};                // {code → {streak,lastDay,activity,words,...}}
 let _sigStatsMap={};               // сигнатуры каждой языковой статистики (для persist)
 function statsFor(lang){
-  if(!statsByLang[lang]) statsByLang[lang]={streak:0,lastDay:'',activity:{}};
+  if(!statsByLang[lang]){
+    statsByLang[lang]={streak:0,lastDay:'',activity:{}};
+    _sigStatsMap[lang]=statsSig(statsByLang[lang]);  // пустой язык не должен сдвигать updated_at при persist()
+  }
   return statsByLang[lang];
 }
 
 async function persist(){
   const t=now();
-  // карточки: двигаем updated_at только при реальном изменении синхронизируемых полей;
-  // __sig хранится на карточке, поэтому простой перезапуск не сдвигает метку.
+  // карточки (Фаза 8): двигаем updated_at и prog_at НЕЗАВИСИМО — каждый только при изменении
+  // своей части. Подписи __sigC/__sigP сеются normalizeAppItem при загрузке, поэтому простой
+  // перезапуск/миграция не сдвигают ни одну метку.
   for(const it of items){
-    const s=itemSig(it);
-    if(it.__sig!==s){ it.updated_at=t; it.__sig=s; }
+    const sc=itemContentSig(it);
+    if(it.__sigC!==sc){ it.updated_at=(it.updated_at||0)<t?t:it.updated_at; it.__sigC=sc; }
+    const sp=itemProgSig(it);
+    if(it.__sigP!==sp){ it.prog_at=(it.prog_at||0)<t?t:it.prog_at; it.__sigP=sp; }
   }
   // settings/stats: двигаем updated_at только при изменении содержимого
   const ss=settingsSig(settings);
@@ -1409,7 +1461,7 @@ function openItemModal(id){
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
     isNewItem=true;
-    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()};
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()};
   }else{
     hydrateRecordings(editingItem);
   }
@@ -1709,7 +1761,7 @@ function saveBatch(){
     }
     if(!hanzi) return;
     if(!pinyin && hasStrokes()) pinyin=toPinyin(hanzi);
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()});
     n++;
   });
   persist().then(()=>{ closeModal('modalBatch'); renderDict(); updateChips(); toast('Добавлено: '+n); });
@@ -2865,6 +2917,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.0','03.10.26','Фаза 8 — защита от затирания свежих данных: карточка разделена на контент и прогресс с отдельными таймстампами (updated_at / prog_at), каждый двигается только при реальном действии; серверная БД не принимает более старую запись; при расхождении обеих версий — экран конфликтов «Локально / Облако»'],
   ['1.7.0','03.10.26','SRS — переработка стратегии уровней: интервалы коробок 2/3/5/8/12 сессий (было 1/2/4/6/8); новое слово покидает уровень 1 после 4 верных ответов суммарно (было 3+3 подряд в соседних сессиях), ошибки счётчик не сбрасывают; новое слово повторяется через сессию, а не в каждой; в очереди не больше 10 новых слов за сессию'],
   ['1.6.0','03.10.26','Настройки → Данные: размер базы слов и базы аудио (штуки и КБ/МБ, активный язык); Экзамен — слово повторяется каждые 7 секунд, пока вопрос на экране; «Выбор ответов» — выше кнопки ответов (×1.5); «Учить» — тулбар заменён кнопкой ⚙ справа сверху: настройки Аудио/Пиньин/Перевод переехали в отдельное окно'],
   ['1.5.1','03.10.26','«Все переводы» честно работает во всех режимах (выкл — только главный перевод, вкл — все через «/»); «Учить» — тулбар настроек сверху (Аудио/Пиньин/Перевод); ошибка в Экзамене подсвечивается 1 сек без зелёной подсветки правильного; «Верно-неверно» — кнопки столбиком (Верно сверху); словарь — 4 одинаковых чипа-фильтра; крупнее поля карточки, кнопки действий всегда 2×2; окно фильтра — «Сбросить фильтр»/«Применить фильтр», фильтр применяется только по кнопке'],
@@ -3711,7 +3764,7 @@ async function doExport(){
       const rec=await DB.get('aud:'+it.id+':'+r.speed);
       recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
     }
-    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,lang:langOf(it),recordings:recs};
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,lang:langOf(it),updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
   }));
   const blob=new Blob([JSON.stringify({items:out,settings,statsByLang},null,1)],{type:'application/json'});
   downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
@@ -3728,8 +3781,9 @@ async function doImportFile(file){
     for(const each of items) revokeAll(each);
     items=[];
     for(const d of (j.items||[])){
-      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',updated_at:d.updated_at||now()};
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
       migrateItem(it);
+      seedCardSigs(it);
       for(const r of (d.recordings||[])){
         if(r.data){ const {buf,mime}=b64ToBuf(r.data); await DB.put('aud:'+it.id+':'+r.speed,{name:r.name,type:mime,buf}); it.recordings.push({speed:r.speed,name:r.name,url:URL.createObjectURL(new Blob([buf],{type:mime}))}); }
       }
@@ -3814,7 +3868,7 @@ function sampleData(skipConfirm){
   if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
   const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now()});
+    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()});
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
 }
@@ -3944,7 +3998,7 @@ let lastSyncAt=0;                     // момент последней усп�
 let _syncUser=null;                   // вошедший пользователь (обновляется в renderAuth)
 
 // --- кэш облака после последней синхронизации (для «Изменено: N» и «В сети · синхр.») ---
-let cloudRecs={};                     // id карточки → updated_at в облаке (все языки)
+let cloudRecs={};                     // id карточки → {u,pu} метки в облаке (все языки)
 let cloudSettingsU=0;                 // updated_at настроек в облаке
 let cloudStatsU={};                   // {lang → updated_at} статистики в облаке (Фаза 5)
 
@@ -3978,10 +4032,11 @@ function fmtHM(ts){ const d=new Date(ts); return String(d.getHours()).padStart(2
 // Локальных строк свежее облака — для подсказки «Изменено: N».
 function dirtyCount(){
   let n=0;
-  // карточки всех языков (облако теперь синхронизирует всё)
+  // карточки всех языков (облако теперь синхронизирует всё); свежее — если любая часть новее.
   for(const it of items){
     const c=cloudRecs[it.id];
-    if(c===undefined || (it.updated_at||0)>c) n++;
+    if(c===undefined) n++;
+    else if((it.updated_at||0)>(c.u||0) || (it.prog_at||0)>(c.pu||0)) n++;
   }
   if((settings.updated_at||0)>cloudSettingsU) n++;
   // статистика: каждый язык сверяем со своим облачным updated_at
@@ -3996,11 +4051,12 @@ function dirtyCount(){
 function cloudCard(it){
   const o={};
   for(const k of Object.keys(it)){
-    if(k==='recordings'||k==='__sig') continue;
+    if(k==='recordings'||k==='__sig'||k==='__sigC'||k==='__sigP') continue;
     const v=it[k], t=typeof v;
     if(t==='string'||t==='number'||t==='boolean'||v===null) o[k]=v;
   }
   if(!o.lang) o.lang=langOf(it);
+  if(o.prog_at===undefined) o.prog_at=it.prog_at||0;
   o.recordings=cloudRecordings(it);
   return o;
 }
@@ -4018,9 +4074,9 @@ function cloudRecordings(it){
 function audioPathOf(cardId, slot){ return _syncUser?(_syncUser.id+'/'+cardId+'/'+slot+'.mp3'):null; }
 // Восстановление карточки из облака: числовые поля приводим к числам; аудио — как метаданные
 // со ссылкой-путём (blob-кэш подтянется локально при hydrateRecordings, если файл есть на устройстве).
-function cardFromCloud(data){
+function cardFromCloud(data, u, pu){
   const recs=(data.recordings||[]).map(r=>({speed:r.speed, name:r.name||'', path:r.path||null, url:null}));
-  return {...data,
+  const it={...data,
     recordings:recs,
     box:Math.max(1,Math.min(5,+data.box||1)),
     dueSess:+data.dueSess||0, correct:+data.correct||0, wrong:+data.wrong||0,
@@ -4032,8 +4088,13 @@ function cardFromCloud(data){
     lastShowN:+data.lastShowN||0, lastSeen:+data.lastSeen||0, nextDue:+data.nextDue||0,
     newDone:+data.newDone||0, starred:!!data.starred,
     lastCorrectDay:data.lastCorrectDay||'', learnedOn:data.learnedOn||'', addedOn:data.addedOn||'',
-    lang:data.lang||'zh'
+    lang:data.lang||'zh',
+    // Фаза 8: авторитетные метки читаем из колонок; data.* — только запасной вариант (для старых row).
+    updated_at:(u!==undefined ? (+u||0) : (+data.updated_at||0)),
+    prog_at:(pu!==undefined ? (+pu||0) : (+data.prog_at||0))
   };
+  seedCardSigs(it);
+  return it;
 }
 // Склейка календарей по датам (union): activity {дата→счёт}, words {дата→[id]}.
 function unionArr(a,b){ const s={}; (a||[]).forEach(x=>s[x]=1); (b||[]).forEach(x=>s[x]=1); return Object.keys(s); }
@@ -4047,16 +4108,26 @@ function mergeCalendars(local, remote){
   return out;
 }
 // METADATA (кэш синхронизации в IndexedDB)
+// Фаза 8: recs теперь id → {u,pu}; старые кэши с числовым значением чинятся в boot() со сбросом до числа.
 const META='sync-meta';
 function syncMeta(){ return {lang:SYNC_LANG, email:_syncUser?_syncUser.email:null, lastSync:lastSyncAt, recs:cloudRecs, settingsU:cloudSettingsU, statsU:cloudStatsU}; }
 async function saveMeta(){ await DB.put(META, syncMeta()); }
+// Приводим кэш облака из IndexedDB к новому виду {u,pu} (старый кэш хранил число = updated_at).
+function normalizeCloudRecs(recs){
+  const out={};
+  for(const id of Object.keys(recs||{})){
+    const v=recs[id];
+    out[id]=(typeof v==='number') ? {u:v, pu:0} : {u:(v&&v.u)||0, pu:(v&&v.pu)||0};
+  }
+  return out;
+}
 
 // ---------- PULL (Supabase → память) ----------
 async function pullCloudRows(u){
   const cards=[];
   let from=0;
   for(;;){
-    const r=await sbClient().from('cards').select('id,lang,data,updated_at').eq('user_id',u.id).range(from,from+999);
+    const r=await sbClient().from('cards').select('id,lang,data,updated_at,prog_at').eq('user_id',u.id).range(from,from+999);
     if(r.error) throw r.error;
     const rows=r.data||[]; cards.push(...rows);
     if(rows.length<1000) break; from+=1000;
@@ -4114,7 +4185,7 @@ async function uploadAudio(it, slot){
   rec.path=path;
 }
 // Обходим карточки: локальные записи без path и с файлом на устройстве — в облако
-// (перенос существующих mp3 владельца). Вызывается до LWW-мержа; updated_at и __sig НЕ трогаем,
+// (перенос существующих mp3 владельца). Вызывается до LWW-мержа; таймстампы НЕ трогаем,
 // чтобы сам факт выгрузки не делал карточку победителем над облачной версией.
 async function uploadPendingAudio(){
   if(!_syncUser || !sbClient()) return;
@@ -4134,7 +4205,111 @@ async function removeAudioRemote(it, slot){
   if(!path) return;
   try{ await sbClient().storage.from('recordings').remove([path]); }catch(e){}
 }
-// ---------- MERGE + PUSH ----------
+// ---------- MERGE + PUSH (Фаза 8: контент/прогресс по отдельности) ----------
+// Пуш одной карточки: две авторитетные колонки updated_at (контент) и prog_at (прогресс).
+// Серверные guard-триггеры не дадут записать метку меньше хранимой даже от багнутого/старого клиента.
+async function pushCard(it, u){
+  const r=await sbClient().from('cards').upsert({
+    id:it.id, user_id:u.id, lang:langOf(it), data:cloudCard(it),
+    updated_at:it.updated_at||0, prog_at:it.prog_at||0
+  },{onConflict:'id'});
+  if(r.error) throw r.error;
+}
+// Копируем контент из источника (облако) в цель. Аудио: облачные слоты (speed+name+path),
+// но локальный blob-кэш — поверх path, чтобы играть офлайн на этом устройстве.
+function applyContentSrc(dst, src){
+  for(const k of C_FIELDS){ if(src[k]!==undefined) dst[k]=src[k]; }
+  const keepLocal=(dst.recordings||[]).filter(r=>r&&r.url&&r.url.startsWith('blob:'));
+  const by={}; for(const r of keepLocal) by[r.speed]=r;
+  dst.recordings=(src.recordings||[]).map(r=>({...r, url: by[r.speed] ? by[r.speed].url : (r.url||null)}));
+  dst.updated_at=src.updated_at||0;
+}
+// Копируем прогресс из источника (облако) в цель.
+function applyProgressSrc(dst, src){
+  for(const k of P_FIELDS){ if(src[k]!==undefined) dst[k]=src[k]; }
+  dst.prog_at=src.prog_at||0;
+}
+// Как решается каждая часть при авто-мерже: push/pull/none/conflict.
+// Конфликт — когда обе стороны реально меняли часть (оба ts>0) с разным payload.
+function decidePart(part, loc, cl){
+  const locT = part==='content' ? (loc.updated_at||0) : (loc.prog_at||0);
+  const remT = part==='content' ? (cl.updated_at||0) : (cl.prog_at||0);
+  const sigE = part==='content'
+    ? itemContentSig(loc)!==itemContentSig(cl)
+    : itemProgSig(loc)!==itemProgSig(cl);
+  if(locT>0 && remT>0 && locT!==remT && sigE) return 'conflict';
+  if(locT===remT && locT>0 && sigE) return 'conflict'; // таймстампы равны, данные разные → спор
+  if(locT>remT) return 'push';
+  if(locT<remT) return 'pull';
+  return 'none';
+}
+// Превью части для экрана конфликтов.
+function contentPreview(it){ return (it.translation||'').trim() || (it.pinyin||'').trim() || '—'; }
+function progressPreview(it){ return 'Коробка '+it.box+' · верно '+it.correct+' · ошибок '+it.wrong; }
+// Экран конфликтов: rows = [{it, cloudIt, content:bool, progress:bool}]. Возвращает Promise
+// карты id → {content:'local'|'cloud', progress:...} только для спорных частей.
+function modalSyncConflicts(rows){
+  return new Promise(resolve=>{
+    closeAllModals();
+    const m=document.getElementById('modalSyncConflicts');
+    const state={};
+    for(const row of rows){
+      const id=row.it.id, loc=row.it, cl=row.cloudIt;
+      state[id]={};
+      if(row.content) state[id].content = (loc.updated_at>cl.updated_at) ? 'local' : 'cloud';
+      if(row.progress) state[id].progress = (loc.prog_at>cl.prog_at) ? 'local' : 'cloud';
+    }
+    const segHTML=(id,part,label,val,locPrev,clPrev)=>`
+      <div class="lbl" style="margin-top:8px">${label}</div>
+      <div class="seg sm">
+        <button class="cf-seg-btn ${val==='local'?'on':''}" data-id="${id}" data-part="${part}" data-val="local">Локально</button>
+        <button class="cf-seg-btn ${val==='cloud'?'on':''}" data-id="${id}" data-part="${part}" data-val="cloud">Облако</button>
+      </div>
+      <div class="muted cf-prev">Локально: ${escapeHtml(locPrev)}<br>Облако: ${escapeHtml(clPrev)}</div>`;
+    let html='<div class="sheet"><div class="row"><h2>Конфликты синхронизации</h2><div class="spacer"></div></div>';
+    html+='<div class="muted" style="margin-bottom:10px">Обе стороны меняли эти карточки. Выберите, какую версию оставить.</div>';
+    for(const row of rows){
+      const id=row.it.id, loc=row.it, cl=row.cloudIt;
+      const langName=(LANG_MAP[loc.lang||cl.lang]||LANGS[0]).name;
+      html+=`<div class="conflict-card">
+        <div class="row"><span class="conflict-face ${hasStrokes()?'zh':''}">${escapeHtml((loc.hanzi||cl.hanzi||'?'))}</span><span class="spacer"></span><span class="muted">${escapeHtml(langName)}</span></div>`;
+      if(row.content) html+=segHTML(id,'content','Контент', state[id].content, contentPreview(loc), contentPreview(cl));
+      if(row.progress) html+=segHTML(id,'progress','Прогресс', state[id].progress, progressPreview(loc), progressPreview(cl));
+      html+=`</div>`;
+    }
+    html+=`<div class="btn-row" style="margin-top:10px">
+        <button class="btn ghost" id="cfAllLocal">Всё локально</button>
+        <button class="btn ghost" id="cfAllCloud">Всё из облака</button>
+      </div>
+      <div class="btn-row"><button class="btn" id="cfApply">Применить</button></div></div>`;
+    m.innerHTML=html;
+    m.classList.remove('hidden');
+    const refreshSegs=()=>{
+      m.querySelectorAll('.cf-seg-btn').forEach(b=>{
+        b.classList.toggle('on', state[b.dataset.id][b.dataset.part]===b.dataset.val);
+      });
+    };
+    m.querySelectorAll('.cf-seg-btn').forEach(b=>{
+      b.onclick=()=>{ state[b.dataset.id][b.dataset.part]=b.dataset.val; refreshSegs(); };
+    });
+    m.querySelector('#cfAllLocal').onclick=()=>{ for(const id in state) for(const p in state[id]) state[id][p]='local'; refreshSegs(); };
+    m.querySelector('#cfAllCloud').onclick=()=>{ for(const id in state) for(const p in state[id]) state[id][p]='cloud'; refreshSegs(); };
+    // Пока идёт синхронизация, Esc и клик по фону НЕ закрывают экран конфликтов (нельзя потерять выбор).
+    const escGuard=e=>{ if(e.key==='Escape'){ e.stopPropagation(); e.preventDefault(); } };
+    const pdGuard=e=>{ if(e.target===m){ e.stopPropagation(); } };
+    document.addEventListener('keydown', escGuard, true);
+    m.addEventListener('pointerdown', pdGuard, true);
+    let done=false;
+    const finish=()=>{
+      if(done) return; done=true;
+      document.removeEventListener('keydown', escGuard, true);
+      m.removeEventListener('pointerdown', pdGuard, true);
+      closeModal('modalSyncConflicts');
+      resolve(state);
+    };
+    m.querySelector('#cfApply').onclick=finish;
+  });
+}
 async function doSync(){
   if(syncBusy || syncNetDown()) return;
   syncBusy=true; setSyncEnabled(false); syncStatus('Синхронизация…','spin');
@@ -4146,66 +4321,72 @@ async function doSync(){
     if(!u) throw new Error('Сначала войдите в аккаунт');
     const cloud=await pullCloudRows(u);
     // Фаза 6: локальные mp3 без path выгружаем ДО мержа, чтобы пуш шёл уже со ссылкой на файл.
-    // Локальная запись при выгрузке получит path, но НЕ updated_at — карточка не должна
+    // Локальная запись при выгрузке получит path, но НЕ таймстамп — карточка не должна
     // «победить» облачную лишь из-за того, что на этом устройстве оказался файл.
     await uploadPendingAudio();
     const cloudById={};                 // облачные карточки ВСЕХ языков
-    for(const row of cloud.cards) cloudById[row.id]={u:row.updated_at||0, data:row.data, lang:row.lang};
+    for(const row of cloud.cards) cloudById[row.id]={u:row.updated_at||0, pu:row.prog_at||0, data:row.data, lang:row.lang};
 
-    // --- карточки (все языки) ---
+    // --- карточки (все языки): план мержа по каждой части ---
     const localSeen={};
+    const plans=[];                     // {it, rec?, cloudIt?, content, progress}
+    const conflictRows=[];              // строки для экрана конфликтов
     for(let i=0;i<items.length;i++){
       const it=items[i];
       localSeen[it.id]=1;
       const rec=cloudById[it.id];
-      const locU=it.updated_at||0;
-      const lang=langOf(it);
-      if(!rec){
-        // локальна, в облаке нет → push
-        const ts=locU||now(); it.updated_at=ts;
-        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
-        if(r.error) throw r.error;
-        pushedN++;
-        cloudRecs[it.id]=ts;
-      }else if(locU>rec.u){
-        // локальное новее → push
-        const ts=locU;
-        const r=await sbClient().from('cards').upsert({id:it.id, user_id:u.id, lang, data:cloudCard(it), updated_at:ts},{onConflict:'id'});
-        if(r.error) throw r.error;
-        pushedN++;
-        cloudRecs[it.id]=ts;
-      }else if(locU<rec.u){
-        // облако новее → pull. Аудио берём из облака (path), но локальный blob-кэш
-        // (если файл уже есть на этом устройстве) сохраняем поверх, чтобы играть офлайн.
-        const keepLocal=(it.recordings||[]).filter(r=>r&&r.url&&r.url.startsWith('blob:')); // локальные файлы
-        const merged=cardFromCloud(rec.data||{});
-        const localBySlot={}; for(const r of keepLocal){ localBySlot[r.speed]=r; }
-        for(const r of merged.recordings){
-          if(localBySlot[r.speed]) r.url=localBySlot[r.speed].url; // поверх path — живой локальный кэш
-        }
-        merged.updated_at=rec.u;
-        merged.__sig=itemSig(merged);
-        items[i]=merged;
-        pulledN++;
-        cloudRecs[it.id]=rec.u;
-      }else{
-        cloudRecs[it.id]=locU;
+      if(!rec){ plans.push({it, rec:null}); continue; }
+      const cloudIt=cardFromCloud(rec.data||{}, rec.u, rec.pu);
+      const cd=decidePart('content', it, cloudIt);
+      const pd=decidePart('progress', it, cloudIt);
+      plans.push({it, rec, cloudIt, content:cd, progress:pd});
+      if(cd==='conflict' || pd==='conflict'){
+        conflictRows.push({it, cloudIt, content:cd==='conflict', progress:pd==='conflict'});
       }
+    }
+
+    // Экран конфликтов, если есть спорные карточки (синхронизация ждёт выбора).
+    const choice = conflictRows.length ? await modalSyncConflicts(conflictRows) : null;
+    // {id → {content:'local'|'cloud', progress:...}} по тем частям, что были спорными
+
+    // --- применяем план ---
+    for(const plan of plans){
+      const it=plan.it;
+      if(!plan.rec){
+        // локальна, в облаке нет → push целиком
+        if(!it.updated_at && !it.prog_at){ const ts=now(); it.updated_at=ts; it.prog_at=ts; }
+        await pushCard(it, u);
+        pushedN++;
+        cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0};
+        continue;
+      }
+      const ch=choice ? (choice[it.id]||{}) : {};
+      const resolvePart=(auto, picked)=> auto==='conflict' ? (picked==='local'?'push':'pull') : auto;
+      const cd=resolvePart(plan.content, ch.content);
+      const pd=resolvePart(plan.progress, ch.progress);
+      if(cd==='pull'){ applyContentSrc(it, plan.cloudIt); pulledN++; }
+      if(pd==='pull'){ applyProgressSrc(it, plan.cloudIt); pulledN++; }
+      if(cd==='push' || pd==='push'){
+        await pushCard(it, u);
+        pushedN++;
+      }
+      cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0};
+      seedCardSigs(it);                 // нейтрализуем persist() после внешних записей
     }
     // облачные карточки, которых нет локально → pull (новое устройство / восстановление)
     for(const id of Object.keys(cloudById)){
       if(localSeen[id]) continue;
       const rec=cloudById[id];
-      const n=cardFromCloud(rec.data||{});
-      n.updated_at=rec.u||now();
+      const n=cardFromCloud(rec.data||{}, rec.u, rec.pu);
+      if(!n.id) n.id=id;
       migrateItem(n);
-      n.__sig=itemSig(n);
+      normalizeAppItem(n);
       items.push(n);
       pulledN++;
-      cloudRecs[id]=rec.u||0;
+      cloudRecs[id]={u:rec.u, pu:rec.pu};
     }
 
-    // --- настройки ---
+    // --- настройки (один timestamp; серверный триггер не даст затереть свежее) ---
     const locSU=settings.updated_at||0, remSU=cloud.settings?(cloud.settings.updated_at||0):0;
     if(remSU>locSU){
       const d={...cloud.settings.data};
@@ -4248,7 +4429,7 @@ async function doSync(){
     // --- аудио (Фаза 6): записи, пришедшие из облака с path, но без локального кэша, подтянут файл
     // по требованию (при проигрывании) — массовую предзагрузку не делаем, чтобы синхронизация была быстрой.
 
-    // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул updated_at) ---
+    // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул таймстампы) ---
     _sigSet=settingsSig(settings);
     for(const lg of Object.keys(statsByLang)) _sigStatsMap[lg]=statsSig(statsByLang[lg]);
     await persist(); await refreshAll();
@@ -4444,6 +4625,7 @@ async function boot(){
   SESS=settings.sessN||0;
   for(const it of items) migrateItem(it);
   for(const it of items) await migrateNormAudio(it);
+  for(const it of items) normalizeAppItem(it);   // Фаза 8: скаляры + сеем __sigC/__sigP; таймстампы НЕ трогаем
   SHOW_N=items.reduce((m,it)=>Math.max(m, it.lastShowN||0), 0);
   for(const it of items) await hydrateRecordings(it);
   // миграция: у настроек/статистики должна быть начальная метка синхронизации
@@ -4453,7 +4635,7 @@ async function boot(){
   for(const lg of Object.keys(statsByLang)) _sigStatsMap[lg]=statsSig(statsByLang[lg]);
   // восстанавливаем кэш последней синхронизации (для «В сети · синхр.» и «Изменено: N»)
   const _meta=await DB.get(META);
-  if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=_meta.recs||{}; cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||{}; }
+  if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=normalizeCloudRecs(_meta.recs); cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||{}; }
   renderLangSeg();
   await persist();
   maybeOfferSamples();
