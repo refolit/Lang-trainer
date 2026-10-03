@@ -234,6 +234,16 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .flt-badge.show{display:inline-block}
 /* «Данные» в Настройках: размер баз слов и аудио */
 .data-stats{display:flex; flex-direction:column; gap:8px; margin-bottom:12px}
+/* Экран «Синхронизация»: админ-статистика + журнал того, что ушло/пришло */
+.synclog{display:flex; flex-direction:column; gap:8px}
+.sl-row{border:1.5px solid var(--line); border-radius:12px; background:var(--card); padding:9px 12px}
+.sl-head{display:flex; align-items:center; gap:8px; font-size:13px}
+.sl-head .sl-time{font-weight:800; color:var(--ink)}
+.sl-head .sl-ver{color:var(--mut); font-size:11.5px; font-weight:700}
+.sl-meta{display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:5px; font-size:12px; color:var(--mut)}
+.sl-meta b{color:var(--ink); font-weight:800}
+.tag-up{color:var(--green); font-weight:800}
+.tag-down{color:var(--amber); font-weight:800}
 .data-stats .ds-row{display:flex; justify-content:space-between; align-items:center; font-size:14px; color:var(--mut)}
 .data-stats .ds-row b{color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums}
 .data-stats-note{font-size:12px; color:var(--mut); opacity:.85; margin:-6px 0 12px; line-height:1.45}
@@ -584,6 +594,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
     <div class="more-wrap">
       <div class="seg" id="moreTabSeg" style="margin-bottom:14px">
         <button data-tab="stats" class="active">Статистика</button>
+        <button data-tab="sync">Синхронизация</button>
         <button data-tab="settings">Настройки</button>
       </div>
 
@@ -619,6 +630,29 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <div class="card" style="margin-top:10px">
           <div class="card-h">Лучшие серии</div>
           <div id="stStreakList"></div>
+        </div>
+      </div>
+
+      <!-- ВКЛАДКА: СИНХРОНИЗАЦИЯ (админ-статистика + журнал) -->
+      <div id="moreTabSync" class="hidden">
+        <div class="card" style="margin-top:10px">
+          <div class="card-h">Облако (ваш аккаунт)</div>
+          <div class="data-stats">
+            <div class="ds-row"><span>📚 Карточек в облаке</span><b id="slCards">—</b></div>
+            <div class="ds-row"><span>🗂 Слов (по языкам)</span><b id="slByLang">—</b></div>
+            <div class="ds-row"><span>💾 База слов в БД</span><b id="slDbBytes">—</b></div>
+            <div class="ds-row"><span>🔊 Аудио в Storage</span><b id="slAudioBytes">—</b></div>
+            <div class="ds-row"><span>🧮 Всего синхронизаций</span><b id="slSyncCount">—</b></div>
+          </div>
+          <div class="data-stats-note" id="slShowNote" style="display:none; margin-bottom:0">
+            Нажмите «Синхронизировать» в Словаре — после этого здесь появятся записи о том, что ушло в облако и что пришло.
+          </div>
+          <button class="btn sec" id="slRefresh" style="margin-top:4px">Обновить</button>
+          <button class="btn ghost" id="slResetDevice" style="margin-top:8px">Новое имя этого устройства</button>
+        </div>
+        <div class="card" style="margin-top:10px">
+          <div class="card-h"><span>Журнал синхронизаций</span><span class="muted" style="font-weight:600">последние 30</span></div>
+          <div class="synclog" id="slLog"></div>
         </div>
       </div>
 
@@ -794,7 +828,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.1';
+const APP_VERSION='1.8.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2934,6 +2968,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.2','03.10.26','Новая вкладка «Ещё → Синхронизация»: агрегат облака (карточки, слова по языкам, размер базы и аудио в Storage, число синков) и журнал синхронизаций — что ушло в облако и пришло, отдельно по контенту и прогрессу, конфликты и в чью пользу, с какого устройства и какой версии; в БД добавлена таблица sync_log'],
   ['1.8.1','03.10.26','Словарь — стрелки ↑↓ жирнее и контрастнее; Экзамен «Верно-неверно» — кнопки Верно/Не верно прижаты к низу экрана (как в «Учить»); экран конфликтов синхронизации переделан: выбор стороны теперь глобальный по частям «Контент» и «Прогресс» (не на каждое слово), внизу — список-справка с датами изменения обеих версий и подсветкой более свежей'],
   ['1.8.0','03.10.26','Фаза 8 — защита от затирания свежих данных: карточка разделена на контент и прогресс с отдельными таймстампами (updated_at / prog_at), каждый двигается только при реальном действии; серверная БД не принимает более старую запись; при расхождении обеих версий — экран конфликтов «Локально / Облако»'],
   ['1.7.0','03.10.26','SRS — переработка стратегии уровней: интервалы коробок 2/3/5/8/12 сессий (было 1/2/4/6/8); новое слово покидает уровень 1 после 4 верных ответов суммарно (было 3+3 подряд в соседних сессиях), ошибки счётчик не сбрасывают; новое слово повторяется через сессию, а не в каждой; в очереди не больше 10 новых слов за сессию'],
@@ -3074,9 +3109,11 @@ let moreTab='stats';
 function switchMoreTab(tab){
   moreTab=tab;
   document.getElementById('moreTabStats').classList.toggle('hidden', tab!=='stats');
+  document.getElementById('moreTabSync').classList.toggle('hidden', tab!=='sync');
   document.getElementById('moreTabSettings').classList.toggle('hidden', tab!=='settings');
   document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   if(tab==='stats') renderMoreStats();
+  else if(tab==='sync') renderSyncPanel();
   else renderDataStats();
 }
 // Читаемый размер в байтах: до 1 МБ — в КБ (точнее для текста слов), дальше — в МБ с 1 знаком.
@@ -3163,6 +3200,145 @@ function renderMemoryBars(){
       <div class="num">${c}</div>
     </div>`).join('');
 }
+// ============================================================
+//  «Синхронизация» — админ-панель: агрегат облака + журнал sync_log.
+// ============================================================
+function deviceId(){
+  try{
+    let id=localStorage.getItem('ltDeviceId');
+    if(!id){ id=(crypto.randomUUID?crypto.randomUUID():('d'+Date.now()+Math.random().toString(36).slice(2,8))); localStorage.setItem('ltDeviceId', id); }
+    return id;
+  }catch(e){ return 'unknown'; }
+}
+function deviceLabel(){
+  try{ return localStorage.getItem('ltDeviceLabel')||''; }catch(e){ return ''; }
+}
+// Вставляем одну запись в журнал sync_log (серверная метка ts). Вызывается в конце успешного doSync.
+async function logSyncEvent(st){
+  if(SB_OFFLINE || !_syncUser || !sbClient()) return;
+  try{
+    await sbClient().from('sync_log').insert({
+      device_id: deviceId(), device_label: (st.deviceLabel||'').slice(0,32),
+      app_version: APP_VERSION, started_at: st.startedAt||0, duration_ms: st.durationMs||0,
+      cards_pushed: st.pushedCards||0, cards_pulled: st.pulledCards||0,
+      content_push: st.contentPush||0, content_pull: st.contentPull||0,
+      progress_push: st.progressPush||0, progress_pull: st.progressPull||0,
+      conflict_content: st.conflictContent||0, conflict_progress: st.conflictProgress||0,
+      conflict_content_local: st.conflictContentLocal||0, conflict_content_cloud: st.conflictContentCloud||0,
+      conflict_progress_local: st.conflictProgressLocal||0, conflict_progress_cloud: st.conflictProgressCloud||0
+    });
+  }catch(e){ /* журнал не должен ломать синхронизацию */ }
+}
+// Основной агрегат: сколько всего в облаке (карточки, слова по языкам, МБ БД и аудио).
+// Карточки/БД/число синков — серверная функция db_stats(); аудио — пересчёт файлов в Storage.
+async function loadCloudTotals(){
+  if(!_syncUser || !sbClient()) return {cards:0, byLang:null, dbBytes:0, audioBytes:0, audioFiles:0, syncCount:0};
+  const c=sbClient();
+  let cards=0, byLang=null, dbBytes=0, syncCount=0;
+  try{
+    const {data,error}=await c.rpc('db_stats');
+    if(!error && data){
+      cards=+data.cards||0;
+      byLang=data.by_lang||null;
+      dbBytes=+data.db_bytes||0;
+      syncCount=+data.sync_count||0;
+    }
+  }catch(e){ /* rpc нет — fallback ниже */ }
+  let audioFiles=0, audioBytes=0;
+  try{
+    // Подсчёт файлов аудио в Storage по папке пользователя (без скачивания самих mp3).
+    let offset=0;
+    for(;;){
+      const {data:l,error}=await c.storage.from('recordings').list(_syncUser.id, {limit:200, offset:offset, sortBy:{column:'name',order:'asc'}});
+      if(error) break;
+      const items=l||[];
+      for(const f of items){
+        if(!f.id) continue;                     // id — null у папок
+        audioFiles++;
+        audioBytes += (f.metadata && f.metadata.size) ? +f.metadata.size : 0;
+      }
+      if(items.length<200) break;
+      offset+=200;
+    }
+  }catch(e){}
+  return {cards, byLang, dbBytes, audioBytes, audioFiles, syncCount};
+}
+// Последние записи журнала (для экрана «Синхронизация»).
+async function loadSyncLog(){
+  const out=[];
+  if(!_syncUser || !sbClient()) return out;
+  try{
+    const r=await sbClient().from('sync_log')
+      .select('ts,device_label,app_version,started_at,duration_ms,cards_pushed,cards_pulled,content_push,content_pull,progress_push,progress_pull,conflict_content,conflict_progress,conflict_content_local,conflict_content_cloud,conflict_progress_local,conflict_progress_cloud')
+      .eq('user_id',_syncUser.id).order('ts',{ascending:false}).limit(30);
+    return (r.data||[]).map(x=>({...x, ts: x.ts||x.started_at||0}));
+  }catch(e){ return out; }
+}
+function fmtDTlog(ts){
+  if(!ts) return '…';
+  const d=new Date(ts);
+  const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
+  return d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear()+' '+hh+':'+mm;
+}
+async function renderSyncPanel(){
+  const cardsEl=document.getElementById('slCards'), byLangEl=document.getElementById('slByLang'),
+        dbEl=document.getElementById('slDbBytes'), audEl=document.getElementById('slAudioBytes'),
+        cntEl=document.getElementById('slSyncCount'), logEl=document.getElementById('slLog'),
+        noteEl=document.getElementById('slShowNote'), refr=document.getElementById('slRefresh'),
+        reset=document.getElementById('slResetDevice');
+  if(!_syncUser || !sbClient()){
+    cardsEl.textContent='—'; byLangEl.textContent='—'; dbEl.textContent='—'; audEl.textContent='—'; cntEl.textContent='—';
+    logEl.innerHTML='<div class="muted" style="padding:4px 2px">Войдите в аккаунт и синхронизируйтесь — здесь появятся данные облака.</div>';
+    if(noteEl) noteEl.style.display='none';
+    return;
+  }
+  if(refr) refr.disabled=true;
+  const t=await loadCloudTotals();
+  cardsEl.textContent=t.cards;
+  if(t.byLang && typeof t.byLang==='object'){
+    byLangEl.textContent=Object.keys(t.byLang).map(lg=>(LANG_MAP[lg]?LANG_MAP[lg].flag:lg)+' '+t.byLang[lg]).join(' · ')||'—';
+  }else byLangEl.textContent='—';
+  dbEl.textContent=fmtBytes(t.dbBytes);
+  audEl.textContent=t.audioFiles ? (t.audioFiles+' шт · '+fmtBytes(t.audioBytes)) : '—';
+  cntEl.textContent=t.syncCount;
+  const rows=await loadSyncLog();
+  if(noteEl) noteEl.style.display=rows.length?'none':'block';
+  if(!rows.length){
+    logEl.innerHTML='<div class="muted" style="padding:4px 2px">Записей пока нет.</div>';
+  }else{
+    logEl.innerHTML=rows.map(x=>{
+      const up=(x.cards_pushed||0), down=(x.cards_pulled||0);
+      const cpush=(x.content_push||0), cpull=(x.content_pull||0), ppush=(x.progress_push||0), ppull=(x.progress_pull||0);
+      const conf=(x.conflict_content||0)+(x.conflict_progress||0);
+      const dl=(x.device_label||'устройство').slice(0,14);
+      return `<div class="sl-row">
+        <div class="sl-head"><span class="sl-time">${fmtDTlog(x.ts)}</span><span class="sl-ver">v${escapeHtml(x.app_version||'—')}</span><span class="spacer"></span><span class="muted">${escapeHtml(dl)}</span></div>
+        <div class="sl-meta">
+          <span><span class="tag-up">↑ ${up}</span></span>
+          <span><span class="tag-down">↓ ${down}</span></span>
+          <span>контент <b>${cpush}/${cpull}</b></span>
+          <span>прогресс <b>${ppush}/${ppull}</b></span>
+          ${conf?`<span>конфликтов <b>${conf}</b></span>`:''}
+          <span>${x.duration_ms? (x.duration_ms<1000?x.duration_ms+' мс':(x.duration_ms/1000).toFixed(1)+' с') : ''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  if(refr) refr.disabled=false;
+}
+function bindSyncPanel(){
+  const r=document.getElementById('slRefresh');
+  if(r) r.onclick=()=>renderSyncPanel();
+  const rs=document.getElementById('slResetDevice');
+  if(rs) rs.onclick=()=>{
+    const nm=prompt('Имя этого устройства (видно в журнале синхронизаций):', deviceLabel()||'');
+    if(nm===null) return;
+    try{ localStorage.setItem('ltDeviceLabel', nm.trim()); }catch(e){}
+    toastShort('Устройство: '+(nm.trim()||'(без имени)'));
+    renderSyncPanel();
+  };
+}
+
 // ============================================================
 //  Статистика (по образцу uHabits / Loop Habit Tracker).
 //  Единый шрифт 13px (заголовки карточек 17px); число точек и
@@ -3971,10 +4147,11 @@ document.getElementById('fileImport').onchange=e=>{ if(e.target.files[0]) doImpo
 document.getElementById('btnSample').onclick=sampleData;
 document.getElementById('btnWipe').onclick=wipeAll;
 document.getElementById('voiceSel').onchange=e=>{ settings.voiceURI=e.target.value; persist(); };
-// Вкладки «Ещё»: Статистика / Настройки
+// Вкладки «Ещё»: Статистика / Синхронизация / Настройки
 document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>{
   b.onclick=()=>switchMoreTab(b.dataset.tab);
 });
+bindSyncPanel();
 bindModalDismiss();
 
 // ============================== AUDIO LIFECYCLE ==============================
@@ -4373,6 +4550,11 @@ async function doSync(){
   // Снапшот для отката: если сеть оборвётся на полпути, локальные данные не должны пострадать.
   const snap={items:items.slice(), settings:{...settings}, statsByLang:JSON.parse(JSON.stringify(statsByLang)), sigSet:_sigSet, sigStats:{..._sigStatsMap}};
   let pulledN=0, pushedN=0;
+  // Счётчики направления для журнала (Фаза 9): «что откуда и куда ушло» по частям.
+  let cPush=0, cPull=0, pPush=0, pPull=0;
+  let confContent=0, confContentLocal=0, confContentCloud=0;
+  let confProgress=0, confProgressLocal=0, confProgressCloud=0;
+  const syncStartedAt=now();
   try{
     const u=_syncUser;
     if(!u) throw new Error('Сначала войдите в аккаунт');
@@ -4405,15 +4587,24 @@ async function doSync(){
     // Экран конфликтов, если есть спорные карточки (синхронизация ждёт выбора).
     const choice = conflictRows.length ? await modalSyncConflicts(conflictRows) : null;
     // {id → {content:'local'|'cloud', progress:...}} по тем частям, что были спорными
+    for(const row of conflictRows){
+      const ch=choice ? (choice[row.it.id]||{}) : {};
+      if(row.content){ confContent++;
+        if(ch.content==='cloud') confContentCloud++; else confContentLocal++; }
+      if(row.progress){ confProgress++;
+        if(ch.progress==='cloud') confProgressCloud++; else confProgressLocal++; }
+    }
 
     // --- применяем план ---
     for(const plan of plans){
       const it=plan.it;
       if(!plan.rec){
-        // локальна, в облаке нет → push целиком
+        // локальна, в облаке нет → push целиком (если часть свежая — считаем её по направлению)
         if(!it.updated_at && !it.prog_at){ const ts=now(); it.updated_at=ts; it.prog_at=ts; }
         await pushCard(it, u);
         pushedN++;
+        if(it.updated_at>0) cPush++;          // контент новый (или только что помечен)
+        if(it.prog_at>0) pPush++;
         cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0};
         continue;
       }
@@ -4421,8 +4612,10 @@ async function doSync(){
       const resolvePart=(auto, picked)=> auto==='conflict' ? (picked==='local'?'push':'pull') : auto;
       const cd=resolvePart(plan.content, ch.content);
       const pd=resolvePart(plan.progress, ch.progress);
-      if(cd==='pull'){ applyContentSrc(it, plan.cloudIt); pulledN++; }
-      if(pd==='pull'){ applyProgressSrc(it, plan.cloudIt); pulledN++; }
+      if(cd==='pull'){ applyContentSrc(it, plan.cloudIt); pulledN++; cPull++; }
+      if(pd==='pull'){ applyProgressSrc(it, plan.cloudIt); pulledN++; pPull++; }
+      if(cd==='push'){ cPush++; }
+      if(pd==='push'){ pPush++; }
       if(cd==='push' || pd==='push'){
         await pushCard(it, u);
         pushedN++;
@@ -4440,6 +4633,8 @@ async function doSync(){
       normalizeAppItem(n);
       items.push(n);
       pulledN++;
+      if(n.updated_at>0) cPull++;
+      if(n.prog_at>0) pPull++;
       cloudRecs[id]={u:rec.u, pu:rec.pu};
     }
 
@@ -4492,6 +4687,15 @@ async function doSync(){
     await persist(); await refreshAll();
     lastSyncAt=now();
     await saveMeta();
+    // Журнал синхронизации (что откуда и куда ушло) — отдельная запись в БД, не влияет на мерж.
+    await logSyncEvent({
+      startedAt:syncStartedAt, durationMs:now()-syncStartedAt,
+      deviceLabel:deviceLabel(),
+      pushedCards:pushedN, pulledCards:pulledN,
+      contentPush:cPush, contentPull:cPull, progressPush:pPush, progressPull:pPull,
+      conflictContent:confContent, conflictContentLocal:confContentLocal, conflictContentCloud:confContentCloud,
+      conflictProgress:confProgress, conflictProgressLocal:confProgressLocal, conflictProgressCloud:confProgressCloud
+    });
     syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
   }catch(e){
     // откат к снапшоту — локальные данные не тронуты
