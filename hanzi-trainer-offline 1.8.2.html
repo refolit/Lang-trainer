@@ -13,9 +13,40 @@
   --bg:#f7f4ef; --card:#ffffff; --ink:#1d1c1a; --mut:#8a847c;
   --red:#c62828; --red-d:#a32222; --green:#2e7d32; --amber:#f9a825;
   --line:#e8e2d8; --radius:18px;
+  --soft:#f0ece4;      /* фон сегментов/микрочипов (нейтральная подложка) */
+  --soft2:#ece9e2;     /* чуть темнее подложка (пустые ячейки календарей) */
+  --sec-d:#e3ddd1;     /* тень вторичной кнопки */
+  --nav-bg:rgba(255,255,255,.96); /* подложка нижней навигации */
   --shadow-sm:0 1px 2px rgba(30,28,26,.05);
   --shadow-md:0 6px 16px rgba(30,28,26,.08);
   --font-cjk:"PingFang SC","Hiragino Sans GB","Noto Sans SC","Noto Sans CJK SC","Microsoft YaHei","WenQuanYi Micro Hei",sans-serif;
+}
+/* Тёмная — ночная палитра (меньше синего): #121110 */
+html[data-theme="dark"]{
+  --bg:#171513; --card:#211f1c; --ink:#f2efe9; --mut:#9a9287;
+  --red:#e05252; --red-d:#b23a3a; --green:#6cae75; --amber:#e6b23a;
+  --line:#332f2a; --soft:#2b2824; --soft2:#26231f; --sec-d:#000000;
+  --nav-bg:rgba(22,20,18,.96);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 6px 16px rgba(0,0,0,.42);
+}
+/* Песочная — тёплая сепия: #e6d7b8 */
+html[data-theme="sepia"]{
+  --bg:#f6efdf; --card:#fffaf0; --ink:#3d3226; --mut:#8a7b63;
+  --red:#b4532e; --red-d:#934227; --green:#5a7230; --amber:#d9962b;
+  --line:#eadfc5; --soft:#f0e6cf; --soft2:#e9dec4; --sec-d:#dccfa8;
+  --nav-bg:rgba(246,239,223,.96);
+  --shadow-sm:0 1px 2px rgba(95,74,40,.08);
+  --shadow-md:0 6px 16px rgba(95,74,40,.12);
+}
+/* Мятная — спокойная, зелёная хвоя: #acc4b5 */
+html[data-theme="mint"]{
+  --bg:#eef4f1; --card:#fbfefc; --ink:#1c2b26; --mut:#6d8078;
+  --red:#c62828; --red-d:#a32222; --green:#2f6b47; --amber:#c98a1b;
+  --line:#dbe7e0; --soft:#e0ebe5; --soft2:#d7e4dc; --sec-d:#c8dbd0;
+  --nav-bg:rgba(238,244,241,.96);
+  --shadow-sm:0 1px 2px rgba(30,52,42,.06);
+  --shadow-md:0 6px 16px rgba(30,52,42,.10);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%}
@@ -33,7 +64,14 @@ header.top{
 }
 header.top .title{font-weight:800; font-size:17px; letter-spacing:.3px}
 header.top .title .zh{color:var(--red); font-size:19px}
-header.top .sub{display:flex; gap:6px}
+header.top .sub{display:flex; gap:6px; align-items:center}
+/* Круглая кнопка быстрого переключения светлой/тёмной темы в шапке */
+.theme-switch{
+  width:30px; height:30px; border:1.5px solid var(--line); border-radius:50%;
+  background:var(--card); color:var(--mut); cursor:pointer; display:inline-flex;
+  align-items:center; justify-content:center; box-shadow:var(--shadow-sm); padding:0;
+}
+.theme-switch svg{width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
 .chip{
   background:var(--card); border:1px solid var(--line); border-radius:999px;
   padding:4px 11px; font-size:12px; color:var(--mut); box-shadow:var(--shadow-sm);
@@ -50,7 +88,7 @@ main{flex:1 1 auto; overflow:hidden; position:relative}
 nav.tabs{
   position:fixed; left:0; right:0; bottom:0; display:flex; gap:6px;
   padding:8px 10px calc(8px + env(safe-area-inset-bottom));
-  background:rgba(255,255,255,.96); backdrop-filter:blur(12px);
+  background:var(--nav-bg); backdrop-filter:blur(12px);
   border-top:1px solid var(--line); z-index:50;
 }
 nav.tabs button{
@@ -69,7 +107,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .item-line .zh{font-size:26px; font-weight:600; font-family:var(--font-cjk)}
 .item-line .py{color:var(--amber); font-size:13px}
 .item-line .tr{color:var(--mut); font-size:13px}
-.badge{font-size:10px; padding:2px 7px; border-radius:999px; background:#f0ece4; color:var(--mut); white-space:nowrap}
+.badge{font-size:10px; padding:2px 7px; border-radius:999px; background:var(--soft); color:var(--mut); white-space:nowrap}
 .badge.learned{background:#e6f2e6; color:var(--green)}
 .badge.box{background:#fdf2e0}
 
@@ -80,8 +118,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
   box-shadow:0 4px 0 var(--red-d), 0 6px 14px rgba(198,40,40,.22);
 }
 .btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d), 0 2px 6px rgba(198,40,40,.22)}
-.btn.sec{background:#fff; color:var(--ink); border:1.5px solid var(--line); box-shadow:0 4px 0 #e3ddd1, 0 4px 10px rgba(30,28,26,.07)}
-.btn.sec:active{transform:translateY(3px); box-shadow:0 1px 0 #e3ddd1}
+.btn.sec{background:var(--card); color:var(--ink); border:1.5px solid var(--line); box-shadow:0 4px 0 var(--sec-d), 0 4px 10px rgba(30,28,26,.07)}
+.btn.sec:active{transform:translateY(3px); box-shadow:0 1px 0 var(--sec-d)}
 .btn.ghost{background:transparent; color:var(--red); box-shadow:none}
 .btn.ok{background:var(--green); box-shadow:0 4px 0 #256029, 0 6px 14px rgba(46,125,50,.22)}
 .btn.ok:active{transform:translateY(3px); box-shadow:0 1px 0 #256029}
@@ -119,7 +157,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 /* Подсветка текущего иероглифа (экзамен-письмо / письмо) */
 .char-strip{display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:6px; margin:2px 0 8px}
 .char-strip .label{flex-basis:100%; text-align:center; font-size:13px; color:var(--mut); margin-bottom:2px}
-.char-strip .c{font-family:var(--font-cjk); font-size:20px; padding:2px 9px; border-radius:9px; background:#f0ece4; color:var(--mut); line-height:1.4}
+.char-strip .c{font-family:var(--font-cjk); font-size:20px; padding:2px 9px; border-radius:9px; background:var(--soft); color:var(--mut); line-height:1.4}
 .char-strip .c.cur{background:var(--red); color:#fff; font-size:26px; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
 
 /* Hanzi writer area */
@@ -148,23 +186,23 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .write-toolbar .wbtn.lg{font-size:14px; padding:8px 13px}
 .write-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
 #writeWord{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:2px 0 8px; font-family:var(--font-cjk)}
-#writeWord .wch{font-size:40px; padding:3px 12px; border-radius:10px; background:#f0ece4; color:var(--mut); line-height:1.3}
+#writeWord .wch{font-size:40px; padding:3px 12px; border-radius:10px; background:var(--soft); color:var(--mut); line-height:1.3}
 #writeWord .wch.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
 #writeCenter{width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; max-width:620px; margin:0 auto}
 /* Окно письма — на всю ширину телефона, строгий квадрат 1:1; боковой отступ даёт padding экрана */
-#writeArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); margin:0 auto; touch-action:none; background:#fff; border-radius:12px}
+#writeArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); margin:0 auto; touch-action:none; background:var(--card); border-radius:12px}
 /* Письмо для языков без иероглифов (en/tr/ar) — клавиатурный ввод вместо кисти */
 #writeArea.type{aspect-ratio:auto; max-width:min(620px,100%); min-height:64px; display:flex; align-items:center; justify-content:center}
 .type-card{width:100%; text-align:center; padding:26px 16px}
 .type-word{font-size:34px; font-weight:700; letter-spacing:.4px; margin-bottom:6px; line-height:1.3}
 #writePy.type-py{font-size:17px; margin-top:8px; min-height:1.3em}
 #writeTr.type-tr{font-size:18px; max-width:100%}
-.type-in{width:88%; max-width:340px; padding:12px 14px; font-size:18px; text-align:center; border-radius:12px; border:1.5px solid var(--line); margin-top:12px; background:#fff}
+.type-in{width:88%; max-width:340px; padding:12px 14px; font-size:18px; text-align:center; border-radius:12px; border:1.5px solid var(--line); margin-top:12px; background:var(--card); color:var(--ink)}
 .type-btn{margin-top:12px; width:auto; padding:10px 24px}
-#examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:#fff; border-radius:12px}
+#examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px}
 #writeTr{font-size:15px; color:var(--mut); text-align:center; margin-top:2px; line-height:1.4; max-width:92%}
 #writeList{max-width:560px; margin:14px auto 0; display:flex; flex-wrap:wrap; gap:7px; align-items:center; justify-content:flex-start}
-.wl-zh-pill{font-family:var(--font-cjk); font-size:19px; padding:4px 12px; border-radius:12px; background:#f0ece4; color:var(--mut); cursor:pointer; line-height:1.4; border:1px solid transparent}
+.wl-zh-pill{font-family:var(--font-cjk); font-size:19px; padding:4px 12px; border-radius:12px; background:var(--soft); color:var(--mut); cursor:pointer; line-height:1.4; border:1px solid transparent}
 .wl-zh-pill.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.35)}
 
 /* Словарь: центрированный список, карточки в 3 столбца */
@@ -174,11 +212,12 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .dc{min-width:0; overflow-wrap:anywhere}
 .dc.zh{font-family:var(--font-cjk); font-size:24px; font-weight:600}
 .dc.py{color:#1565c0; font-size:15px; font-weight:700}
-.dc.tr{color:#5f5a51; font-size:15px; font-weight:600; text-align:right}
+html[data-theme="dark"] .dc.py{color:#7db8f2}
+.dc.tr{color:var(--mut); font-size:15px; font-weight:600; text-align:right}
 .dc-side{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto}
 /* Кнопки карточки всегда сеткой 2×2 (★ ↑ / 🔊 ↓) — ровный вид и больше места тексту на любой ширине */
 .dc-btns{display:grid; grid-template-columns:34px 34px; grid-auto-rows:34px; gap:4px}
-.icon-btn{border:0; background:#f0ece4; color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0}
+.icon-btn{border:0; background:var(--soft); color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
 .icon-btn.arrow{font-size:21px; font-weight:900; color:var(--ink)}
@@ -191,14 +230,14 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 
 /* Forms */
 input[type=text],input[type=email],textarea,select{
-  width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 12px; font-size:15px; background:#fff; font-family:inherit;
+  width:100%; border:1.5px solid var(--line); border-radius:12px; padding:11px 12px; font-size:15px; background:var(--card); color:var(--ink); font-family:inherit;
 }
 input[type=text].zh{font-family:var(--font-cjk); font-size:22px}
 textarea{min-height:110px; resize:vertical; line-height:1.5}
 label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; font-weight:600}
-.seg{display:flex; background:#f0ece4; border-radius:12px; padding:3px; gap:3px}
+.seg{display:flex; background:var(--soft); border-radius:12px; padding:3px; gap:3px}
 .seg button{flex:1; border:0; background:none; padding:8px; border-radius:9px; font-size:13px; color:var(--mut); font-weight:600}
-.seg button.active{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.seg button.active{background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
 
 /* Экран конфликтов синхронизации (Фаза 8) */
 .muted{font-size:12px; color:var(--mut)}
@@ -211,7 +250,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .cf-list-lbl{margin:14px 0 6px; font-size:13px; font-weight:700; color:var(--ink)}
 .cf-part{font-size:11.5px; font-weight:700; color:var(--mut); margin-top:7px}
 .cf-cmp-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:5px}
-.cf-cmp-side{border:1.5px solid var(--line); border-radius:10px; padding:7px 9px; background:#fff}
+.cf-cmp-side{border:1.5px solid var(--line); border-radius:10px; padding:7px 9px; background:var(--card)}
 .cf-cmp-side.fresh{border-color:var(--green); background:#f0f7f0}
 .cf-tag{display:block; font-size:11px; font-weight:800; color:var(--mut); letter-spacing:.3px}
 .cf-cmp-side.fresh .cf-tag{color:var(--green)}
@@ -279,11 +318,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Ещё: контент по центру, две вкладки */
 .more-wrap{max-width:600px; margin:0 auto}
 .card-h{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:14px; font-weight:700; color:var(--ink); margin:0 0 10px}
-.mini-select{width:auto; font-size:12px; padding:6px 8px; border-radius:10px; border:1.5px solid var(--line); background:#fff; color:var(--ink)}
+.mini-select{width:auto; font-size:12px; padding:6px 8px; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink)}
 /* Память: горизонтальные бары */
 .hmbar{display:flex; align-items:center; gap:9px; margin:8px 0}
 .hmbar .lb{flex:0 0 124px; font-size:11px; color:var(--mut); text-align:right; line-height:1.25}
-.hmbar .track{flex:1; height:15px; background:#f0ece4; border-radius:8px; overflow:hidden}
+.hmbar .track{flex:1; height:15px; background:var(--soft); border-radius:8px; overflow:hidden}
 .hmbar .fill{height:100%; background:var(--red); border-radius:8px 0 0 8px}
 .hmbar .num{flex:0 0 22px; font-size:12.5px; font-weight:800; color:var(--ink)}
 /* Календарь-хитмап */
@@ -294,7 +333,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .hm-days{display:flex; flex-direction:column; gap:var(--hmgap,2px); margin-right:5px; flex:0 0 18px}
 .hm-days span{height:var(--hmcell,14px); line-height:var(--hmcell,14px); font-size:8.5px; color:var(--mut); text-align:right}
 .hm-grid{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,var(--hmcell,14px)); grid-auto-columns:var(--hmcell,14px); gap:var(--hmgap,2px)}
-.hm-cell{width:var(--hmcell,14px); height:var(--hmcell,14px); border-radius:3px; background:#f0ece4; font-size:8px; line-height:var(--hmcell,14px); text-align:center; color:#b7b0a6}
+.hm-cell{width:var(--hmcell,14px); height:var(--hmcell,14px); border-radius:3px; background:var(--soft); font-size:8px; line-height:var(--hmcell,14px); text-align:center; color:var(--mut)}
 .hm-cell.on{background:var(--red); color:#fff; font-weight:700}
 .hm-cell.future{background:transparent}
 /* Графики — горизонтальная прокрутка */
@@ -305,7 +344,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .hbar{display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:170px}
 .hbar .hval{font-size:11px; font-weight:800; color:var(--ink); margin-bottom:3px; min-height:14px}
 .hbar .hcol{width:22px; border-radius:6px 6px 2px 2px; background:var(--red)}
-.hbar .hcol.zero{background:#f0ece4; min-height:3px}
+.hbar .hcol.zero{background:var(--soft); min-height:3px}
 .hbar .hlab{font-size:9px; color:var(--mut); margin-top:5px; white-space:nowrap; max-width:58px; overflow:hidden; text-overflow:ellipsis}
 /* Лучшие серии */
 .streak{margin:9px 0}
@@ -328,7 +367,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .months{position:relative; height:18px}
 .months span{position:absolute; top:0; font-size:13px; color:var(--mut); white-space:nowrap}
 .grid{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,16px); grid-auto-columns:16px; gap:2px}
-.cell{position:relative; width:16px; height:16px; border-radius:4px; background:#ece9e2; color:var(--mut);
+.cell{position:relative; width:16px; height:16px; border-radius:4px; background:var(--soft2); color:var(--mut);
   font-size:13px; line-height:16px; text-align:center; font-weight:500}
 .cell.on{background:var(--red); color:#fff; font-weight:700}
 .cell.future{background:transparent; color:transparent}
@@ -339,11 +378,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Выпадающий выбор периода (▾) */
 .dd{position:relative; flex:0 0 auto}
-.dd-btn{display:flex; align-items:center; gap:6px; border:1px solid var(--line); background:#fff;
+.dd-btn{display:flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--card);
   border-radius:9px; padding:6px 10px; font-size:13px; color:var(--ink); cursor:pointer; font-family:inherit}
 .dd-btn .tgl{font-size:9px; color:var(--mut); transition:transform .15s}
 .dd.open .tgl{transform:rotate(180deg)}
-.dd-menu{position:absolute; right:0; top:calc(100% + 4px); background:#fff; border:1px solid var(--line);
+.dd-menu{position:absolute; right:0; top:calc(100% + 4px); background:var(--card); border:1px solid var(--line);
   border-radius:10px; box-shadow:var(--shadow-md); padding:4px; min-width:118px; display:none; z-index:20}
 .dd.open .dd-menu{display:block}
 .dd-menu button{display:block; width:100%; text-align:left; border:0; background:transparent;
@@ -435,12 +474,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
   box-shadow:var(--shadow-sm);
 }
+.study-gear svg{width:17px; height:17px; fill:currentColor}
 .study-gear:active{transform:translateY(1px)}
 /* Строки-тумблеры в окне настроек «Учить» */
 .sn-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; font-weight:700}
 .sn-row:last-child{border-bottom:0}
-.sn-switch{width:50px; height:30px; border-radius:999px; border:0; background:#d8d2c6; position:relative; cursor:pointer; transition:background .15s; flex:0 0 auto}
-.sn-switch::after{content:''; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s}
+.sn-switch{width:50px; height:30px; border-radius:999px; border:0; background:var(--soft2); position:relative; cursor:pointer; transition:background .15s; flex:0 0 auto}
+.sn-switch::after{content:''; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s}
 .sn-switch.on{background:var(--red)}
 .sn-switch.on::after{left:23px}
 
@@ -458,7 +498,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .exam-py{font-size:14px; color:var(--amber); text-align:center; min-height:1.2em}
 
 /* Экзамен: блок ответов «Верно-неверно» прижат к низу экрана (как кнопки в «Учить») */
-#examBody{min-height:100%}
+#scr-exam.active{display:flex; flex-direction:column}
+#examBody{flex:1 1 auto; min-height:0}
 .exam-spacer{flex:1 1 auto; min-height:14px}
 
 /* Экзамен: подбор пар */
@@ -489,7 +530,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 <header class="top">
   <div class="title">Language Trainer</div>
-  <div class="sub"><span class="ver" id="appVer">Версия</span></div>
+  <div class="sub">
+    <button class="theme-switch" id="themeSwitch" title="Светлый / тёмный режим" aria-label="Светлый / тёмный режим"></button>
+    <span class="ver" id="appVer">Версия</span>
+  </div>
 </header>
 
 <main>
@@ -519,7 +563,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <section class="screen" id="scr-study">
     <div id="studyWrap" class="study-wrap">
       <div class="study-top">
-        <button class="study-gear" id="studySettingsBtn" title="Настройки экрана">⚙</button>
+        <button class="study-gear" id="studySettingsBtn" title="Настройки экрана" aria-label="Настройки экрана"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a.5.5 0 0 0 .05-.2v-.19a.5.5 0 0 0-.05-.2l1.17-.91a.27.27 0 0 0 .06-.35l-1.12-1.94a.27.27 0 0 0-.33-.11l-1.38.56a4.1 4.1 0 0 0-.34-.2l-.21-1.47a.27.27 0 0 0-.27-.23h-2.24a.27.27 0 0 0-.27.23l-.21 1.47c-.12.06-.23.13-.34.2l-1.38-.56a.27.27 0 0 0-.33.11L9.05 11.3a.27.27 0 0 0 .06.35l1.17.91a.5.5 0 0 0-.05.2v.19a.5.5 0 0 0 .05.2l-1.17.91a.27.27 0 0 0-.06.35l1.12 1.94a.27.27 0 0 0 .33.11l1.38-.56c.11.07.22.13.34.2l.21 1.47c.01.13.12.23.27.23h2.24c.15 0 .26-.1.27-.23l.21-1.47c.12-.07.23-.13.34-.2l1.38.56a.27.27 0 0 0 .33-.11l1.12-1.94a.27.27 0 0 0-.06-.35l-1.17-.91ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg></button>
       </div>
       <div class="row" style="justify-content:space-between; margin-bottom:4px">
         <span class="chip" id="studyProgress">0 / 0</span>
@@ -702,6 +746,16 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         </div>
 
         <div class="card">
+          <label class="lbl">Оформление</label>
+          <div class="seg" id="themeSeg">
+            <button data-v="light">☀️ Светлая</button>
+            <button data-v="dark">🌙 Тёмная</button>
+            <button data-v="sepia">🕯 Песочная</button>
+            <button data-v="mint">🌿 Мятная</button>
+          </div>
+        </div>
+
+        <div class="card">
           <div class="card-h">Аккаунт</div>
           <div id="authBox"></div>
         </div>
@@ -714,8 +768,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
           </div>
           <div class="data-stats-note" id="dsNote"></div>
           <div class="btn-row">
-            <button class="btn sec" id="btnExport">Экспорт JSON</button>
-            <button class="btn sec" id="btnImport">Импорт JSON</button>
+            <button class="btn sec" id="btnExport">Экспорт JSON (все языки)</button>
+            <button class="btn sec" id="btnImport">Импорт JSON (все языки)</button>
           </div>
           <div class="btn-row" style="margin-top:10px">
             <button class="btn sec" id="btnSample">Загрузить примеры</button>
@@ -2968,7 +3022,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.8.2','03.10.26','Новая вкладка «Ещё → Синхронизация»: агрегат облака (карточки, слова по языкам, размер базы и аудио в Storage, число синков) и журнал синхронизаций — что ушло в облако и пришло, отдельно по контенту и прогрессу, конфликты и в чью пользу, с какого устройства и какой версии; в БД добавлена таблица sync_log'],
+  ['1.8.2','03.10.26','Вкладка «Ещё → Синхронизация»: агрегат облака и журнал синхронизаций (таблица sync_log). Правки: конфликт при одинаково свежих версиях больше не блокирует синк — побеждает облако; автосинхронизация отключена (только кнопка «Синхронизировать»); 4 цветовые гаммы (Светлая/Тёмная/Песочная/Мятная) с быстрым переключателем в шапке и выбором в Настройках; шестерёнка в «Учить» — аккуратная SVG-иконка; кнопки экспорта/импорта подписаны «все языки»; «Верно/Не верно» прижаты к низу, как в «Учить»'],
   ['1.8.1','03.10.26','Словарь — стрелки ↑↓ жирнее и контрастнее; Экзамен «Верно-неверно» — кнопки Верно/Не верно прижаты к низу экрана (как в «Учить»); экран конфликтов синхронизации переделан: выбор стороны теперь глобальный по частям «Контент» и «Прогресс» (не на каждое слово), внизу — список-справка с датами изменения обеих версий и подсветкой более свежей'],
   ['1.8.0','03.10.26','Фаза 8 — защита от затирания свежих данных: карточка разделена на контент и прогресс с отдельными таймстампами (updated_at / prog_at), каждый двигается только при реальном действии; серверная БД не принимает более старую запись; при расхождении обеих версий — экран конфликтов «Локально / Облако»'],
   ['1.7.0','03.10.26','SRS — переработка стратегии уровней: интервалы коробок 2/3/5/8/12 сессий (было 1/2/4/6/8); новое слово покидает уровень 1 после 4 верных ответов суммарно (было 3+3 подряд в соседних сессиях), ошибки счётчик не сбрасывают; новое слово повторяется через сессию, а не в каждой; в очереди не больше 10 новых слов за сессию'],
@@ -3900,6 +3954,36 @@ function applySizes(){
   document.documentElement.style.setProperty('--mul-p', settings.mulP||1);
   document.documentElement.style.setProperty('--mul-t', settings.mulT||1);
 }
+
+// ============================== ТЕМЫ ОФОРМЛЕНИЯ ==============================
+// Четыре гаммы (светлая/тёмная/песочная/мятная) на CSS-переменных в head.
+// Выбор хранится в localStorage ('ltTheme') отдельно от settings — не участвует в облачной
+// синхронизации (оформление — личная настройка устройства, а не данные аккаунта).
+const THEME_ORDER=['light','dark','sepia','mint'];
+function applyTheme(t){
+  if(THEME_ORDER.indexOf(t)<0) t='light';
+  document.documentElement.setAttribute('data-theme', t);
+  try{ localStorage.setItem('ltTheme', t); }catch(e){}
+  const seg=document.getElementById('themeSeg');
+  if(seg) seg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===t));
+  const sw=document.getElementById('themeSwitch');
+  if(sw) sw.innerHTML = (t==='dark') ? SUN_ICON : MOON_ICON;
+}
+const MOON_ICON='<svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+const SUN_ICON='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
+function bindThemeControls(){
+  let cur='light';
+  try{ cur=localStorage.getItem('ltTheme')||'light'; }catch(e){}
+  if(THEME_ORDER.indexOf(cur)<0) cur='light';
+  applyTheme(cur);
+  document.getElementById('themeSwitch').onclick=()=>{
+    applyTheme(cur==='dark' ? 'light' : 'dark');
+    cur=cur==='dark' ? 'light' : 'dark';
+  };
+  document.getElementById('themeSeg').querySelectorAll('button').forEach(b=>{
+    b.onclick=()=>{ cur=b.dataset.v; applyTheme(cur); };
+  });
+}
 function bindSettings(){
   const seg=(id, key, type, after)=>{
     document.getElementById(id).querySelectorAll('button').forEach(b=>{
@@ -4433,7 +4517,10 @@ function decidePart(part, loc, cl){
     ? itemContentSig(loc)!==itemContentSig(cl)
     : itemProgSig(loc)!==itemProgSig(cl);
   if(locT>0 && remT>0 && locT!==remT && sigE) return 'conflict';
-  if(locT===remT && locT>0 && sigE) return 'conflict'; // таймстампы равны, данные разные → спор
+  // Таймстампы равны, но данные разные: часы устройств сошлись (массовая правка в одну секунду)
+  // или совпали до миллисекунды. Спор решить нельзя, поэтому НЕ объявляем конфликт и не
+  // блокируем синхронизацию — победителем считаем облако (защищает от зависшего окна выбора).
+  if(locT===remT && locT>0 && sigE) return 'pull';
   if(locT>remT) return 'push';
   if(locT<remT) return 'pull';
   return 'none';
@@ -4845,21 +4932,9 @@ function initAuthState(){
   });
 }
 
-// ============================== АВТО-СИНК (вариант 2: при открытии и возврате) ==============================
-// Тихий синк при старте/возврате в приложение и при восстановлении сети. Без дебаунса правок:
-// только если вошёл, онлайн и синк не идёт. Кнопка «Синхронизировать» остаётся для ручного контроля.
-let lastAutoSyncTry=0;
-function autoSyncIfIdle(){
-  if(syncBusy || syncNetDown() || !_syncUser) return;
-  const t=now();
-  if(t-lastAutoSyncTry < 30000) return;   // не чаще раза в 30 секунд
-  lastAutoSyncTry=t;
-  doSync().catch(()=>{});
-}
-function bindAutoSync(){
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) autoSyncIfIdle(); });
-  window.addEventListener('online', autoSyncIfIdle);
-}
+// ============================== СИНХРОНИЗАЦИЯ ТОЛЬКО ВРУЧНУЮ ==============================
+// Авто-синк при открытии/возврате НЕ запускаем: программа должна обновиться на устройстве
+// ДО синхронизации, поэтому синхронизируемся только кнопкой «Синхронизировать» в Словаре.
 
 // ============================== BOOT ==============================
 async function boot(){
@@ -4902,13 +4977,11 @@ async function boot(){
   maybeOfferSamples();
   refreshSyncUI();
   bindSettings();
+  bindThemeControls();
   bindAudioSlot();
   bindAudioLifecycle();
-  bindAutoSync();
   refreshAll();
   initAuthState();
-  // автосинк при открытии: сессия подхватится в renderAuth, затем — тихий синк после первого входа/по сети
-  setTimeout(autoSyncIfIdle, 2500);
 }
 boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
 
