@@ -181,6 +181,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .icon-btn{border:0; background:#f0ece4; color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
+.icon-btn.arrow{font-size:21px; font-weight:900; color:var(--ink)}
 .dc-stat{font-size:11px; color:var(--mut); white-space:nowrap}
 .autolink{font-size:12px; color:var(--red); text-decoration:none; font-weight:600}
 .tr-row{display:flex; align-items:center; gap:8px; margin-top:6px}
@@ -203,8 +204,19 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .muted{font-size:12px; color:var(--mut)}
 .conflict-card{border:1.5px solid var(--line); border-radius:12px; background:var(--card); padding:10px 12px; margin-bottom:10px}
 .conflict-face{font-size:24px; font-weight:600; font-family:var(--font-cjk)}
-.cf-seg-btn{flex:1; border:0; background:none; padding:6px 8px; border-radius:8px; font-size:12.5px; color:var(--mut); font-weight:600; cursor:pointer}
-.cf-seg-btn.on{background:#fff; color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.cf-global{border:1.5px solid var(--line); border-radius:14px; background:var(--card); padding:10px 12px; margin-bottom:10px}
+.cf-g-head{display:flex; align-items:baseline; gap:8px; margin-bottom:2px}
+.cf-g-head b{font-size:14px}
+.cf-g-sum{margin-bottom:8px}
+.cf-list-lbl{margin:14px 0 6px; font-size:13px; font-weight:700; color:var(--ink)}
+.cf-part{font-size:11.5px; font-weight:700; color:var(--mut); margin-top:7px}
+.cf-cmp-row{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:5px}
+.cf-cmp-side{border:1.5px solid var(--line); border-radius:10px; padding:7px 9px; background:#fff}
+.cf-cmp-side.fresh{border-color:var(--green); background:#f0f7f0}
+.cf-tag{display:block; font-size:11px; font-weight:800; color:var(--mut); letter-spacing:.3px}
+.cf-cmp-side.fresh .cf-tag{color:var(--green)}
+.cf-dt{display:block; font-size:12px; color:var(--mut); margin:2px 0 4px}
+.cf-dt b{color:var(--green); font-weight:800}
 .cf-prev{margin-top:6px; line-height:1.45}
 
 /* Словарь: строка фильтров — 4 одинаковых чипа в ряд (Все слова / Избранное / выучено / Фильтр) */
@@ -434,6 +446,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Экзамен: пиньинь-подсказка (маленькая) */
 .exam-py{font-size:14px; color:var(--amber); text-align:center; min-height:1.2em}
+
+/* Экзамен: блок ответов «Верно-неверно» прижат к низу экрана (как кнопки в «Учить») */
+#examBody{min-height:100%}
+.exam-spacer{flex:1 1 auto; min-height:14px}
 
 /* Экзамен: подбор пар */
 #matchRoot{max-width:600px; margin:0 auto}
@@ -778,7 +794,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.0';
+const APP_VERSION='1.8.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1428,9 +1444,9 @@ function renderDict(){
         <div class="dc-side">
           <div class="dc-btns">
             <button class="icon-btn star ${it.starred?'starred':''}" data-act="star" title="Звезда">★</button>
-            <button class="icon-btn" data-act="up" title="Повысить уровень">↑</button>
+            <button class="icon-btn arrow" data-act="up" title="Повысить уровень">↑</button>
             <button class="icon-btn" data-act="play" title="Произнести">🔊</button>
-            <button class="icon-btn" data-act="down" title="Понизить уровень">↓</button>
+            <button class="icon-btn arrow" data-act="down" title="Понизить уровень">↓</button>
           </div>
           <div class="dc-stat">${stat}</div>
         </div>
@@ -2685,7 +2701,8 @@ function renderExamTF(q){
       <div class="exam-py" style="font-size:20px; font-weight:700">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
       <div class="eq-tr" style="font-size:20px; font-weight:700">${escapeHtml(tr)}</div>
     </div>
-    <div class="btn-col" style="margin-top:18px; width:100%">
+    <div class="exam-spacer"></div>
+    <div class="btn-col">
       <button class="btn ok" data-v="1">Верно</button>
       <button class="btn warn" data-v="0">Не верно</button>
     </div>`;
@@ -2917,6 +2934,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.1','03.10.26','Словарь — стрелки ↑↓ жирнее и контрастнее; Экзамен «Верно-неверно» — кнопки Верно/Не верно прижаты к низу экрана (как в «Учить»); экран конфликтов синхронизации переделан: выбор стороны теперь глобальный по частям «Контент» и «Прогресс» (не на каждое слово), внизу — список-справка с датами изменения обеих версий и подсветкой более свежей'],
   ['1.8.0','03.10.26','Фаза 8 — защита от затирания свежих данных: карточка разделена на контент и прогресс с отдельными таймстампами (updated_at / prog_at), каждый двигается только при реальном действии; серверная БД не принимает более старую запись; при расхождении обеих версий — экран конфликтов «Локально / Облако»'],
   ['1.7.0','03.10.26','SRS — переработка стратегии уровней: интервалы коробок 2/3/5/8/12 сессий (было 1/2/4/6/8); новое слово покидает уровень 1 после 4 верных ответов суммарно (было 3+3 подряд в соседних сессиях), ошибки счётчик не сбрасывают; новое слово повторяется через сессию, а не в каждой; в очереди не больше 10 новых слов за сессию'],
   ['1.6.0','03.10.26','Настройки → Данные: размер базы слов и базы аудио (штуки и КБ/МБ, активный язык); Экзамен — слово повторяется каждые 7 секунд, пока вопрос на экране; «Выбор ответов» — выше кнопки ответов (×1.5); «Учить» — тулбар заменён кнопкой ⚙ справа сверху: настройки Аудио/Пиньин/Перевод переехали в отдельное окно'],
@@ -4246,54 +4264,88 @@ function decidePart(part, loc, cl){
 // Превью части для экрана конфликтов.
 function contentPreview(it){ return (it.translation||'').trim() || (it.pinyin||'').trim() || '—'; }
 function progressPreview(it){ return 'Коробка '+it.box+' · верно '+it.correct+' · ошибок '+it.wrong; }
+// Дата/время из epoch-ms (для сравнения сторон в конфликте).
+function fmtDT(ts){
+  if(!ts) return 'нет данных';
+  const d=new Date(ts);
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  return d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear()+' '+hh+':'+mm;
+}
 // Экран конфликтов: rows = [{it, cloudIt, content:bool, progress:bool}]. Возвращает Promise
 // карты id → {content:'local'|'cloud', progress:...} только для спорных частей.
+// Решение принимается глобально по частям «Контент» и «Прогресс» (не на каждое слово);
+// список со сравнением дат — только справка для обдумывания.
 function modalSyncConflicts(rows){
   return new Promise(resolve=>{
     closeAllModals();
     const m=document.getElementById('modalSyncConflicts');
-    const state={};
+    // Сколько спорных карточек по каждой части и чья версия чаще свежее.
+    const cnt={content:{n:0,local:0,cloud:0}, progress:{n:0,local:0,cloud:0}};
     for(const row of rows){
-      const id=row.it.id, loc=row.it, cl=row.cloudIt;
-      state[id]={};
-      if(row.content) state[id].content = (loc.updated_at>cl.updated_at) ? 'local' : 'cloud';
-      if(row.progress) state[id].progress = (loc.prog_at>cl.prog_at) ? 'local' : 'cloud';
+      if(row.content){ cnt.content.n++;
+        if((row.it.updated_at||0)>(row.cloudIt.updated_at||0)) cnt.content.local++; else cnt.content.cloud++; }
+      if(row.progress){ cnt.progress.n++;
+        if((row.it.prog_at||0)>(row.cloudIt.prog_at||0)) cnt.progress.local++; else cnt.progress.cloud++; }
     }
-    const segHTML=(id,part,label,val,locPrev,clPrev)=>`
-      <div class="lbl" style="margin-top:8px">${label}</div>
-      <div class="seg sm">
-        <button class="cf-seg-btn ${val==='local'?'on':''}" data-id="${id}" data-part="${part}" data-val="local">Локально</button>
-        <button class="cf-seg-btn ${val==='cloud'?'on':''}" data-id="${id}" data-part="${part}" data-val="cloud">Облако</button>
-      </div>
-      <div class="muted cf-prev">Локально: ${escapeHtml(locPrev)}<br>Облако: ${escapeHtml(clPrev)}</div>`;
+    // По умолчанию сторона, где свежих изменений больше (если ничья — локально).
+    const def=p=> cnt[p].local>=cnt[p].cloud ? 'local' : 'cloud';
+    // Глобальный выбор по частям — единый для всех спорных карточек.
+    const g={content:def('content'), progress:def('progress')};
+    const freshSide=(part,row)=>{
+      const lt=part==='content'?(row.it.updated_at||0):(row.it.prog_at||0);
+      const rt=part==='content'?(row.cloudIt.updated_at||0):(row.cloudIt.prog_at||0);
+      return lt>rt?'local':(lt<rt?'cloud':'none');
+    };
+    const sideHTML=(part,label,locPrev,clPrev)=>{
+      return `<div class="cf-global">
+        <div class="cf-g-head"><b>${label}</b><span class="spacer"></span><span class="muted">${cnt[part].n} карт.</span></div>
+        <div class="muted cf-g-sum">Свежих локально: <b>${cnt[part].local}</b> · в облаке: <b>${cnt[part].cloud}</b></div>
+        <div class="seg sm">
+          <button class="cf-seg-btn ${g[part]==='local'?'on':''}" data-part="${part}" data-val="local">Локально</button>
+          <button class="cf-seg-btn ${g[part]==='cloud'?'on':''}" data-part="${part}" data-val="cloud">Облако</button>
+        </div>
+      </div>`;
+    };
     let html='<div class="sheet"><div class="row"><h2>Конфликты синхронизации</h2><div class="spacer"></div></div>';
-    html+='<div class="muted" style="margin-bottom:10px">Обе стороны меняли эти карточки. Выберите, какую версию оставить.</div>';
+    html+='<div class="muted">Обе стороны меняли одни и те же карточки. Выберите, какую сторону оставить — для контента и прогресса отдельно.</div>';
+    html+=sideHTML('content','Контент (слова, переводы, аудио)');
+    html+=sideHTML('progress','Прогресс (уровень, ответы)');
+    html+='<div class="cf-list-lbl">Детали для сравнения</div>';
     for(const row of rows){
-      const id=row.it.id, loc=row.it, cl=row.cloudIt;
+      const loc=row.it, cl=row.cloudIt;
       const langName=(LANG_MAP[loc.lang||cl.lang]||LANGS[0]).name;
       html+=`<div class="conflict-card">
         <div class="row"><span class="conflict-face ${hasStrokes()?'zh':''}">${escapeHtml((loc.hanzi||cl.hanzi||'?'))}</span><span class="spacer"></span><span class="muted">${escapeHtml(langName)}</span></div>`;
-      if(row.content) html+=segHTML(id,'content','Контент', state[id].content, contentPreview(loc), contentPreview(cl));
-      if(row.progress) html+=segHTML(id,'progress','Прогресс', state[id].progress, progressPreview(loc), progressPreview(cl));
+      if(row.content){
+        const fr=freshSide('content',row);
+        html+=`<div class="cf-part">Контент</div>
+          <div class="cf-cmp-row">
+            <div class="cf-cmp-side ${fr==='local'?'fresh':''}"><span class="cf-tag">Это устройство${fr==='local'?' · новее':''}</span><span class="cf-dt">${fmtDT(loc.updated_at)}</span><span class="cf-prev">${escapeHtml(contentPreview(loc))}</span></div>
+            <div class="cf-cmp-side ${fr==='cloud'?'fresh':''}"><span class="cf-tag">Облако${fr==='cloud'?' · новее':''}</span><span class="cf-dt">${fmtDT(cl.updated_at)}</span><span class="cf-prev">${escapeHtml(contentPreview(cl))}</span></div>
+          </div>`;
+      }
+      if(row.progress){
+        const fr=freshSide('progress',row);
+        html+=`<div class="cf-part">Прогресс</div>
+          <div class="cf-cmp-row">
+            <div class="cf-cmp-side ${fr==='local'?'fresh':''}"><span class="cf-tag">Это устройство${fr==='local'?' · новее':''}</span><span class="cf-dt">${fmtDT(loc.prog_at)}</span><span class="cf-prev">${escapeHtml(progressPreview(loc))}</span></div>
+            <div class="cf-cmp-side ${fr==='cloud'?'fresh':''}"><span class="cf-tag">Облако${fr==='cloud'?' · новее':''}</span><span class="cf-dt">${fmtDT(cl.prog_at)}</span><span class="cf-prev">${escapeHtml(progressPreview(cl))}</span></div>
+          </div>`;
+      }
       html+=`</div>`;
     }
-    html+=`<div class="btn-row" style="margin-top:10px">
-        <button class="btn ghost" id="cfAllLocal">Всё локально</button>
-        <button class="btn ghost" id="cfAllCloud">Всё из облака</button>
-      </div>
-      <div class="btn-row"><button class="btn" id="cfApply">Применить</button></div></div>`;
+    html+=`<div class="btn-row" style="margin-top:12px"><button class="btn" id="cfApply">Применить</button></div></div>`;
     m.innerHTML=html;
     m.classList.remove('hidden');
     const refreshSegs=()=>{
       m.querySelectorAll('.cf-seg-btn').forEach(b=>{
-        b.classList.toggle('on', state[b.dataset.id][b.dataset.part]===b.dataset.val);
+        b.classList.toggle('on', g[b.dataset.part]===b.dataset.val);
       });
     };
     m.querySelectorAll('.cf-seg-btn').forEach(b=>{
-      b.onclick=()=>{ state[b.dataset.id][b.dataset.part]=b.dataset.val; refreshSegs(); };
+      b.onclick=()=>{ g[b.dataset.part]=b.dataset.val; refreshSegs(); };
     });
-    m.querySelector('#cfAllLocal').onclick=()=>{ for(const id in state) for(const p in state[id]) state[id][p]='local'; refreshSegs(); };
-    m.querySelector('#cfAllCloud').onclick=()=>{ for(const id in state) for(const p in state[id]) state[id][p]='cloud'; refreshSegs(); };
     // Пока идёт синхронизация, Esc и клик по фону НЕ закрывают экран конфликтов (нельзя потерять выбор).
     const escGuard=e=>{ if(e.key==='Escape'){ e.stopPropagation(); e.preventDefault(); } };
     const pdGuard=e=>{ if(e.target===m){ e.stopPropagation(); } };
@@ -4305,7 +4357,10 @@ function modalSyncConflicts(rows){
       document.removeEventListener('keydown', escGuard, true);
       m.removeEventListener('pointerdown', pdGuard, true);
       closeModal('modalSyncConflicts');
-      resolve(state);
+      // Возвращаем единый выбор для всех спорных карточек по обеим частям.
+      const out={};
+      for(const row of rows) out[row.it.id]=g;
+      resolve(out);
     };
     m.querySelector('#cfApply').onclick=finish;
   });
