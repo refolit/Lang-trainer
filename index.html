@@ -923,7 +923,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.9';
+const APP_VERSION='1.8.10';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2123,7 +2123,7 @@ function showStudyCard(){
   document.getElementById('studyProgress').textContent=(studyIdx+1)+' / '+studyQueue.length;
   const big=document.getElementById('studyHanzi');
   big.textContent=it.hanzi;
-  // один класс на все случаи: точный размер задаёт applyStudySizes (П.1 «правки 22.26»)
+  // один класс на все случаи: точный размер задаёт applyStudySizes
   big.className='big';
   applyStudySizes();
   // фактические размеры (после перерисовки; двойной rAF — чтобы CJK-шрифт успел отрисоваться)
@@ -2134,14 +2134,14 @@ function showStudyCard(){
   if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
   else studyPlayLoop(it);
 }
-// Точные размеры «Учить»: телефон иероглиф 100px / пиньинь 38px / перевод 27px;
-// десктоп (≥1024px) — 95 / 49 / 27 (подобрано на ноутбуке 14″: иер 95px · 6.6% / пин 49px · 3.4% / пер 27px · 1.9%).
-// Предложения — тот же размер (пропорции совпадают со стандартом).
+// Точные размеры «Учить» при 100% (золотой стандарт, пользователь утвердил 05.10.26):
+// телефон — иероглиф 100px / пиньинь 38px / перевод 27px;
+// десктоп (≥1024px) — иероглиф 57px / пиньинь 29px / перевод 19px.
 // Ползунок «Иероглиф/Пиньинь/Перевод» в модалке умножает базовое значение (mulH/mulP/mulT).
-const STUDY_HZ_MOBILE=100, STUDY_HZ_DESKTOP=95;
-const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=49;
-const STUDY_TR=27;
-const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт (найдено на ноутбуке 14″)
+const STUDY_HZ_MOBILE=100, STUDY_HZ_DESKTOP=57;
+const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=29;
+const STUDY_TR_MOBILE=27, STUDY_TR_DESKTOP=19;
+const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
 function applyStudySizes(){
   const n=document.getElementById('studyHanzi'); if(!n) return;
@@ -2157,7 +2157,7 @@ function applyStudySizes(){
   const py=document.getElementById('studyPinyin');
   if(py){ const ps=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP; py.style.fontSize=ps.toFixed(1)+'px'; }
   const tr=document.getElementById('studyTr');
-  if(tr){ const ts=STUDY_TR*mulT; tr.style.fontSize=ts.toFixed(1)+'px'; }
+  if(tr){ const ts=(desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE)*mulT; tr.style.fontSize=ts.toFixed(1)+'px'; }
 }
 function updateStudySize(){
   const el=document.getElementById('studySize'); if(!el) return;
@@ -3289,6 +3289,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.10','05.10.26','«Учить» — ползунки размера теперь отсчитываются от золотого стандарта: на десктопе 100% = иероглиф 57px / пиньинь 29px / перевод 19px (телефон 100/38/27), а у тех, кто раньше держал 60/60/70, ползунки один раз сами встали на 100% — крутить вручную не нужно'],
   ['1.8.9','04.10.26','Размеры «Учить» подобраны под ноутбук 14″: главный иероглиф 95px / пиньинь 49px / перевод 27px на десктопе (телефон 100/38/27), предложения — тот же размер, что стандарт (убрано уменьшение до ~72%)'],
   ['1.8.8','04.10.26','Правки от 04.10.26 22:26: в «Учить» — главный иероглиф 100/134px, пиньинь 38/52px, перевод 28px (предложения ~72%), модалка «Настройки режима Изучение» с порядком Аудио→Иероглиф→Пиньинь→Перевод и подписями; в «Словаре» — «Уровень N / Повторов M» в 2 строки на телефоне, плавающая стрелка «Наверх» для длинных списков, перевод чёрный жирный; в «Письме» — переключатели Контур/Аудио/Анимация/Рандом (Анимация выкл по умолчанию), «Настройки режима Письмо», Назад/Вперед по краям с ползунком размера, шестерёнка справа от «Вперед», компактная подсказка с переключателем и ползунком, убрана строка с иероглифом и переводом между кнопками, список слов строго по порядку добавления (свежие первыми); в «Экзамене» — шестерёнка справа, переключатели перерисовываются сразу, в «Подборе» нет 7-сек повтора озвучки экзамена и карточки одной высоты; на «Ещё → Синхронизация» журнал обновляется сразу после синка, а «Новое имя этого устройства» задаёт имя для будущих записей журнала'],
   ['1.8.7','04.10.26','В «Учить» под карточкой — размеры иероглифа / пиньиня / перевода в пикселях и процентах; модалка шестерёнки переименована в «Настройки режима» и получила ползунки размера (50–200%, шаг 10) под «Пиньин», «Перевод» и новое поле «Иероглиф» с переключателем; шестерёнка — заливной классический значок; дубли сегментов размера из общих «Настроек» убраны'],
@@ -5220,6 +5221,14 @@ async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
   settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
+  // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
+  if(!settings.studySizeStd){
+    if(settings.mulH===0.6) settings.mulH=1;
+    if(settings.mulP===0.6) settings.mulP=1;
+    if(settings.mulT===0.7) settings.mulT=1;
+    settings.studySizeStd=true;
+  }
   studyAudioOn=settings.studyAudio!==false;
   studyPyOn=settings.studyPy!==false;
   studyTrOn=settings.studyTr!==false;
