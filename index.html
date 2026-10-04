@@ -135,8 +135,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 /* Big display — размером каждой части управляют CSS-переменные (mul-h/p/t) */
 :root{ --mul-h:1; --mul-p:1; --mul-t:1; }
 .bigwrap{
-  flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; align-items:center;
-  text-align:center; gap:6px; min-height:0;
+  flex:1 1 auto; display:flex; flex-direction:column; justify-content:safe center; align-items:center;
+  text-align:center; gap:6px; min-height:0; overflow-y:auto;
 }
 .big{
   font-family:var(--font-cjk); font-weight:700; line-height:1.12;
@@ -144,7 +144,9 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
   color:var(--ink); word-break:break-all; max-width:100%;
 }
 .big.word{font-size:calc(24vmin * var(--mul-h,1))}
-.big.sent{font-size:calc(14vmin * var(--mul-h,1)); line-height:1.35}
+/* Длинные слова и предложения: компактный шрифт + перенос по словам, чтобы текст
+   не выталкивал пиньинь/перевод за экран и не прятался под кнопками. */
+.big.sent{font-size:calc(clamp(15px, 5.5vmin, 24px) * var(--mul-h,1)); line-height:1.4; word-break:normal; overflow-wrap:anywhere}
 .bigpy{font-size:calc(9vmin * var(--mul-p,1)); color:var(--amber); min-height:1.2em; font-family:system-ui,-apple-system,var(--font-cjk),sans-serif}
 .bigtr{font-size:calc(7.5vmin * var(--mul-t,1)); color:var(--mut); min-height:1.3em; line-height:1.4}
 /* Фактический размер иероглифа в пикселях (+ проценты от ширины экрана) */
@@ -194,7 +196,10 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 /* Письмо для языков без иероглифов (en/tr/ar) — клавиатурный ввод вместо кисти */
 #writeArea.type{aspect-ratio:auto; max-width:min(620px,100%); min-height:64px; display:flex; align-items:center; justify-content:center}
 .type-card{width:100%; text-align:center; padding:26px 16px}
-.type-word{font-size:34px; font-weight:700; letter-spacing:.4px; margin-bottom:6px; line-height:1.3}
+.type-word{font-size:34px; font-weight:700; letter-spacing:.4px; margin-bottom:6px; line-height:1.3; overflow-wrap:anywhere}
+/* Длинные слова/предложения в письме-печати: компактнее, чтобы карточка не уезжала за экран */
+.type-word.mid{font-size:22px; letter-spacing:.2px}
+.type-word.sent{font-size:16px; letter-spacing:0; line-height:1.4}
 #writePy.type-py{font-size:17px; margin-top:8px; min-height:1.3em}
 #writeTr.type-tr{font-size:18px; max-width:100%}
 .type-in{width:88%; max-width:340px; padding:12px 14px; font-size:18px; text-align:center; border-radius:12px; border:1.5px solid var(--line); margin-top:12px; background:var(--card); color:var(--ink)}
@@ -493,6 +498,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Экзамен: вопрос с двумя колонками (перевод сверху, псевдо-иероглиф) */
 .exam-q{display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center}
 .exam-q .eq-word{font-family:var(--font-cjk); font-weight:600; line-height:1.2; color:var(--ink); word-break:break-all; font-size:min(30vmin,130px)}
+/* Длинные слова/предложения не должны раздуваться на весь экран и выталкивать кнопки ответов:
+   чем длиннее текст, тем меньше шрифт — вопрос остаётся компактным, кнопки всегда влезают. */
+.exam-q .eq-word.mid{font-size:min(16vmin,72px)}
+.exam-q .eq-word.sent{font-size:clamp(17px,7vmin,26px); line-height:1.3; word-break:normal; overflow-wrap:anywhere}
 .exam-q .eq-tr{font-size:15px; color:var(--mut); line-height:1.4; overflow-wrap:anywhere}
 
 /* Экзамен: пиньинь-подсказка (маленькая) */
@@ -500,7 +509,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Экзамен: блок ответов «Верно-неверно» прижат к низу экрана (как кнопки в «Учить») */
 #scr-exam.active{display:flex; flex-direction:column}
-#examBody{flex:1 1 auto; min-height:0}
+#examBody{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:4px}
 .exam-spacer{flex:1 1 auto; min-height:14px}
 
 /* Экзамен: подбор пар */
@@ -511,7 +520,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .exam-opt{font-size:14px; padding:12px 8px; min-height:70px; word-break:break-word}
 
 .match-col{display:grid; grid-template-rows:repeat(5, minmax(64px, 1fr)); gap:8px; align-content:stretch}
-.match-pair{font-family:var(--font-cjk); font-size:18px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word}
+.match-pair{font-family:var(--font-cjk); font-size:18px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word; overflow-wrap:anywhere}
+.match-pair.sent{font-size:14px; line-height:1.35}
 .match-pair.match-txt{font-family:system-ui,-apple-system,var(--font-cjk),sans-serif; font-size:14px; font-weight:600}
 .match-pair.sel{background:var(--amber); border-color:#d6930b; color:#3b2f00; transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
 .match-pair.done{opacity:.18; pointer-events:none; transform:none; box-shadow:none}
@@ -522,6 +532,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
   .exam-opt{font-size:19px; padding:18px 14px; min-height:91px; word-break:break-word}
   .match-pair{font-size:22px; line-height:1.3}
+  .match-pair.sent{font-size:16px; line-height:1.35}
   .match-pair.match-txt{font-size:17px; line-height:1.35}
   .match-col{grid-template-rows:repeat(5, minmax(72px, 1fr)); gap:10px}
 }
@@ -870,7 +881,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.4';
+const APP_VERSION='1.8.5';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2264,7 +2275,7 @@ function setWriteItemTyping(it, speakNow){
   const hintOn=writeHintOn();
   area.innerHTML=`<div class="type-card">
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
-    ${hintOn?`<div class="type-word">${escapeHtml(it.hanzi)}</div>`:''}
+    ${hintOn?`<div class="type-word ${eqWordClass(it.hanzi)}">${escapeHtml(it.hanzi)}</div>`:''}
     <input type="text" id="typeInput" class="type-in" dir="${langInfo().rtl?'rtl':'auto'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${hintOn?'введите слово':'слово / фраза'}">
     <div><button class="btn type-btn" id="typeCheck">Проверить</button></div>
   </div>`;
@@ -2762,6 +2773,14 @@ function examDrop(it){
 }
 
 // ---------- Верно-неверно ----------
+// Размер текста вопроса в экзамене по длине: 1 символ — крупно, 2–4 — средне,
+// 5+ (предложение) — компактно, чтобы кнопки ответов всегда влезали в экран.
+function eqWordClass(hanzi){
+  const n=(hanzi||'').replace(/\s+/g,'').length;
+  if(n<=1) return '';
+  if(n<=4) return 'mid';
+  return 'sent';
+}
 function renderExamTF(q){
   const it=q.it;
   const showOk=Math.random()<0.5;
@@ -2773,7 +2792,7 @@ function renderExamTF(q){
   const body=document.getElementById('examBody');
   body.innerHTML=`
     <div class="exam-q">
-      <div class="eq-word">${escapeHtml(it.hanzi)}</div>
+      <div class="eq-word ${eqWordClass(it.hanzi)}">${escapeHtml(it.hanzi)}</div>
       <div class="exam-py" style="font-size:20px; font-weight:700">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
       <div class="eq-tr" style="font-size:20px; font-weight:700">${escapeHtml(tr)}</div>
     </div>
@@ -2798,7 +2817,7 @@ function renderExamChoice(q){
   // вопрос один раз; варианты перерисовываются мгновенно при смене 4-6-8-10
   body.innerHTML=`
     <div class="exam-q" style="margin-bottom:14px">
-      <div class="eq-word">${escapeHtml(it.hanzi)}</div>
+      <div class="eq-word ${eqWordClass(it.hanzi)}">${escapeHtml(it.hanzi)}</div>
     </div>
     <div class="exam-q" style="width:100%">
       <div class="seg sm" style="width:auto; margin-bottom:4px">
@@ -2897,8 +2916,8 @@ function renderMatch(){
   const body=document.getElementById('examBody');
   body.innerHTML=`
     <div class="match-cols">
-      <div class="match-col" id="matchLeft">${left.map(it=>`<button class="btn sec match-pair" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`).join('')}</div>
-      <div class="match-col" id="matchRight">${right.map(it=>`<button class="btn sec match-pair match-txt" data-id="${it.id}">${escapeHtml(examPickTr(it))}</button>`).join('')}</div>
+      <div class="match-col" id="matchLeft">${left.map(it=>`<button class="btn sec match-pair ${eqWordClass(it.hanzi)}" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`).join('')}</div>
+      <div class="match-col" id="matchRight">${right.map(it=>{const t=examPickTr(it);return `<button class="btn sec match-pair match-txt ${eqWordClass(t)}" data-id="${it.id}">${escapeHtml(t)}</button>`;}).join('')}</div>
     </div>
     <button class="btn" id="matchDone" style="width:100%; margin-top:12px">Завершить подбор</button>`;
   document.querySelectorAll('#matchLeft button').forEach(b=>{
@@ -3010,6 +3029,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.5','04.10.26','Длинные слова и предложения больше не выталкивают кнопки за экран и не прячутся под ними ни в одном режиме: размер текста подбирается по длине (1 символ крупно, 2–4 средне, предложение компактно) — в «Экзамене», «Учить», письме-печати и «Подборе»; зона вопроса/подбора прокручивается, когда контент выше экрана'],
   ['1.8.4','03.10.26','Синхронизация прогресса больше не застревает в конфликтах: SRS (уровни, ответы) сливается автоматически по свежести таймстампа (новее всегда побеждает), экран «Конфликты» показывается только для контента (слова/переводы/аудио)'],
   ['1.8.3','03.10.26','Окно конфликтов синхронизации: кнопки «Локально»/«Облако» подсвечиваются при выборе, «Применить» прикреплена к низу и видна всегда. Экзамен → Выбор ответов: кнопки теперь строго 2 в ряд на всю ширину экрана (раньше блок сжимался до ширины содержимого, и короткие слова давали мелкие кнопки) и выше на 30%'],
   ['1.8.2','03.10.26','Вкладка «Ещё → Синхронизация»: агрегат облака и журнал синхронизаций (таблица sync_log). Правки: конфликт при одинаково свежих версиях больше не блокирует синк — побеждает облако; автосинхронизация отключена (только кнопка «Синхронизировать»); 4 цветовые гаммы (Светлая/Тёмная/Песочная/Мятная) с быстрым переключателем в шапке и выбором в Настройках; шестерёнка в «Учить» — аккуратная SVG-иконка; кнопки экспорта/импорта подписаны «все языки»; «Верно/Не верно» прижаты к низу, как в «Учить»'],
