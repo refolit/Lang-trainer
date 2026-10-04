@@ -507,13 +507,17 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 }
 .study-gear svg{width:17px; height:17px; fill:currentColor}
 .study-gear:active{transform:translateY(1px)}
-/* Строки-тумблеры в окне настроек «Учить» */
-.sn-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; font-weight:700}
-.sn-row:last-child{border-bottom:0}
+/* Блоки-тумблеры в окне настроек «Учить» + ползунки размеров */
+.sn-block{padding:0; border-bottom:1px solid var(--line)}
+.sn-block:last-child{border-bottom:0}
+.sn-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0 4px; font-size:15px; font-weight:700; border-bottom:0}
 .sn-switch{width:50px; height:30px; border-radius:999px; border:0; background:var(--soft2); position:relative; cursor:pointer; transition:background .15s; flex:0 0 auto}
 .sn-switch::after{content:''; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s}
 .sn-switch.on{background:var(--red)}
 .sn-switch.on::after{left:23px}
+.sn-slider{display:flex; align-items:center; gap:10px; padding:0 0 12px}
+.sn-slider input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--red); height:28px; margin:0}
+.sn-slider-val{flex:0 0 auto; min-width:52px; text-align:right; font-size:13px; font-weight:700; color:var(--red); font-variant-numeric:tabular-nums}
 
 /* Экзамен: верхний тулбар настроек */
 .exam-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
@@ -603,7 +607,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <section class="screen" id="scr-study">
     <div id="studyWrap" class="study-wrap">
       <div class="study-top">
-        <button class="study-gear" id="studySettingsBtn" title="Настройки экрана" aria-label="Настройки экрана"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a.5.5 0 0 0 .05-.2v-.19a.5.5 0 0 0-.05-.2l1.17-.91a.27.27 0 0 0 .06-.35l-1.12-1.94a.27.27 0 0 0-.33-.11l-1.38.56a4.1 4.1 0 0 0-.34-.2l-.21-1.47a.27.27 0 0 0-.27-.23h-2.24a.27.27 0 0 0-.27.23l-.21 1.47c-.12.06-.23.13-.34.2l-1.38-.56a.27.27 0 0 0-.33.11L9.05 11.3a.27.27 0 0 0 .06.35l1.17.91a.5.5 0 0 0-.05.2v.19a.5.5 0 0 0 .05.2l-1.17.91a.27.27 0 0 0-.06.35l1.12 1.94a.27.27 0 0 0 .33.11l1.38-.56c.11.07.22.13.34.2l.21 1.47c.01.13.12.23.27.23h2.24c.15 0 .26-.1.27-.23l.21-1.47c.12-.07.23-.13.34-.2l1.38.56a.27.27 0 0 0 .33-.11l1.12-1.94a.27.27 0 0 0-.06-.35l-1.17-.91ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg></button>
+        <button class="study-gear" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.69-.98L14.6 2.64a.5.5 0 0 0-.5-.42h-4a.5.5 0 0 0-.5.42l-.27 2.43c-.61.25-1.18.58-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.23.4.32.61.22l2.49-1c.51.4 1.08.73 1.69.98l.27 2.43c.04.23.21.42.5.42h4c.28 0 .46-.18.5-.42l.27-2.43c.61-.25 1.18-.58 1.69-.98l2.49 1c.22.1.49.01.61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg></button>
       </div>
       <div class="row" style="justify-content:space-between; margin-bottom:4px">
         <span class="chip" id="studyProgress">0 / 0</span>
@@ -735,24 +739,6 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
           <div class="seg" id="langSeg"></div>
         </div>
         <div class="card">
-          <label class="lbl">Размер иероглифа</label>
-          <div class="seg" id="hanziSizeSeg">
-            <button data-v="1.35">Крупнее</button>
-            <button data-v="1" class="active">Обычно</button>
-            <button data-v="0.7">Меньше</button>
-          </div>
-          <label class="lbl">Размер пиньиня</label>
-          <div class="seg" id="pinyinSizeSeg">
-            <button data-v="1.5">Крупнее</button>
-            <button data-v="1" class="active">Обычно</button>
-            <button data-v="0.7">Меньше</button>
-          </div>
-          <label class="lbl">Размер перевода</label>
-          <div class="seg" id="trSizeSeg">
-            <button data-v="1.5">Крупнее</button>
-            <button data-v="1" class="active">Обычно</button>
-            <button data-v="0.7">Меньше</button>
-          </div>
           <label class="lbl">Подсказка в письме после промахов</label>
           <div class="seg" id="hintSeg">
             <button data-v="0">Сразу</button>
@@ -901,7 +887,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.6';
+const APP_VERSION='1.8.7';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1952,64 +1938,79 @@ function attachGuide(el, size){
 // ============================== STUDY ==============================
 let studyQueue=[], studyIdx=0;
 // Настройки показа в «Учить»: аудио (озвучка + автоповтор), пиньинь, перевод.
-// Все три включены по умолчанию; состояние сохраняется в settings как у «Письма».
-// Живут в модалке «Настройки экрана» (кнопка ⚙ справа сверху экрана «Учить»).
-let studyAudioOn=true, studyPyOn=true, studyTrOn=true;
-const STUDY_SETTINGS_KEYS=[['studyAudio','Аудио','🔊 озвучка + автоповтор'],['studyPy','Пиньин','подпись под иероглифом'],['studyTr','Перевод','перевод под пиньинем']];
+// Показ строк карточки в «Учить»: аудио, пиньинь, перевод, иероглиф.
+// Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
+let studyAudioOn=true, studyPyOn=true, studyTrOn=true, studyHanziOn=true;
+const STUDY_KEYS=[
+  ['studyAudio','Аудио','🔊 озвучка + автоповтор', null],
+  ['studyPy','Пиньин','подпись под иероглифом','mulP'],
+  ['studyTr','Перевод','перевод под пиньинем','mulT'],
+  ['studyHanzi','Иероглиф','главная строка карточки','mulH'],
+];
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
-  if(gear) gear.style.color = (studyAudioOn&&studyPyOn&&studyTrOn) ? '' : 'var(--red)';
-  const py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
+  if(gear) gear.style.color = (studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn) ? '' : 'var(--red)';
+  const hz=document.getElementById('studyHanzi'), py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
+  if(hz) hz.style.display=studyHanziOn?'':'none';
   if(py) py.style.display=studyPyOn?'':'none';
   if(tr) tr.style.display=studyTrOn?'':'none';
+  updateStudySize();
   renderStudySettings();
+}
+function studyFlag(k){ return k==='studyAudio'?studyAudioOn:(k==='studyPy'?studyPyOn:(k==='studyTr'?studyTrOn:studyHanziOn)); }
+function setStudyFlag(k,v){
+  if(k==='studyAudio'){ studyAudioOn=v; settings.studyAudio=v; }
+  else if(k==='studyPy'){ studyPyOn=v; settings.studyPy=v; }
+  else if(k==='studyTr'){ studyTrOn=v; settings.studyTr=v; }
+  else { studyHanziOn=v; settings.studyHanzi=v; }
+  persist(); applyStudyToggles();
+  if(k==='studyAudio'){ if(!v){ Player.stop(); speechSynthesis.cancel(); studyTouch(); } else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); } }
 }
 function openStudySettings(){
   closeAllModals();
   document.getElementById('modalStudySettings').classList.remove('hidden');
   renderStudySettings();
 }
+// ползунок размера: 50–200%, шаг 10; живёт в модалке и меняет mul* через applySizes()
+function studySizeSliderHTML(skey){
+  const cur=Math.round((settings[skey]||1)*100);
+  return `<div class="sn-slider"><input type="range" min="50" max="200" step="10" value="${cur}" data-size-key="${skey}"><span class="sn-slider-val" data-val-key="${skey}">${cur}%</span></div>`;
+}
 function renderStudySettings(){
   const m=document.getElementById('modalStudySettings');
   if(!m || m.classList.contains('hidden')) return;
   m.innerHTML=`<div class="sheet">
-    <div class="row"><h2>Настройки экрана</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
+    <div class="row"><h2>Настройки режима</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
     <div style="margin-top:6px">
-    ${STUDY_SETTINGS_KEYS.map(([key,label,hint])=>{
-      const v=key==='studyAudio'?studyAudioOn:(key==='studyPy'?studyPyOn:studyTrOn);
-      return `<div class="sn-row">
-        <div><div style="font-weight:700">${label}</div><div style="font-size:12px;color:var(--mut);font-weight:400;margin-top:2px">${hint}</div></div>
-        <button class="sn-switch ${v?'on':''}" data-study-key="${key}"></button>
+    ${STUDY_KEYS.map(([key,label,hint,skey])=>{
+      const v=studyFlag(key);
+      return `<div class="sn-block">
+        <div class="sn-row">
+          <div><div style="font-weight:700">${label}</div><div style="font-size:12px;color:var(--mut);font-weight:400;margin-top:2px">${hint}</div></div>
+          <button class="sn-switch ${v?'on':''}" data-study-key="${key}"></button>
+        </div>
+        ${skey?studySizeSliderHTML(skey):''}
       </div>`;
     }).join('')}
     </div>
   </div>`;
   m.querySelectorAll('.sn-switch').forEach(b=>{
-    b.onclick=()=>{
-      const k=b.dataset.studyKey;
-      if(k==='studyAudio') toggleStudyAudio();
-      else if(k==='studyPy') toggleStudyPy();
-      else if(k==='studyTr') toggleStudyTr();
+    b.onclick=()=>setStudyFlag(b.dataset.studyKey, !studyFlag(b.dataset.studyKey));
+  });
+  m.querySelectorAll('input[type=range][data-size-key]').forEach(r=>{
+    r.oninput=()=>{
+      const k=r.dataset.sizeKey;
+      const v=Math.round(Number(r.value));
+      settings[k]=v/100; persist();
+      applySizes();
+      requestAnimationFrame(()=>requestAnimationFrame(updateStudySize));
+      const val=m.querySelector(`[data-val-key="${k}"]`); if(val) val.textContent=v+'%';
     };
   });
 }
-function toggleStudyAudio(){
-  studyAudioOn=!studyAudioOn;
-  settings.studyAudio=studyAudioOn; persist();
-  applyStudyToggles();
-  if(!studyAudioOn){ Player.stop(); speechSynthesis.cancel(); studyTouch(); }
-  else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); }
-}
-function toggleStudyPy(){
-  studyPyOn=!studyPyOn;
-  settings.studyPy=studyPyOn; persist();
-  applyStudyToggles();
-}
-function toggleStudyTr(){
-  studyTrOn=!studyTrOn;
-  settings.studyTr=studyTrOn; persist();
-  applyStudyToggles();
-}
+function toggleStudyAudio(){ setStudyFlag('studyAudio', !studyAudioOn); }
+function toggleStudyPy(){ setStudyFlag('studyPy', !studyPyOn); }
+function toggleStudyTr(){ setStudyFlag('studyTr', !studyTrOn); }
 function shuffle(a){
   for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
   return a;
@@ -2065,8 +2066,8 @@ function showStudyCard(){
   big.textContent=it.hanzi;
   // размер подбирается автоматически: 1 символ — big, 2-4 — word, >=5 — sent
   big.className='big '+(it.hanzi.length===1?'':(it.hanzi.length<=4?'word':'sent'));
-  // фактический размер иероглифа в пикселях (после перерисовки)
-  requestAnimationFrame(()=>updateStudySize());
+  // фактические размеры (после перерисовки; двойной rAF — чтобы CJK-шрифт успел отрисоваться)
+  requestAnimationFrame(()=>requestAnimationFrame(()=>updateStudySize()));
   // пиньинь и перевод видны сразу (и крупно); скрыты, если выключены в тулбаре
   document.getElementById('studyPinyin').textContent=it.pinyin||'';
   document.getElementById('studyTr').textContent=trJoined(it)||'';
@@ -2074,14 +2075,27 @@ function showStudyCard(){
   else studyPlayLoop(it);
 }
 function updateStudySize(){
-  const big=document.getElementById('studyHanzi');
-  const el=document.getElementById('studySize'); if(!el||!big) return;
-  const px=Math.round(big.getBoundingClientRect().height);
-  if(!px){ return; }
-  const pct=Math.round(px/innerWidth*1000)/10;
-  el.textContent=px+' px · '+pct+'%';
+  const el=document.getElementById('studySize'); if(!el) return;
+  const scr=document.getElementById('scr-study'); if(scr && !scr.classList.contains('active')) return;
+  const width=innerWidth||1;
+  // иероглиф / пиньинь / перевод — каждый в пикселях и в процентах от ширины экрана
+  const parts=[];
+  const rows=[['studyHanzi','иер'],['studyPinyin','пин'],['studyTr','пер']];
+  for(const [pid,short] of rows){
+    const n=document.getElementById(pid); if(!n) continue;
+    let px=Math.round(n.getBoundingClientRect().height);
+    if(!px){
+      // скрытая строка (выключена в настройках) — не показываем её в подписи
+      if(n.style.display==='none' || getComputedStyle(n).display==='none') continue;
+      // CJK-шрифт может отработать на кадр позже: тогда берём размер из font-size
+      const fs=parseFloat(getComputedStyle(n).fontSize); if(!isFinite(fs)||!fs) continue; px=Math.round(fs*1.12);
+    }
+    const pct=Math.round(px/width*1000)/10;
+    parts.push(short+' '+px+' px · '+pct+'%');
+  }
+  el.textContent=parts.join(' / ');
 }
-// пересчитывать размер иероглифа при повороте/изменении ширины
+// пересчитывать размеры при повороте/изменении ширины и после смены слайдеров
 window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
 // --- Автоповтор озвучки в «Учить»: слово звучит один раз при показе, затем после
 // фактического КОНЦА озвучки повторяется ещё максимум STUDY_REPEAT_MAX раз с паузой,
@@ -3160,6 +3174,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.7','04.10.26','В «Учить» под карточкой — размеры иероглифа / пиньиня / перевода в пикселях и процентах; модалка шестерёнки переименована в «Настройки режима» и получила ползунки размера (50–200%, шаг 10) под «Пиньин», «Перевод» и новое поле «Иероглиф» с переключателем; шестерёнка — заливной классический значок; дубли сегментов размера из общих «Настроек» убраны'],
   ['1.8.6','04.10.26','Большие правки удобства: главный иероглиф/слово в «Учить» — 100px на телефоне и 140px на десктопе (предложения остаются компактными); шестерёнка настроек — у «Учить» янтарная, у «Экзамена» и «Письма» своя справа сверху (меню: Верно-неверно, Выбор ответов, 4-6-8-10, Все переводы, Подбор, Аудио / Контур, Рандом, Анимация, Аудио); убран дубль кнопок 4-6-8-10; в «Письме» под переводом — список всех слов в порядке добавления; в «Словаре» новая кнопка ✍️ «писать это слово», кнопка «Наверх» в конце списка и карточка в 3 колонки с рядом ★ 🔊 ✍️ ↑ ↓ и статусом справа («Уровень N. Повторов M» / «Уровень 5. Выучено»); скролл нигде не заезжает под нижнее меню; у конфликтов синхронизации показываются только 2 самые свежие карточки, а при явно свежих данных на одной стороне загрузка происходит автоматически; исправлена ошибка запуска после удаления старого тулбара экзамена'],
   ['1.8.5','04.10.26','Длинные слова и предложения больше не выталкивают кнопки за экран и не прячутся под ними ни в одном режиме: размер текста подбирается по длине (1 символ крупно, 2–4 средне, предложение компактно) — в «Экзамене», «Учить», письме-печати и «Подборе»; зона вопроса/подбора прокручивается, когда контент выше экрана'],
   ['1.8.4','03.10.26','Синхронизация прогресса больше не застревает в конфликтах: SRS (уровни, ответы) сливается автоматически по свежести таймстампа (новее всегда побеждает), экран «Конфликты» показывается только для контента (слова/переводы/аудио)'],
@@ -4147,9 +4162,6 @@ function bindSettings(){
       };
     });
   };
-  seg('hanziSizeSeg','mulH','float',applySizes);
-  seg('pinyinSizeSeg','mulP','float',applySizes);
-  seg('trSizeSeg','mulT','float',applySizes);
   seg('hintSeg','hint','num');
   seg('writeOrderSeg','writeOrder','str',onWriteOrderChange);
   seg('writeHintSeg','writeHint','str',onWriteHintChange);
@@ -5083,10 +5095,11 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   studyAudioOn=settings.studyAudio!==false;
   studyPyOn=settings.studyPy!==false;
   studyTrOn=settings.studyTr!==false;
+  studyHanziOn=settings.studyHanzi!==false;
   applyStudyToggles();
   activeLang=LANG_MAP[settings.activeLang]?settings.activeLang:'zh';
   // Статистика по языкам (Фаза 5): если ещё нет карты — мигрируем старую статистику в язык activeLang.
