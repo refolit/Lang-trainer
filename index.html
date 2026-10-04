@@ -79,9 +79,13 @@ header.top .sub{display:flex; gap:6px; align-items:center}
 .chip b{color:var(--ink); font-weight:800}
 header.top .ver{font-size:13px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
 
-/* Screens */
+/* Screens. Скролл-зона заканчивается НАД нижним меню: сама полоса прокрутки
+   не уезжает под панель вкладок (и последний контент тоже). */
 main{flex:1 1 auto; overflow:hidden; position:relative}
-.screen{position:absolute; inset:0; overflow-y:auto; padding:10px 16px calc(88px + env(safe-area-inset-bottom)); display:none}
+.screen{
+  position:absolute; left:0; right:0; top:0; bottom:calc(84px + env(safe-area-inset-bottom));
+  overflow-y:auto; padding:10px 16px 14px; display:none;
+}
 .screen.active{display:block}
 
 /* Bottom nav — pill tabs à la uHabits */
@@ -140,15 +144,16 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 }
 .big{
   font-family:var(--font-cjk); font-weight:700; line-height:1.12;
-  font-size:calc(50vmin * var(--mul-h,1));
+  /* одиночный иероглиф: большой, но не «огромный» — потолок 100px (телефон) / 140px (десктоп) */
+  font-size:calc(min(50vmin, 100px) * var(--mul-h,1));
   color:var(--ink); word-break:break-all; max-width:100%;
 }
-.big.word{font-size:calc(24vmin * var(--mul-h,1))}
+.big.word{font-size:calc(min(24vmin, 100px) * var(--mul-h,1))}
 /* Длинные слова и предложения: компактный шрифт + перенос по словам, чтобы текст
    не выталкивал пиньинь/перевод за экран и не прятался под кнопками. */
 .big.sent{font-size:calc(clamp(15px, 5.5vmin, 24px) * var(--mul-h,1)); line-height:1.4; word-break:normal; overflow-wrap:anywhere}
-.bigpy{font-size:calc(9vmin * var(--mul-p,1)); color:var(--amber); min-height:1.2em; font-family:system-ui,-apple-system,var(--font-cjk),sans-serif}
-.bigtr{font-size:calc(7.5vmin * var(--mul-t,1)); color:var(--mut); min-height:1.3em; line-height:1.4}
+.bigpy{font-size:calc(min(9vmin, 26px) * var(--mul-p,1)); color:var(--amber); min-height:1.2em; font-family:system-ui,-apple-system,var(--font-cjk),sans-serif}
+.bigtr{font-size:calc(min(7.5vmin, 20px) * var(--mul-t,1)); color:var(--mut); min-height:1.3em; line-height:1.4}
 /* Фактический размер иероглифа в пикселях (+ проценты от ширины экрана) */
 .bigsize{font-size:11px; color:var(--mut); opacity:.8; min-height:1.2em; line-height:1.3}
 .speaker{font-size:13px; color:var(--mut); letter-spacing:1px}
@@ -182,11 +187,12 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .repeat-counter{display:flex; align-items:center; gap:4px; font-size:13px; color:var(--mut)}
 .repeat-counter .num{font-weight:800; color:var(--ink); font-size:16px}
 
-/* Письмо: верхний тулбар */
+/* Письмо: верхний тулбар (Назад/Вперёд) */
 .write-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
 .write-toolbar .wbtn{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
 .write-toolbar .wbtn.lg{font-size:14px; padding:8px 13px}
 .write-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
+.write-head .wbtn.lg{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
 #writeWord{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:2px 0 8px; font-family:var(--font-cjk)}
 #writeWord .wch{font-size:40px; padding:3px 12px; border-radius:10px; background:var(--soft); color:var(--mut); line-height:1.3}
 #writeWord .wch.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
@@ -210,23 +216,27 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .wl-zh-pill{font-family:var(--font-cjk); font-size:19px; padding:4px 12px; border-radius:12px; background:var(--soft); color:var(--mut); cursor:pointer; line-height:1.4; border:1px solid transparent}
 .wl-zh-pill.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.35)}
 
-/* Словарь: центрированный список, карточки в 3 столбца */
+/* Словарь: центрированный список, карточки в 2 строки:
+   1) иероглиф / пиньин / перевод — 3 РАВНЫЕ колонки;
+   2) слева кнопки в ряд (★ ✍️ ↑ 🔊 ↓), справа статус «Уровень N. Повторов M». */
 #dictList{max-width:560px; margin:0 auto}
-.dict-card{display:flex; gap:10px; align-items:flex-start}
-.dc-cols{flex:1; display:grid; grid-template-columns:1.1fr .9fr 1.6fr; gap:10px; align-items:baseline; min-width:0}
+.dict-card{display:flex; flex-direction:column; gap:9px}
+.dc-cols{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:baseline; min-width:0}
 .dc{min-width:0; overflow-wrap:anywhere}
 .dc.zh{font-family:var(--font-cjk); font-size:24px; font-weight:600}
-.dc.py{color:#1565c0; font-size:15px; font-weight:700}
+.dc.py{color:#1565c0; font-size:14px; font-weight:700}
 html[data-theme="dark"] .dc.py{color:#7db8f2}
-.dc.tr{color:var(--mut); font-size:15px; font-weight:600; text-align:right}
-.dc-side{display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto}
-/* Кнопки карточки всегда сеткой 2×2 (★ ↑ / 🔊 ↓) — ровный вид и больше места тексту на любой ширине */
-.dc-btns{display:grid; grid-template-columns:34px 34px; grid-auto-rows:34px; gap:4px}
-.icon-btn{border:0; background:var(--soft); color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0}
+.dc.tr{color:var(--mut); font-size:14px; font-weight:600; text-align:right}
+.dc-side{display:flex; flex-direction:row; align-items:center; gap:8px; justify-content:space-between}
+/* Кнопки карточки теперь в один ряд (★ ✍️ ↑ 🔊 ↓) */
+.dc-btns{display:flex; gap:4px; align-items:center}
+.icon-btn{border:0; background:var(--soft); color:var(--mut); border-radius:10px; width:34px; height:34px; font-size:17px; display:inline-flex; align-items:center; justify-content:center; line-height:1; padding:0; flex:0 0 auto}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
 .icon-btn.arrow{font-size:21px; font-weight:900; color:var(--ink)}
-.dc-stat{font-size:11px; color:var(--mut); white-space:nowrap}
+.dc-stat{font-size:11px; color:var(--mut); white-space:nowrap; margin-left:2px}
+/* Кнопка «Наверх» — после последней карточки словаря, над нижним меню */
+.dict-scroll-top{width:100%; margin-top:14px; padding:12px 16px}
 .autolink{font-size:12px; color:var(--red); text-decoration:none; font-weight:600}
 .tr-row{display:flex; align-items:center; gap:8px; margin-top:6px}
 .tr-row input{flex:1; margin:0}
@@ -474,11 +484,26 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Изучение: маленькая кнопка настроек в правом верхнем углу экрана */
 .study-top{display:flex; justify-content:flex-end; margin:0 0 4px}
+/* Общий верхний ряд режимов: шестерёнка справа (Письмо) / чипы + шестерёнка (Экзамен) */
+.mode-top{display:flex; justify-content:flex-end; align-items:center; gap:8px; margin:0 0 4px; max-width:600px; margin-left:auto; margin-right:auto}
+.mode-top.exam-top{justify-content:center; flex-wrap:wrap}
+.mode-top.exam-top .study-gear{margin-left:auto}
+/* Письмо: строка «◀ Назад | текущее слово | Вперёд ▶» (остаётся на месте) */
+.write-head{display:flex; justify-content:center; align-items:center; gap:10px; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
+.write-head .wbtn.lg{width:auto}
+.write-head-label{flex:0 1 auto; min-width:0; font-size:13px; font-weight:700; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:46%}
+/* Пункты меню в окнах настроек Письма/Экзамена */
+.menu-item{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; font-weight:700}
+.menu-item:last-child{border-bottom:0}
+.menu-item .mi-label{flex:1 1 auto}
+.menu-item .mi-hint{display:block; font-size:12px; color:var(--mut); font-weight:400; margin-top:2px}
+.menu-item .seg.sm{flex:0 0 auto; margin-left:10px}
+.menu-item .seg.sm button{padding:5px 8px; font-size:12px}
 .study-gear{
-  width:34px; height:34px; border:1.5px solid var(--line); border-radius:50%;
-  background:var(--card); color:var(--mut); font-size:17px; line-height:1;
+  width:34px; height:34px; border:1.5px solid var(--amber); border-radius:50%;
+  background:var(--card); color:var(--amber); font-size:17px; line-height:1;
   display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
-  box-shadow:var(--shadow-sm);
+  box-shadow:var(--shadow-sm); flex:0 0 auto;
 }
 .study-gear svg{width:17px; height:17px; fill:currentColor}
 .study-gear:active{transform:translateY(1px)}
@@ -526,9 +551,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .match-pair.sel{background:var(--amber); border-color:#d6930b; color:#3b2f00; transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
 .match-pair.done{opacity:.18; pointer-events:none; transform:none; box-shadow:none}
 
-/* Десктоп/ноутбук (≥1024px): крупнее карточки «Выбора ответов» и «Подбора».
+/* Десктоп/ноутбук (≥1024px): крупнее карточки «Выбора ответов» и «Подбора»,
+   одиночный иероглиф в «Учить» до 140px.
    Телефоны и планшеты (<1024px) — размеры прежние. */
 @media (min-width:1024px){
+  .big{font-size:calc(min(50vmin, 140px) * var(--mul-h,1))}
+  .big.word{font-size:calc(min(24vmin, 120px) * var(--mul-h,1))}
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
   .exam-opt{font-size:19px; padding:18px 14px; min-height:91px; word-break:break-word}
   .match-pair{font-size:22px; line-height:1.3}
@@ -602,12 +630,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
   <!-- ПИСЬМО -->
   <section class="screen" id="scr-write">
-    <div class="write-toolbar">
-      <button class="btn sec wbtn on" id="writeAudio">🔊 Аудио</button>
-      <button class="btn sec wbtn" id="writeAnim">✨ Анимация</button>
-      <button class="btn sec wbtn on" id="writeOutline">◌ Контур</button>
-      <button class="btn sec wbtn" id="writeRand">🎲 Рандомно</button>
+    <div class="mode-top">
+      <button class="study-gear" id="writeSettingsBtn" title="Настройки письма" aria-label="Настройки письма"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a.5.5 0 0 0 .05-.2v-.19a.5.5 0 0 0-.05-.2l1.17-.91a.27.27 0 0 0 .06-.35l-1.12-1.94a.27.27 0 0 0-.33-.11l-1.38.56a4.1 4.1 0 0 0-.34-.2l-.21-1.47a.27.27 0 0 0-.27-.23h-2.24a.27.27 0 0 0-.27.23l-.21 1.47c-.12.06-.23.13-.34.2l-1.38-.56a.27.27 0 0 0-.33.11L9.05 11.3a.27.27 0 0 0 .06.35l1.17.91a.5.5 0 0 0-.05.2v.19a.5.5 0 0 0 .05.2l-1.17.91a.27.27 0 0 0-.06.35l1.12 1.94a.27.27 0 0 0 .33.11l1.38-.56c.11.07.22.13.34.2l.21 1.47c.01.13.12.23.27.23h2.24c.15 0 .26-.1.27-.23l.21-1.47c.12-.07.23-.13.34-.2l1.38.56a.27.27 0 0 0 .33-.11l1.12-1.94a.27.27 0 0 0-.06-.35l-1.17-.91ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg></button>
+    </div>
+    <div class="write-head">
       <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
+      <span class="write-head-label" id="writeHeadLabel"></span>
       <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
     </div>
     <div id="writeWord"></div>
@@ -621,22 +649,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
   <!-- ЭКЗАМЕН -->
   <section class="screen" id="scr-exam">
-    <div class="row" style="justify-content:space-between; margin-bottom:2px; max-width:600px; margin-left:auto; margin-right:auto">
+    <div class="mode-top exam-top">
       <span class="chip" id="examProgress"></span>
       <span class="chip" id="examScore"></span>
-    </div>
-    <div class="exam-toolbar">
-      <button class="btn sec wbtn on" id="examAudio">🔊 Аудио</button>
-      <button class="btn sec wbtn on" data-exam-toggle="tf">Верно-неверно</button>
-      <button class="btn sec wbtn on" data-exam-toggle="choice">Выбор ответов</button>
-      <span class="seg sm" id="examChoiceSeg" style="width:auto">
-        <button data-v="4">4</button>
-        <button data-v="6">6</button>
-        <button data-v="8" class="active">8</button>
-        <button data-v="10">10</button>
-      </span>
-      <button class="btn sec wbtn on" id="examAllTr">Все переводы</button>
-      <button class="btn sec wbtn" id="examMatchBtn">Подбор</button>
+      <button class="study-gear" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a.5.5 0 0 0 .05-.2v-.19a.5.5 0 0 0-.05-.2l1.17-.91a.27.27 0 0 0 .06-.35l-1.12-1.94a.27.27 0 0 0-.33-.11l-1.38.56a4.1 4.1 0 0 0-.34-.2l-.21-1.47a.27.27 0 0 0-.27-.23h-2.24a.27.27 0 0 0-.27.23l-.21 1.47c-.12.06-.23.13-.34.2l-1.38-.56a.27.27 0 0 0-.33.11L9.05 11.3a.27.27 0 0 0 .06.35l1.17.91a.5.5 0 0 0-.05.2v.19a.5.5 0 0 0 .05.2l-1.17.91a.27.27 0 0 0-.06.35l1.12 1.94a.27.27 0 0 0 .33.11l1.38-.56c.11.07.22.13.34.2l.21 1.47c.01.13.12.23.27.23h2.24c.15 0 .26-.1.27-.23l.21-1.47c.12-.07.23-.13.34-.2l1.38.56a.27.27 0 0 0 .33-.11l1.12-1.94a.27.27 0 0 0-.06-.35l-1.17-.91ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg></button>
     </div>
     <div id="examBody" style="display:flex; flex-direction:column; align-items:center; width:100%; max-width:600px; margin:0 auto"></div>
     <div class="empty hidden" id="examEmpty">
@@ -809,6 +825,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 <!-- НАСТРОЙКИ ЭКРАНА «УЧИТЬ» -->
 <div class="modal hidden" id="modalStudySettings"></div>
+<!-- НАСТРОЙКИ ЭКРАНА «ПИСЬМО» -->
+<div class="modal hidden" id="modalWriteSettings"></div>
+<!-- НАСТРОЙКИ ЭКРАНА «ЭКЗАМЕН» -->
+<div class="modal hidden" id="modalExamSettings"></div>
 
 <nav class="tabs">
   <button data-scr="scr-dict" class="active"><span class="ic">📚</span>Словарь</button>
@@ -881,7 +901,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.5';
+const APP_VERSION='1.8.6';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1519,8 +1539,8 @@ function renderDict(){
   list.innerHTML=arr.map(it=>{
     const learned=isLearned(it);
     const stat=learned
-      ? ('Уровень '+levelOf(it)+' · выучено')
-      : ('Уровень '+levelOf(it)+' · Повторялось '+(it.correct||0)+' раз.');
+      ? ('Уровень '+levelOf(it)+' · Выучено')
+      : ('Уровень '+levelOf(it)+' · Повторов '+(it.correct||0));
     return `<div class="card item-line" data-id="${it.id}">
       <div class="dict-card">
         <div class="dc-cols">
@@ -1531,8 +1551,9 @@ function renderDict(){
         <div class="dc-side">
           <div class="dc-btns">
             <button class="icon-btn star ${it.starred?'starred':''}" data-act="star" title="Звезда">★</button>
-            <button class="icon-btn arrow" data-act="up" title="Повысить уровень">↑</button>
             <button class="icon-btn" data-act="play" title="Произнести">🔊</button>
+            <button class="icon-btn" data-act="write" title="Писать этот иероглиф/слово">✍️</button>
+            <button class="icon-btn arrow" data-act="up" title="Повысить уровень">↑</button>
             <button class="icon-btn arrow" data-act="down" title="Понизить уровень">↓</button>
           </div>
           <div class="dc-stat">${stat}</div>
@@ -1540,6 +1561,7 @@ function renderDict(){
       </div>
     </div>`;
   }).join('');
+  list.innerHTML+=`<button class="btn sec dict-scroll-top" id="dictScrollTop">Наверх</button>`;
   list.querySelectorAll('.item-line').forEach(el=>{
     const id=el.dataset.id;
     el.onclick=()=>openItemModal(id);
@@ -1550,9 +1572,12 @@ function renderDict(){
         else if(act==='play'){ const it=items.find(x=>x.id===id); if(it) playWordNorm(it); }
         else if(act==='up') promoteLevel(id);
         else if(act==='down') demoteLevel(id);
+        else if(act==='write'){ const it=items.find(x=>x.id===id); if(it) go('scr-write', it); }
       };
     });
   });
+  const top=document.getElementById('dictScrollTop');
+  top.onclick=()=>{ document.getElementById('scr-dict').scrollTo({top:0, behavior:'smooth'}); };
 }
 
 // ============================== ITEM MODAL ==============================
@@ -2281,6 +2306,7 @@ function setWriteItemTyping(it, speakNow){
   </div>`;
   renderWriteList();
   renderTypeCardsHint();
+  updateWriteHeadLabel();
   const inp=area.querySelector('#typeInput');
   inp.onkeydown=e=>{
     if(e.key==='Enter'){ e.preventDefault(); checkTyped(inp); }
@@ -2327,6 +2353,7 @@ function renderWriteLabels(){
   const ch=writeChars[writeCharIdx];
   document.getElementById('writePy').textContent=ch?toPinyin(ch):'';
   document.getElementById('writeTr').textContent=(writeCurItem&&trJoined(writeCurItem))||'';
+  updateWriteHeadLabel();
 }
 function renderWriteList(){
   const el=document.getElementById('writeList'); if(!el) return;
@@ -2347,9 +2374,14 @@ function writeGoto(idx){
   startWriteChar();
 }
 function writeWordList(){
-  // кандидаты: по приоритету и «давно не видел — первым»; чередование 2:1.
-  const ids=new Set(writableItems().map(x=>x.id));
-  const list=queueStudy().filter(it=>ids.has(it.id));
+  // ВСЕ слова/предложения словаря в порядке добавления (новые сверху, старые ниже);
+  // при «Рандом» — перемешанный, но тот же полный набор. Список под переводом и
+  // «◀ Назад / Вперёд ▶» ходят по одному и тому же порядку.
+  const list=writableItems().slice().sort((a,b)=>{
+    const da=String(a.addedOn||''), db=String(b.addedOn||'');
+    if(da!==db) return da<db?1:-1;   // дата больше (новее) — сверху
+    return (a.id||'').localeCompare(b.id||'');
+  });
   if(!writeRandOn()) return list;
   return shuffle(list);
 }
@@ -2538,6 +2570,59 @@ function playWriteAnim(){
   writer.animateCharacter({onComplete:()=>{ writeAnimRunning=false; }});
 }
 
+// ---------- Шестерёнка «Письмо»: Контур / Рандом / Анимация / Аудио ----------
+function openWriteSettings(){
+  closeAllModals();
+  document.getElementById('modalWriteSettings').classList.remove('hidden');
+  renderWriteSettings();
+}
+function renderWriteSettings(){
+  const m=document.getElementById('modalWriteSettings');
+  if(!m || m.classList.contains('hidden')) return;
+  const rows=[
+    ['Контур','Помогающая сетка и контур иероглифа','sn','writeOutline',writeOutlineOn],
+    ['Рандом','Перемешивать порядок слов','sn','writeRand',writeRandOn()]
+  ];
+  if(hasStrokes()) rows.splice(1,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
+  else rows.splice(2,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
+  if(!hasStrokes()) rows.push(['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]);
+  else rows.unshift(['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]);
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Настройки письма</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalWriteSettings')">✕</button></div>
+    <div style="margin-top:6px">
+    ${rows.map(([label,hint,type,key,v])=>{
+      if(type==='sn') return `<div class="menu-item" data-write-key="${key}">
+        <div class="mi-label">${label}<span class="mi-hint">${hint}</span></div>
+        <button class="sn-switch ${v?'on':''}" data-write-key="${key}"></button>
+      </div>`;
+      return '';
+    }).join('')}
+    </div>
+  </div>`;
+  m.querySelectorAll('[data-write-key]').forEach(el=>{
+    const k=el.dataset.writeKey;
+    el.onclick=()=>{
+      if(k==='writeOutline') toggleWriteOutline();
+      else if(k==='writeRand') toggleWriteRand();
+      else if(k==='writeAnim') toggleWriteAnim();
+      else if(k==='writeAudio') toggleWriteAudio();
+    };
+  });
+}
+// подпись текущего слова в строке «◀ Назад | слово | Вперёд ▶»
+function updateWriteHeadLabel(){
+  const el=document.getElementById('writeHeadLabel'); if(!el) return;
+  el.textContent='';
+  if(hasStrokes()){
+    const ch=writeChars[writeCharIdx];
+    el.textContent=(writeCurItem?trJoined(writeCurItem)+' · ':'')+(ch||'');
+    el.style.display='';
+  }else{
+    el.textContent=writeCurItem?writeCurItem.hanzi:'';
+    el.style.display=writeCurItem?'':'none';
+  }
+}
+
 // ============================== EXAM ==============================
 // examSeq — упорядоченный поток заданий (слова с повтором по числу иероглифов в Письменно);
 // каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
@@ -2612,9 +2697,6 @@ function updateExamScore(){
   document.getElementById('examScore').textContent='✓ '+examRight;
 }
 function updateExamToggleUI(){
-  document.querySelectorAll('.exam-toolbar [data-exam-toggle]').forEach(b=>{
-    b.classList.toggle('on', !!examSettings[b.dataset.examToggle]);
-  });
   syncExamChoiceSeg();
 }
 function syncExamChoiceSeg(){
@@ -2674,7 +2756,6 @@ function examSpeakWord(it){
 function toggleExamAudio(){
   examAudioOn=!examAudioOn;
   settings.examAudio=examAudioOn; persist();
-  document.getElementById('examAudio').classList.toggle('on', examAudioOn);
   clearExamIdle();
   if(!examAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
   else { const it=examCurrentIt; if(it&&it.hanzi){ speak(it.hanzi,1); startExamRepeat(it); } }
@@ -2682,7 +2763,73 @@ function toggleExamAudio(){
 function toggleExamAllTr(){
   examAllTr=!examAllTr;
   settings.examAllTr=examAllTr; persist();
-  document.getElementById('examAllTr').classList.toggle('on', examAllTr);
+}
+function toggleExamMode(k){
+  examSettings[k]=!examSettings[k];
+  // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
+  if(!examSettings.tf && !examSettings.choice){ examSettings[k]=true; }
+  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice;
+  persist();
+}
+// ---------- Шестерёнка «Экзамен»: Верно-Неверно / Выбор ответов / 4-6-8-10 / Все переводы / Подбор / Аудио ----------
+function openExamSettings(){
+  closeAllModals();
+  document.getElementById('modalExamSettings').classList.remove('hidden');
+  renderExamSettings();
+}
+function renderExamSettings(){
+  const m=document.getElementById('modalExamSettings');
+  if(!m || m.classList.contains('hidden')) return;
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Настройки экзамена</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalExamSettings')">✕</button></div>
+    <div style="margin-top:6px">
+      <div class="menu-item">
+        <div class="mi-label">Верно-неверно<span class="mi-hint">Показывать задания «Верно / Не верно»</span></div>
+        <button class="sn-switch ${examSettings.tf?'on':''}" data-exam-key="tf"></button>
+      </div>
+      <div class="menu-item">
+        <div class="mi-label">Выбор ответов<span class="mi-hint">Показывать задания с вариантами ответов</span></div>
+        <button class="sn-switch ${examSettings.choice?'on':''}" data-exam-key="choice"></button>
+      </div>
+      <div class="menu-item">
+        <div class="mi-label">Число вариантов<span class="mi-hint">Сколько карточек в «Выборе ответов»</span></div>
+        <span class="seg sm" id="examChoiceSeg" style="flex:0 0 auto; margin-left:10px">
+          <button data-v="4">4</button><button data-v="6">6</button>
+          <button data-v="8" class="active">8</button><button data-v="10">10</button>
+        </span>
+      </div>
+      <div class="menu-item">
+        <div class="mi-label">Все переводы<span class="mi-hint">Использовать альтернативные переводы в заданиях</span></div>
+        <button class="sn-switch ${examAllTr?'on':''}" data-exam-key="allTr"></button>
+      </div>
+      <div class="menu-item">
+        <div class="mi-label">Подбор<span class="mi-hint">Игра: соединить иероглиф и перевод</span></div>
+        <button class="btn sec sm" data-exam-key="match" style="width:auto">Играть</button>
+      </div>
+      <div class="menu-item">
+        <div class="mi-label">Аудио<span class="mi-hint">Озвучка слов в заданиях</span></div>
+        <button class="sn-switch ${examAudioOn?'on':''}" data-exam-key="audio"></button>
+      </div>
+    </div>
+  </div>`;
+  m.querySelectorAll('[data-exam-key]').forEach(el=>{
+    el.onclick=()=>{
+      const k=el.dataset.examKey;
+      if(k==='tf') toggleExamMode('tf');
+      else if(k==='choice') toggleExamMode('choice');
+      else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
+      else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
+      else if(k==='match'){ closeModal('modalExamSettings'); matchStart(); }
+    };
+  });
+  m.querySelectorAll('#examChoiceSeg button').forEach(b=>{
+    b.classList.toggle('active', +b.dataset.v===examChoiceN());
+    b.onclick=()=>{
+      examSettings.choiceN=+b.dataset.v;
+      examChoiceChanged();
+      renderExamSettings();
+    };
+  });
 }
 // сбрасывает отсчёт бездействия на новое взаимодействие (касание/ответ/рисование)
 function examTouch(){
@@ -2814,30 +2961,14 @@ function renderExamTF(q){
 function renderExamChoice(q){
   const it=q.it;
   const body=document.getElementById('examBody');
-  // вопрос один раз; варианты перерисовываются мгновенно при смене 4-6-8-10
+  // вопрос один раз; число вариантов (4-6-8-10) меняется в шестерёнке → мгновенная перерисовка
   body.innerHTML=`
     <div class="exam-q" style="margin-bottom:14px">
       <div class="eq-word ${eqWordClass(it.hanzi)}">${escapeHtml(it.hanzi)}</div>
     </div>
     <div class="exam-q" style="width:100%">
-      <div class="seg sm" style="width:auto; margin-bottom:4px">
-        <button data-v="4">4</button><button data-v="6">6</button>
-        <button data-v="8" class="active">8</button><button data-v="10">10</button>
-      </div>
       <div id="examOpts" class="exam-opts"></div>
     </div>`;
-  const seg=body.querySelector('.seg.sm');
-  seg.querySelectorAll('button').forEach(b=>{
-    b.classList.toggle('active', +b.dataset.v===examChoiceN());
-    b.onclick=()=>{
-      seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
-      examSettings.choiceN=+b.dataset.v;
-      settings.examChoiceN=examSettings.choiceN;
-      persist();
-      drawOpts(+b.dataset.v);   // мгновенно: тот же иероглиф, новое число карточек
-      syncExamChoiceSeg();
-    };
-  });
   function drawOpts(N){
     const correct=examPickTr(it);
     const opts=[correct];
@@ -3029,6 +3160,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.6','04.10.26','Большие правки удобства: главный иероглиф/слово в «Учить» — 100px на телефоне и 140px на десктопе (предложения остаются компактными); шестерёнка настроек — у «Учить» янтарная, у «Экзамена» и «Письма» своя справа сверху (меню: Верно-неверно, Выбор ответов, 4-6-8-10, Все переводы, Подбор, Аудио / Контур, Рандом, Анимация, Аудио); убран дубль кнопок 4-6-8-10; в «Письме» под переводом — список всех слов в порядке добавления; в «Словаре» новая кнопка ✍️ «писать это слово», кнопка «Наверх» в конце списка и карточка в 3 колонки с рядом ★ 🔊 ✍️ ↑ ↓ и статусом справа («Уровень N. Повторов M» / «Уровень 5. Выучено»); скролл нигде не заезжает под нижнее меню; у конфликтов синхронизации показываются только 2 самые свежие карточки, а при явно свежих данных на одной стороне загрузка происходит автоматически; исправлена ошибка запуска после удаления старого тулбара экзамена'],
   ['1.8.5','04.10.26','Длинные слова и предложения больше не выталкивают кнопки за экран и не прячутся под ними ни в одном режиме: размер текста подбирается по длине (1 символ крупно, 2–4 средне, предложение компактно) — в «Экзамене», «Учить», письме-печати и «Подборе»; зона вопроса/подбора прокручивается, когда контент выше экрана'],
   ['1.8.4','03.10.26','Синхронизация прогресса больше не застревает в конфликтах: SRS (уровни, ответы) сливается автоматически по свежести таймстампа (новее всегда побеждает), экран «Конфликты» показывается только для контента (слова/переводы/аудио)'],
   ['1.8.3','03.10.26','Окно конфликтов синхронизации: кнопки «Локально»/«Облако» подсвечиваются при выборе, «Применить» прикреплена к низу и видна всегда. Экзамен → Выбор ответов: кнопки теперь строго 2 в ряд на всю ширину экрана (раньше блок сжимался до ширины содержимого, и короткие слова давали мелкие кнопки) и выше на 30%'],
@@ -3864,6 +3996,13 @@ function pluralDays(n){
   if(d>=2&&d<=4&&(h<10||h>=20)) return 'дня';
   return 'дней';
 }
+// русское склонение произвольного слова: pluralRu(5,'карточка','карточки','карточек')
+function pluralRu(n, one, few, many){
+  const d=n%10, h=n%100;
+  if(d===1&&h!==11) return one;
+  if(d>=2&&d<=4&&(h<10||h>=20)) return few;
+  return many;
+}
 function renderStStreaks(){
   const listEl=document.getElementById('stStreakList'); if(!listEl) return;
   const act=stats.activity||{};
@@ -4209,32 +4348,10 @@ document.getElementById('studyAgain').onclick=()=>{
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
-document.getElementById('writeAudio').onclick=toggleWriteAudio;
-document.getElementById('writeAnim').onclick=toggleWriteAnim;
-document.getElementById('writeOutline').onclick=toggleWriteOutline;
-document.getElementById('writeRand').onclick=toggleWriteRand;
 document.getElementById('writePrev').onclick=writePrev;
 document.getElementById('writeNext').onclick=writeNext;
-document.querySelectorAll('.exam-toolbar [data-exam-toggle]').forEach(b=>{
-  b.onclick=()=>{
-    const k=b.dataset.examToggle;
-    examSettings[k]=!examSettings[k];
-    // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
-    if(!examSettings.tf && !examSettings.choice){ examSettings[k]=true; }
-    settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice;
-    b.classList.toggle('on', !!examSettings[k]);
-    persist();
-  };
-});
-document.getElementById('examAudio').onclick=toggleExamAudio;
-document.getElementById('examAllTr').onclick=toggleExamAllTr;
-document.getElementById('examMatchBtn').onclick=()=>{ matchStart(); };
-document.getElementById('examChoiceSeg').querySelectorAll('button').forEach(b=>{
-  b.onclick=()=>{
-    examSettings.choiceN=+b.dataset.v;
-    examChoiceChanged();
-  };
-});
+document.getElementById('writeSettingsBtn').onclick=openWriteSettings;
+document.getElementById('examSettingsBtn').onclick=openExamSettings;
 document.getElementById('btnExport').onclick=doExport;
 document.getElementById('btnImport').onclick=()=>document.getElementById('fileImport').click();
 document.getElementById('fileImport').onchange=e=>{ if(e.target.files[0]) doImportFile(e.target.files[0]); e.target.value=''; };
@@ -4530,17 +4647,11 @@ function decidePart(part, loc, cl){
   // Экран конфликтов для прогресса НЕ показываем: из-за того, что коробку меняет каждое занятие,
   // обе стороны почти всегда «меняли» одну и ту же карточку, и каждое устройство, выбрав
   // «Локально», перезаписывало свежий прогресс другого — прогресс не сходился никогда.
-  if(part==='progress'){
-    if(locT===remT && locT>0 && sigE) return 'pull';   // часы совпали — решить нельзя, берём облако
-    if(locT>remT) return 'push';
-    if(locT<remT) return 'pull';
-    return 'none';
-  }
-  if(locT>0 && remT>0 && locT!==remT && sigE) return 'conflict';
-  // Таймстампы равны, но данные разные: часы устройств сошлись (массовая правка в одну секунду)
-  // или совпали до миллисекунды. Спор решить нельзя, поэтому НЕ объявляем конфликт и не
-  // блокируем синхронизацию — победителем считаем облако (защищает от зависшего окна выбора).
-  if(locT===remT && locT>0 && sigE) return 'pull';
+  // Конфликт показываем ТОЛЬКО когда таймстампы равны (часы устройств сошлись / совпали
+  // до миллисекунды), но стороны меняли часть по-разному. Обе стороны реально «свежие»
+  // одновременно — авто-выбор невозможен, нужен человек.
+  if(locT===remT && locT>0 && sigE) return 'conflict';
+  // Явно свежая сторона → чистое LWW, окно конфликтов не показываем (как и для прогресса).
   if(locT>remT) return 'push';
   if(locT<remT) return 'pull';
   return 'none';
@@ -4597,8 +4708,18 @@ function modalSyncConflicts(rows){
     // (иначе блок с «0 карт.» выглядел бы пустым и вводил в заблуждение).
     if(cnt.content.n) html+=sideHTML('content','Контент (слова, переводы, аудио)');
     if(cnt.progress.n) html+=sideHTML('progress','Прогресс (уровень, ответы)');
+    // Детали: показываем только 2 самые свежие карточки (считая по обеим сторонам),
+    // чтобы список не разрастался при массовом переносе базы что на одном устройстве,
+    // что на другом. Остальные — общим счётчиком «+ ещё N».
+    const DETAIL_MAX=2;
+    const byAge=(a,b)=>{
+      const t=x=>Math.max(x.it.updated_at||0, x.it.prog_at||0, x.cloudIt.updated_at||0, x.cloudIt.prog_at||0);
+      return t(b)-t(a);
+    };
+    const shown=[...rows].sort(byAge).slice(0, DETAIL_MAX);
+    const restN=rows.length-shown.length;
     html+='<div class="cf-list-lbl">Детали для сравнения</div>';
-    for(const row of rows){
+    for(const row of shown){
       const loc=row.it, cl=row.cloudIt;
       const langName=(LANG_MAP[loc.lang||cl.lang]||LANGS[0]).name;
       html+=`<div class="conflict-card">
@@ -4621,7 +4742,8 @@ function modalSyncConflicts(rows){
       }
       html+=`</div>`;
     }
-    html+=`<div class="cf-apply-row"><div class="muted" style="margin-bottom:8px">Выберите сторону выше — нажмите «Применить».</div><button class="btn" id="cfApply" style="width:100%">Применить</button></div>`;
+    if(restN>0) html+=`<div class="muted" style="text-align:center; padding:4px 0 10px">+ ещё ${restN} ${pluralRu(restN,'карточка','карточки','карточек')}</div>`;
+    html+=`<div class="cf-apply-row"><button class="btn" id="cfApply" style="width:100%">Применить</button></div>`;
     html+=`</div>`;
     m.innerHTML=html;
     m.classList.remove('hidden');
@@ -4977,8 +5099,6 @@ async function boot(){
   examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, match:false};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
-  document.getElementById('examAudio').classList.toggle('on', examAudioOn);
-  document.getElementById('examAllTr').classList.toggle('on', examAllTr);
   SESS=settings.sessN||0;
   for(const it of items) migrateItem(it);
   for(const it of items) await migrateNormAudio(it);
