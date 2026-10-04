@@ -923,7 +923,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.10';
+const APP_VERSION='1.8.11';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2143,21 +2143,39 @@ const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=29;
 const STUDY_TR_MOBILE=27, STUDY_TR_DESKTOP=19;
 const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
-function applyStudySizes(){
-  const n=document.getElementById('studyHanzi'); if(!n) return;
+function studyFonts(chars){
   const desktop=innerWidth>=1024;
-  const chars=Array.from((n.textContent||'')).length;
   const sent=chars>=STUDY_SENT_BREAK;
   const mulH=settings.mulH||1, mulP=settings.mulP||1, mulT=settings.mulT||1;
-  const hz=(sent ? (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)*STUDY_SENT_RATIO
-                 : (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)) * mulH;
-  n.style.fontSize = hz.toFixed(1)+'px';
-  n.style.lineHeight = sent ? 1.4 : '';
-  if(sent){ n.style.wordBreak='normal'; n.style.overflowWrap='anywhere'; } else { n.style.wordBreak='break-all'; n.style.overflowWrap=''; }
+  const hz=(desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)*STUDY_SENT_RATIO*mulH;
+  const py=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP;
+  const tr=(desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE)*mulT;
+  return {desktop, sent, hz, py, tr};
+}
+function applyStudySizes(){
+  const n=document.getElementById('studyHanzi'); if(!n) return;
+  const f=studyFonts(Array.from((n.textContent||'')).length);
+  n.style.fontSize = f.hz.toFixed(1)+'px';
+  n.style.lineHeight = f.sent ? 1.4 : '';
+  if(f.sent){ n.style.wordBreak='normal'; n.style.overflowWrap='anywhere'; } else { n.style.wordBreak='break-all'; n.style.overflowWrap=''; }
   const py=document.getElementById('studyPinyin');
-  if(py){ const ps=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP; py.style.fontSize=ps.toFixed(1)+'px'; }
+  if(py) py.style.fontSize=f.py.toFixed(1)+'px';
   const tr=document.getElementById('studyTr');
-  if(tr){ const ts=(desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE)*mulT; tr.style.fontSize=ts.toFixed(1)+'px'; }
+  if(tr) tr.style.fontSize=f.tr.toFixed(1)+'px';
+}
+// Единый размер текста вопроса в «Экзамене» — тот же, что в «Учить» (иер/пин/пер).
+function eqSizesStyle(hanzi, opts){
+  const f=studyFonts(Array.from((hanzi||'')).length);
+  const o=opts||{};
+  const lines=[];
+  if(o.word){
+    lines.push('font-size:'+f.hz.toFixed(1)+'px');
+    if(f.sent){ lines.push('line-height:1.4','word-break:normal','overflow-wrap:anywhere'); }
+    else { lines.push('line-height:1.12','word-break:break-all'); }
+  }
+  if(o.py) lines.push('font-size:'+f.py.toFixed(1)+'px');
+  if(o.tr) lines.push('font-size:'+f.tr.toFixed(1)+'px');
+  return lines.join(';');
 }
 function updateStudySize(){
   const el=document.getElementById('studySize'); if(!el) return;
@@ -3065,9 +3083,9 @@ function renderExamTF(q){
   const body=document.getElementById('examBody');
   body.innerHTML=`
     <div class="exam-q">
-      <div class="eq-word ${eqWordClass(it.hanzi)}">${escapeHtml(it.hanzi)}</div>
-      <div class="exam-py" style="font-size:20px; font-weight:700">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
-      <div class="eq-tr" style="font-size:20px; font-weight:700">${escapeHtml(tr)}</div>
+      <div class="eq-word" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
+      <div class="exam-py" style="${eqSizesStyle(it.hanzi,{py:true})}">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
+      <div class="eq-tr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${escapeHtml(tr)}</div>
     </div>
     <div class="exam-spacer"></div>
     <div class="btn-col">
@@ -3090,7 +3108,7 @@ function renderExamChoice(q){
   // вопрос один раз; число вариантов (4-6-8-10) меняется в шестерёнке → мгновенная перерисовка
   body.innerHTML=`
     <div class="exam-q" style="margin-bottom:14px">
-      <div class="eq-word ${eqWordClass(it.hanzi)}">${escapeHtml(it.hanzi)}</div>
+      <div class="eq-word" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
     </div>
     <div class="exam-q" style="width:100%">
       <div id="examOpts" class="exam-opts"></div>
@@ -3289,6 +3307,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.11','05.10.26','Режим «Экзамен» теперь показывает вопрос теми же размерами, что «Учить» (иероглиф/пиньинь/перевод — один источник, ползунки «Учить» действуют и в экзамене); service worker обновлён: index.html всегда берётся из сети, поэтому новые версии больше не «застревают» в кэше браузера'],
   ['1.8.10','05.10.26','«Учить» — ползунки размера теперь отсчитываются от золотого стандарта: на десктопе 100% = иероглиф 57px / пиньинь 29px / перевод 19px (телефон 100/38/27), а у тех, кто раньше держал 60/60/70, ползунки один раз сами встали на 100% — крутить вручную не нужно'],
   ['1.8.9','04.10.26','Размеры «Учить» подобраны под ноутбук 14″: главный иероглиф 95px / пиньинь 49px / перевод 27px на десктопе (телефон 100/38/27), предложения — тот же размер, что стандарт (убрано уменьшение до ~72%)'],
   ['1.8.8','04.10.26','Правки от 04.10.26 22:26: в «Учить» — главный иероглиф 100/134px, пиньинь 38/52px, перевод 28px (предложения ~72%), модалка «Настройки режима Изучение» с порядком Аудио→Иероглиф→Пиньинь→Перевод и подписями; в «Словаре» — «Уровень N / Повторов M» в 2 строки на телефоне, плавающая стрелка «Наверх» для длинных списков, перевод чёрный жирный; в «Письме» — переключатели Контур/Аудио/Анимация/Рандом (Анимация выкл по умолчанию), «Настройки режима Письмо», Назад/Вперед по краям с ползунком размера, шестерёнка справа от «Вперед», компактная подсказка с переключателем и ползунком, убрана строка с иероглифом и переводом между кнопками, список слов строго по порядку добавления (свежие первыми); в «Экзамене» — шестерёнка справа, переключатели перерисовываются сразу, в «Подборе» нет 7-сек повтора озвучки экзамена и карточки одной высоты; на «Ещё → Синхронизация» журнал обновляется сразу после синка, а «Новое имя этого устройства» задаёт имя для будущих записей журнала'],
@@ -5272,9 +5291,10 @@ async function boot(){
 }
 boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
 
-// PWA: service worker только на https/localhost (иначе — просто кэш браузера)
+// PWA: service worker только на https/localhost (иначе — просто кэш браузера).
+// updateViaCache:'none' — браузер всегда берёт свежий sw.js, не кэшированный старый.
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).catch(()=>{});
 }
 </script>
 </body>
