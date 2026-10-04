@@ -144,14 +144,11 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 }
 .big{
   font-family:var(--font-cjk); font-weight:700; line-height:1.12;
-  /* одиночный иероглиф: большой, но не «огромный» — потолок 100px (телефон) / 140px (десктоп) */
-  font-size:calc(min(50vmin, 100px) * var(--mul-h,1));
+  /* Точный размер «Учить» задаёт JS (applyStudySizes): телефон 100px, десктоп 134px;
+     предложения — ~72% от стандарта; ползунок «Иероглиф» умножает это значение. */
+  font-size:100px;
   color:var(--ink); word-break:break-all; max-width:100%;
 }
-.big.word{font-size:calc(min(24vmin, 100px) * var(--mul-h,1))}
-/* Длинные слова и предложения: компактный шрифт + перенос по словам, чтобы текст
-   не выталкивал пиньинь/перевод за экран и не прятался под кнопками. */
-.big.sent{font-size:calc(clamp(15px, 5.5vmin, 24px) * var(--mul-h,1)); line-height:1.4; word-break:normal; overflow-wrap:anywhere}
 .bigpy{font-size:calc(min(9vmin, 26px) * var(--mul-p,1)); color:var(--amber); min-height:1.2em; font-family:system-ui,-apple-system,var(--font-cjk),sans-serif}
 .bigtr{font-size:calc(min(7.5vmin, 20px) * var(--mul-t,1)); color:var(--mut); min-height:1.3em; line-height:1.4}
 /* Фактический размер иероглифа в пикселях (+ проценты от ширины экрана) */
@@ -194,7 +191,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .write-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
 .write-head .wbtn.lg{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
 #writeWord{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:2px 0 8px; font-family:var(--font-cjk)}
-#writeWord .wch{font-size:40px; padding:3px 12px; border-radius:10px; background:var(--soft); color:var(--mut); line-height:1.3}
+#writeWord .wch{font-size:calc(30px * var(--whint,1)); padding:3px 12px; border-radius:10px; background:var(--soft); color:var(--mut); line-height:1.3}
 #writeWord .wch.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
 #writeCenter{width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; max-width:620px; margin:0 auto}
 /* Окно письма — на всю ширину телефона, строгий квадрат 1:1; боковой отступ даёт padding экрана */
@@ -226,7 +223,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .dc.zh{font-family:var(--font-cjk); font-size:24px; font-weight:600}
 .dc.py{color:#1565c0; font-size:14px; font-weight:700}
 html[data-theme="dark"] .dc.py{color:#7db8f2}
-.dc.tr{color:var(--mut); font-size:14px; font-weight:600; text-align:right}
+.dc.tr{color:var(--ink); font-size:14px; font-weight:700; text-align:right}
 .dc-side{display:flex; flex-direction:row; align-items:center; gap:8px; justify-content:space-between}
 /* Кнопки карточки теперь в один ряд (★ ✍️ ↑ 🔊 ↓) */
 .dc-btns{display:flex; gap:4px; align-items:center}
@@ -234,9 +231,21 @@ html[data-theme="dark"] .dc.py{color:#7db8f2}
 .icon-btn:active{transform:scale(.94)}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
 .icon-btn.arrow{font-size:21px; font-weight:900; color:var(--ink)}
-.dc-stat{font-size:11px; color:var(--mut); white-space:nowrap; margin-left:2px}
-/* Кнопка «Наверх» — после последней карточки словаря, над нижним меню */
-.dict-scroll-top{width:100%; margin-top:14px; padding:12px 16px}
+.dc-stat{font-size:11px; color:var(--mut); white-space:nowrap; margin-left:2px; text-align:right}
+/* На телефоне «Уровень N» и «Повторов M» — на разных строках (П.3 «правки 22.26») */
+@media (max-width:1023px){
+  .dc-stat{display:flex; flex-direction:column; gap:1px; line-height:1.35}
+}
+/* Плавающая кнопка «Наверх» в словаре (П.4): показывается скроллом ниже 15-й карточки */
+.dict-up-fab{
+  position:sticky; bottom:12px; margin:14px 0 0 auto; z-index:5;
+  display:flex; align-items:center; justify-content:center;
+  width:42px; height:42px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--red); color:#fff; box-shadow:0 4px 14px rgba(0,0,0,.28);
+}
+.dict-up-fab svg{width:20px; height:20px; fill:#fff}
+.dict-up-fab:active{transform:translateY(2px)}
+.dict-up-fab.hidden{display:none}
 .autolink{font-size:12px; color:var(--red); text-decoration:none; font-weight:600}
 .tr-row{display:flex; align-items:center; gap:8px; margin-top:6px}
 .tr-row input{flex:1; margin:0}
@@ -324,6 +333,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Modal */
 .modal{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:12px}
 .modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px 20px; max-height:calc(100dvh - 24px); overflow-y:auto}
+/* Полупрозрачный лист модалок (НЗ/Письмо/Экзамен): цвет темы с прозрачностью + лёгкое размытие.
+   Если color-mix не поддерживается — остаётся непрозрачный var(--bg) из строки выше. */
+.modal .sheet{background:color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px)}
 .modal h2{font-size:18px; margin-bottom:4px}
 
 /* Stats */
@@ -488,10 +500,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .mode-top{display:flex; justify-content:flex-end; align-items:center; gap:8px; margin:0 0 4px; max-width:600px; margin-left:auto; margin-right:auto}
 .mode-top.exam-top{justify-content:center; flex-wrap:wrap}
 .mode-top.exam-top .study-gear{margin-left:auto}
-/* Письмо: строка «◀ Назад | текущее слово | Вперёд ▶» (остаётся на месте) */
-.write-head{display:flex; justify-content:center; align-items:center; gap:10px; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
+/* Письмо: строка «◀ Назад» … «Вперёд ▶ | ⚙» — по краям контент-блока (П.8 «правки 22.26») */
+.write-head{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
 .write-head .wbtn.lg{width:auto}
-.write-head-label{flex:0 1 auto; min-width:0; font-size:13px; font-weight:700; color:var(--mut); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:46%}
+.write-head-right{display:flex; align-items:center; gap:8px; flex:0 0 auto}
+/* Размер кнопок Назад/Вперёд регулируется ползунком в настройках Письма (writeMulNav) */
+.write-head .wbtn.lg{font-size:calc(13px * var(--wbtn,1)); padding:calc(7px * var(--wbtn,1)) calc(11px * var(--wbtn,1))}
 /* Пункты меню в окнах настроек Письма/Экзамена */
 .menu-item{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; font-weight:700}
 .menu-item:last-child{border-bottom:0}
@@ -500,13 +514,19 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .menu-item .seg.sm{flex:0 0 auto; margin-left:10px}
 .menu-item .seg.sm button{padding:5px 8px; font-size:12px}
 .study-gear{
-  width:34px; height:34px; border:1.5px solid var(--amber); border-radius:50%;
-  background:var(--card); color:var(--amber); font-size:17px; line-height:1;
+  width:34px; height:34px;
   display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
-  box-shadow:var(--shadow-sm); flex:0 0 auto;
+  flex:0 0 auto; padding:0; background:transparent; border:0; box-shadow:none;
 }
-.study-gear svg{width:17px; height:17px; fill:currentColor}
+.study-gear svg{width:34px; height:34px; display:block; fill:none; overflow:visible}
 .study-gear:active{transform:translateY(1px)}
+/* Градиент металла шестерёнки (SVG-аналог «по мотивам» изображения DuckDuckGo) */
+.gg{stop-color:#dfe5ec}
+.gg.g2{stop-color:#9baab9}
+.gg.g3{stop-color:#5d7187}
+.gg.g4{stop-color:#8296aa}
+/* Индикатор «какой-то блок отключён»: гасим всю иконку, не меняя форму/рамку */
+.study-gear.dim svg{opacity:.45}
 /* Блоки-тумблеры в окне настроек «Учить» + ползунки размеров */
 .sn-block{padding:0; border-bottom:1px solid var(--line)}
 .sn-block:last-child{border-bottom:0}
@@ -516,6 +536,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .sn-switch.on{background:var(--red)}
 .sn-switch.on::after{left:23px}
 .sn-slider{display:flex; align-items:center; gap:10px; padding:0 0 12px}
+.sn-slider .sn-slider-lab{flex:0 0 auto; font-size:12px; color:var(--mut); font-weight:600}
 .sn-slider input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--red); height:28px; margin:0}
 .sn-slider-val{flex:0 0 auto; min-width:52px; text-align:right; font-size:13px; font-weight:700; color:var(--red); font-variant-numeric:tabular-nums}
 
@@ -543,7 +564,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Экзамен: подбор пар */
 #matchRoot{max-width:600px; margin:0 auto}
-.match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:10px 0 14px; align-items:start; width:100%}
+.match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:10px 0 14px; align-items:stretch; width:100%}
 /* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
 .exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
 .exam-opt{font-size:14px; padding:12px 8px; min-height:70px; word-break:break-word}
@@ -555,12 +576,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .match-pair.sel{background:var(--amber); border-color:#d6930b; color:#3b2f00; transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
 .match-pair.done{opacity:.18; pointer-events:none; transform:none; box-shadow:none}
 
-/* Десктоп/ноутбук (≥1024px): крупнее карточки «Выбора ответов» и «Подбора»,
-   одиночный иероглиф в «Учить» до 140px.
+/* Десктоп/ноутбук (≥1024px): крупнее карточки «Выбора ответов» и «Подбора».
+   «Учить»: точные размеры задаёт JS (applyStudySizes) — дублировать в CSS не нужно.
    Телефоны и планшеты (<1024px) — размеры прежние. */
 @media (min-width:1024px){
-  .big{font-size:calc(min(50vmin, 140px) * var(--mul-h,1))}
-  .big.word{font-size:calc(min(24vmin, 120px) * var(--mul-h,1))}
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
   .exam-opt{font-size:19px; padding:18px 14px; min-height:91px; word-break:break-word}
   .match-pair{font-size:22px; line-height:1.3}
@@ -571,6 +590,23 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 </style>
 </head>
 <body>
+
+<!-- SVG-дефиниции: градиент металла для шестерёнки настроек -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gradGear" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" class="gg g4"/>
+      <stop offset="38%" class="gg g3"/>
+      <stop offset="50%" class="gg"/>
+      <stop offset="62%" class="gg g3"/>
+      <stop offset="100%" class="gg g2"/>
+    </linearGradient>
+    <radialGradient id="gradGearHub" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0%" class="gg g3"/>
+      <stop offset="100%" class="gg"/>
+    </radialGradient>
+  </defs>
+</svg>
 
 <header class="top">
   <div class="title">Language Trainer</div>
@@ -607,7 +643,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <section class="screen" id="scr-study">
     <div id="studyWrap" class="study-wrap">
       <div class="study-top">
-        <button class="study-gear" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.02-.66-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.69-.98L14.6 2.64a.5.5 0 0 0-.5-.42h-4a.5.5 0 0 0-.5.42l-.27 2.43c-.61.25-1.18.58-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98s.02.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.13.23.4.32.61.22l2.49-1c.51.4 1.08.73 1.69.98l.27 2.43c.04.23.21.42.5.42h4c.28 0 .46-.18.5-.42l.27-2.43c.61-.25 1.18-.58 1.69-.98l2.49 1c.22.1.49.01.61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"/></svg></button>
+        <button class="study-gear" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
       </div>
       <div class="row" style="justify-content:space-between; margin-bottom:4px">
         <span class="chip" id="studyProgress">0 / 0</span>
@@ -634,13 +670,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
   <!-- ПИСЬМО -->
   <section class="screen" id="scr-write">
-    <div class="mode-top">
-      <button class="study-gear" id="writeSettingsBtn" title="Настройки письма" aria-label="Настройки письма"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a.5.5 0 0 0 .05-.2v-.19a.5.5 0 0 0-.05-.2l1.17-.91a.27.27 0 0 0 .06-.35l-1.12-1.94a.27.27 0 0 0-.33-.11l-1.38.56a4.1 4.1 0 0 0-.34-.2l-.21-1.47a.27.27 0 0 0-.27-.23h-2.24a.27.27 0 0 0-.27.23l-.21 1.47c-.12.06-.23.13-.34.2l-1.38-.56a.27.27 0 0 0-.33.11L9.05 11.3a.27.27 0 0 0 .06.35l1.17.91a.5.5 0 0 0-.05.2v.19a.5.5 0 0 0 .05.2l-1.17.91a.27.27 0 0 0-.06.35l1.12 1.94a.27.27 0 0 0 .33.11l1.38-.56c.11.07.22.13.34.2l.21 1.47c.01.13.12.23.27.23h2.24c.15 0 .26-.1.27-.23l.21-1.47c.12-.07.23-.13.34-.2l1.38.56a.27.27 0 0 0 .33-.11l1.12-1.94a.27.27 0 0 0-.06-.35l-1.17-.91ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg></button>
-    </div>
     <div class="write-head">
       <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
-      <span class="write-head-label" id="writeHeadLabel"></span>
-      <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
+      <div class="write-head-right">
+        <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
+        <button class="study-gear" id="writeSettingsBtn" title="Настройки письма" aria-label="Настройки письма"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
+      </div>
     </div>
     <div id="writeWord"></div>
     <div id="writeCenter">
@@ -656,7 +691,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
     <div class="mode-top exam-top">
       <span class="chip" id="examProgress"></span>
       <span class="chip" id="examScore"></span>
-      <button class="study-gear" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a.5.5 0 0 0 .05-.2v-.19a.5.5 0 0 0-.05-.2l1.17-.91a.27.27 0 0 0 .06-.35l-1.12-1.94a.27.27 0 0 0-.33-.11l-1.38.56a4.1 4.1 0 0 0-.34-.2l-.21-1.47a.27.27 0 0 0-.27-.23h-2.24a.27.27 0 0 0-.27.23l-.21 1.47c-.12.06-.23.13-.34.2l-1.38-.56a.27.27 0 0 0-.33.11L9.05 11.3a.27.27 0 0 0 .06.35l1.17.91a.5.5 0 0 0-.05.2v.19a.5.5 0 0 0 .05.2l-1.17.91a.27.27 0 0 0-.06.35l1.12 1.94a.27.27 0 0 0 .33.11l1.38-.56c.11.07.22.13.34.2l.21 1.47c.01.13.12.23.27.23h2.24c.15 0 .26-.1.27-.23l.21-1.47c.12-.07.23-.13.34-.2l1.38.56a.27.27 0 0 0 .33-.11l1.12-1.94a.27.27 0 0 0-.06-.35l-1.17-.91ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg></button>
+      <button class="study-gear" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
     </div>
     <div id="examBody" style="display:flex; flex-direction:column; align-items:center; width:100%; max-width:600px; margin:0 auto"></div>
     <div class="empty hidden" id="examEmpty">
@@ -747,8 +782,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
           </div>
           <label class="lbl">Письмо: порядок слов</label>
           <div class="seg" id="writeOrderSeg">
-            <button data-v="seq" class="active">Обычный</button>
-            <button data-v="rand">Рандом</button>
+            <button data-v="seq">Обычный</button>
+            <button data-v="rand" class="active">Рандом</button>
           </div>
           <label class="lbl">Письмо: подсказка (слово над окном)</label>
           <div class="seg" id="writeHintSeg">
@@ -869,7 +904,8 @@ const DB = {
 // ============================== STATE ==============================
 let items = [];            // array of item
 let settings = {
-  hint:2, voiceURI:'', mulH:1, mulP:1, mulT:1
+  hint:2, voiceURI:'', mulH:1, mulP:1, mulT:1,
+  writeOrder:'rand', writeHint:'on', writeHintSize:1, writeNavSize:1   // П.6/8/9 «22.26»: Рандом и подсказка вкл по умолчанию
 };
 let stats = { streak:0, lastDay:'', activity:{} };
 // Активный язык (Фаза 5): справочник языков; у каждого — свои карточки и статистика.
@@ -887,7 +923,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.7';
+const APP_VERSION='1.8.8';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1524,9 +1560,8 @@ function renderDict(){
   }
   list.innerHTML=arr.map(it=>{
     const learned=isLearned(it);
-    const stat=learned
-      ? ('Уровень '+levelOf(it)+' · Выучено')
-      : ('Уровень '+levelOf(it)+' · Повторов '+(it.correct||0));
+    const statA='Уровень '+levelOf(it);
+    const statB=learned ? 'Выучено' : ('Повторов '+(it.correct||0));
     return `<div class="card item-line" data-id="${it.id}">
       <div class="dict-card">
         <div class="dc-cols">
@@ -1542,12 +1577,12 @@ function renderDict(){
             <button class="icon-btn arrow" data-act="up" title="Повысить уровень">↑</button>
             <button class="icon-btn arrow" data-act="down" title="Понизить уровень">↓</button>
           </div>
-          <div class="dc-stat">${stat}</div>
+          <div class="dc-stat"><span>${statA}</span><span>${statB}</span></div>
         </div>
       </div>
     </div>`;
   }).join('');
-  list.innerHTML+=`<button class="btn sec dict-scroll-top" id="dictScrollTop">Наверх</button>`;
+  list.innerHTML+=`<button class="dict-up-fab hidden" id="dictUpFab" aria-label="Наверх"><svg viewBox="0 0 24 24"><path d="M12 5l6 7h-4v7h-4v-7H6z"/></svg></button>`;
   list.querySelectorAll('.item-line').forEach(el=>{
     const id=el.dataset.id;
     el.onclick=()=>openItemModal(id);
@@ -1562,8 +1597,31 @@ function renderDict(){
       };
     });
   });
-  const top=document.getElementById('dictScrollTop');
-  top.onclick=()=>{ document.getElementById('scr-dict').scrollTo({top:0, behavior:'smooth'}); };
+  bindDictUpFab();
+}
+// Плавающая кнопка «Наверх» (П.4): появляется, когда 15-я карточка ушла за верх экрана.
+// Стрелка прижата к правому краю содержимого словаря на уровне полосы прокрутки.
+const DICT_UP_AFTER=15;
+let _dictUpBound=false;
+function bindDictUpFab(){
+  const scr=document.getElementById('scr-dict'); if(!scr) return;
+  if(_dictUpBound) return;
+  _dictUpBound=true;
+  scr.addEventListener('scroll', updateDictUpFab, {passive:true});
+  const fab=document.getElementById('dictUpFab');
+  if(fab) fab.onclick=()=>{ scr.scrollTo({top:0, behavior:'smooth'}); };
+  updateDictUpFab();
+}
+function updateDictUpFab(){
+  const scr=document.getElementById('scr-dict'); if(!scr) return;
+  const fab=document.getElementById('dictUpFab'); if(!fab) return;
+  const rows=scr.querySelectorAll('#dictList .item-line');
+  if(rows.length<=DICT_UP_AFTER){ fab.classList.add('hidden'); return; }
+  const ref=rows[DICT_UP_AFTER-1]; // 15-я карточка (счёт сверху вниз)
+  const r=ref.getBoundingClientRect(), sr=scr.getBoundingClientRect();
+  const aboveTop = r.bottom <= sr.top;       // целиком ушла за верх экрана
+  // показываем, когда 15-я карточка именно «поднялась за верх» при скролле вниз
+  fab.classList.toggle('hidden', !(aboveTop));
 }
 
 // ============================== ITEM MODAL ==============================
@@ -1941,20 +1999,21 @@ let studyQueue=[], studyIdx=0;
 // Показ строк карточки в «Учить»: аудио, пиньинь, перевод, иероглиф.
 // Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
 let studyAudioOn=true, studyPyOn=true, studyTrOn=true, studyHanziOn=true;
+// Порядок полей в модалке «Настройки режима Изучение»: Аудио, Иероглиф, Пиньинь, Перевод.
 const STUDY_KEYS=[
   ['studyAudio','Аудио','🔊 озвучка + автоповтор', null],
-  ['studyPy','Пиньин','подпись под иероглифом','mulP'],
-  ['studyTr','Перевод','перевод под пиньинем','mulT'],
-  ['studyHanzi','Иероглиф','главная строка карточки','mulH'],
+  ['studyHanzi','Иероглиф','размер шрифта','mulH'],
+  ['studyPy','Пиньин','размер шрифта','mulP'],
+  ['studyTr','Перевод','размер шрифта','mulT'],
 ];
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
-  if(gear) gear.style.color = (studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn) ? '' : 'var(--red)';
+  if(gear) gear.classList.toggle('dim', !(studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn));
   const hz=document.getElementById('studyHanzi'), py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
   if(hz) hz.style.display=studyHanziOn?'':'none';
   if(py) py.style.display=studyPyOn?'':'none';
   if(tr) tr.style.display=studyTrOn?'':'none';
-  updateStudySize();
+  applyStudySizes();
   renderStudySettings();
 }
 function studyFlag(k){ return k==='studyAudio'?studyAudioOn:(k==='studyPy'?studyPyOn:(k==='studyTr'?studyTrOn:studyHanziOn)); }
@@ -1980,7 +2039,7 @@ function renderStudySettings(){
   const m=document.getElementById('modalStudySettings');
   if(!m || m.classList.contains('hidden')) return;
   m.innerHTML=`<div class="sheet">
-    <div class="row"><h2>Настройки режима</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
+    <div class="row"><h2>Настройки режима Изучение</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
     <div style="margin-top:6px">
     ${STUDY_KEYS.map(([key,label,hint,skey])=>{
       const v=studyFlag(key);
@@ -1995,14 +2054,14 @@ function renderStudySettings(){
     </div>
   </div>`;
   m.querySelectorAll('.sn-switch').forEach(b=>{
-    b.onclick=()=>setStudyFlag(b.dataset.studyKey, !studyFlag(b.dataset.studyKey));
+    b.onclick=()=>{ setStudyFlag(b.dataset.studyKey, !studyFlag(b.dataset.studyKey)); renderStudySettings(); };
   });
   m.querySelectorAll('input[type=range][data-size-key]').forEach(r=>{
     r.oninput=()=>{
       const k=r.dataset.sizeKey;
       const v=Math.round(Number(r.value));
       settings[k]=v/100; persist();
-      applySizes();
+      applyStudySizes();
       requestAnimationFrame(()=>requestAnimationFrame(updateStudySize));
       const val=m.querySelector(`[data-val-key="${k}"]`); if(val) val.textContent=v+'%';
     };
@@ -2064,8 +2123,9 @@ function showStudyCard(){
   document.getElementById('studyProgress').textContent=(studyIdx+1)+' / '+studyQueue.length;
   const big=document.getElementById('studyHanzi');
   big.textContent=it.hanzi;
-  // размер подбирается автоматически: 1 символ — big, 2-4 — word, >=5 — sent
-  big.className='big '+(it.hanzi.length===1?'':(it.hanzi.length<=4?'word':'sent'));
+  // один класс на все случаи: точный размер задаёт applyStudySizes (П.1 «правки 22.26»)
+  big.className='big';
+  applyStudySizes();
   // фактические размеры (после перерисовки; двойной rAF — чтобы CJK-шрифт успел отрисоваться)
   requestAnimationFrame(()=>requestAnimationFrame(()=>updateStudySize()));
   // пиньинь и перевод видны сразу (и крупно); скрыты, если выключены в тулбаре
@@ -2073,6 +2133,30 @@ function showStudyCard(){
   document.getElementById('studyTr').textContent=trJoined(it)||'';
   if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
   else studyPlayLoop(it);
+}
+// Точные размеры «Учить»: телефон иероглиф 100px / пиньинь 38px / перевод 28px;
+// десктоп (≥1024px) — 134 / 52 / 28. Предложения (длинные) — ~72% от стандарта.
+// Ползунок «Иероглиф/Пиньинь/Перевод» в модалке умножает базовое значение (mulH/mulP/mulT).
+const STUDY_HZ_MOBILE=100, STUDY_HZ_DESKTOP=134;
+const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=52;
+const STUDY_TR=28;
+const STUDY_SENT_RATIO=0.72;      // предложение: «немного меньше» стандарта
+const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
+function applyStudySizes(){
+  const n=document.getElementById('studyHanzi'); if(!n) return;
+  const desktop=innerWidth>=1024;
+  const chars=Array.from((n.textContent||'')).length;
+  const sent=chars>=STUDY_SENT_BREAK;
+  const mulH=settings.mulH||1, mulP=settings.mulP||1, mulT=settings.mulT||1;
+  const hz=(sent ? (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)*STUDY_SENT_RATIO
+                 : (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)) * mulH;
+  n.style.fontSize = hz.toFixed(1)+'px';
+  n.style.lineHeight = sent ? 1.4 : '';
+  if(sent){ n.style.wordBreak='normal'; n.style.overflowWrap='anywhere'; } else { n.style.wordBreak='break-all'; n.style.overflowWrap=''; }
+  const py=document.getElementById('studyPinyin');
+  if(py){ const ps=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP; py.style.fontSize=ps.toFixed(1)+'px'; }
+  const tr=document.getElementById('studyTr');
+  if(tr){ const ts=STUDY_TR*mulT; tr.style.fontSize=ts.toFixed(1)+'px'; }
 }
 function updateStudySize(){
   const el=document.getElementById('studySize'); if(!el) return;
@@ -2234,17 +2318,23 @@ let writeAudioOn=true, writeOutlineOn=true, writeAnimOn=false;
 let writeAnimRunning=false, writeToken=0;
 let writeSeq=[]; // упорядоченный список слов/предложений для письма (звёзды первыми; при «Рандом» — вразброс)
 
+// Подсказка (слово над окном письма) и Назад/Вперёд: включение + ползунок размера (П.8/9 «22.26»).
+function writeHintOn(){ return settings.writeHint!==false && settings.writeHint!=='off'; }
+function writeHintMul(){ return (Number(settings.writeHintSize)||1); }
+function writeNavMul(){ return (Number(settings.writeNavSize)||1); }
+function writeRandOn(){ return settings.writeOrder==='rand'; }
 function loadWritePrefs(){
   writeAudioOn=settings.writeAudio!==false;
   writeOutlineOn=settings.writeOutline!==false;
   writeAnimOn=!!settings.writeAnim;
 }
-function writeHintOn(){ return settings.writeHint!==false && settings.writeHint!=='off'; }
-function writeRandOn(){ return settings.writeOrder==='rand'; }
 function applyWriteToggles(){
   const b=(id,on)=>document.getElementById(id)&&document.getElementById(id).classList.toggle('on',on);
   b('writeAudio',writeAudioOn); b('writeOutline',writeOutlineOn); b('writeAnim',writeAnimOn);
   b('writeRand', writeRandOn());
+  // размеры кнопок Назад/Вперёд и подсказки — CSS-переменные
+  document.documentElement.style.setProperty('--wbtn', writeNavMul());
+  document.documentElement.style.setProperty('--whint', writeHintMul());
   // языки без кисти (en/tr/ar): Контур и Анимация не имеют смысла — скрываем
   const hide=!hasStrokes();
   ['writeOutline','writeAnim'].forEach(id=>{
@@ -2320,7 +2410,6 @@ function setWriteItemTyping(it, speakNow){
   </div>`;
   renderWriteList();
   renderTypeCardsHint();
-  updateWriteHeadLabel();
   const inp=area.querySelector('#typeInput');
   inp.onkeydown=e=>{
     if(e.key==='Enter'){ e.preventDefault(); checkTyped(inp); }
@@ -2367,11 +2456,11 @@ function renderWriteLabels(){
   const ch=writeChars[writeCharIdx];
   document.getElementById('writePy').textContent=ch?toPinyin(ch):'';
   document.getElementById('writeTr').textContent=(writeCurItem&&trJoined(writeCurItem))||'';
-  updateWriteHeadLabel();
 }
 function renderWriteList(){
   const el=document.getElementById('writeList'); if(!el) return;
-  const L=writeSeq.length?writeSeq:writeWordList();
+  // список ВСЕГДА в строгом порядке добавления (П.9), независимо от «Рандом» для прохождения
+  const L=writeWordList();
   if(!L.length){ el.innerHTML=''; return; }
   // простой список слева направо, только китайский текст; текущее подсвечено
   el.innerHTML=L.map(it=>{
@@ -2388,19 +2477,21 @@ function writeGoto(idx){
   startWriteChar();
 }
 function writeWordList(){
-  // ВСЕ слова/предложения словаря в порядке добавления (новые сверху, старые ниже);
-  // при «Рандом» — перемешанный, но тот же полный набор. Список под переводом и
-  // «◀ Назад / Вперёд ▶» ходят по одному и тому же порядку.
+  // ВСЕ слова/предложения словаря строго в порядке добавления: чем позже добавлено —
+  // тем выше (П.9 «правки 22.26»). Внутри одного дня — по таймстампу id (время создания).
   const list=writableItems().slice().sort((a,b)=>{
-    const da=String(a.addedOn||''), db=String(b.addedOn||'');
-    if(da!==db) return da<db?1:-1;   // дата больше (новее) — сверху
+    const ta=String(a.addedOn||'')+' '+String(a.id||'');
+    const tb=String(b.addedOn||'')+' '+String(b.id||'');
+    if(ta!==tb) return ta>tb?-1:1;   // дата больше (новее) — сверху; id новее — сверху
     return (a.id||'').localeCompare(b.id||'');
   });
-  if(!writeRandOn()) return list;
-  return shuffle(list);
+  return list;
 }
 function rebuildWriteSeq(){
+  // Порядок прохождения «◀ Назад / Вперёд ▶»: при «Рандом» — перемешанный набор;
+  // список под переводом при этом всегда остаётся строгим (П.9).
   writeSeq=writeWordList();
+  if(writeRandOn()) shuffle(writeSeq);
 }
 function writePrev(){ // предыдущее слово/предложение (по списку ниже); внутри — к его ПЕРВОМУ иероглифу
   if(!hasStrokes()){ writeNavTyping(-1); return; }
@@ -2577,6 +2668,15 @@ function toggleWriteRand(){
     renderWriteList();
   }
 }
+function toggleWriteHint(){
+  // Подсказка (слово над окном письма): вкл/выкл. Синхронизирует сегмент «Общие» и модалку Письма.
+  settings.writeHint = writeHintOn() ? 'off' : 'on';
+  persist();
+  applyWriteToggles();
+  syncWriteHintSeg();
+  onWriteHintChange();
+  renderWriteSettings();
+}
 function playWriteAnim(){
   if(!writer || writeAnimRunning) return;
   const ch=writeChars[writeCharIdx]; if(!ch) return;
@@ -2590,19 +2690,23 @@ function openWriteSettings(){
   document.getElementById('modalWriteSettings').classList.remove('hidden');
   renderWriteSettings();
 }
+function writeSizeSliderHTML(skey, cur, min, max, label){
+  return `<div class="sn-slider"><span class="sn-slider-lab">${label}</span><input type="range" min="${min}" max="${max}" step="10" value="${cur}" data-wsize-key="${skey}"><span class="sn-slider-val" data-wsize-val="${skey}">${cur}%</span></div>`;
+}
 function renderWriteSettings(){
   const m=document.getElementById('modalWriteSettings');
   if(!m || m.classList.contains('hidden')) return;
   const rows=[
+    ['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn],
     ['Контур','Помогающая сетка и контур иероглифа','sn','writeOutline',writeOutlineOn],
-    ['Рандом','Перемешивать порядок слов','sn','writeRand',writeRandOn()]
+    ['Рандом','Перемешивать порядок прохождения по словам','sn','writeRand',writeRandOn()]
   ];
-  if(hasStrokes()) rows.splice(1,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
-  else rows.splice(2,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
-  if(!hasStrokes()) rows.push(['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]);
-  else rows.unshift(['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]);
+  if(hasStrokes()) rows.splice(2,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
+  else rows.splice(3,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
+  const navPct=Math.round(writeNavMul()*100);
+  const hintPct=Math.round(writeHintMul()*100);
   m.innerHTML=`<div class="sheet">
-    <div class="row"><h2>Настройки письма</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalWriteSettings')">✕</button></div>
+    <div class="row"><h2>Настройки режима Письмо</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalWriteSettings')">✕</button></div>
     <div style="margin-top:6px">
     ${rows.map(([label,hint,type,key,v])=>{
       if(type==='sn') return `<div class="menu-item" data-write-key="${key}">
@@ -2611,30 +2715,37 @@ function renderWriteSettings(){
       </div>`;
       return '';
     }).join('')}
+      <div class="menu-item">
+        <div class="mi-label">Кнопки Назад / Вперёд<span class="mi-hint">ползунок ниже меняет их размер</span></div>
+      </div>
+      ${writeSizeSliderHTML('writeNavSize', navPct, 70, 180, 'Размер кнопок')}
+      <div class="menu-item">
+        <div class="mi-label">Подсказка<span class="mi-hint">показывать слово над окном письма</span></div>
+        <button class="sn-switch ${writeHintOn()?'on':''}" data-write-key="writeHint"></button>
+      </div>
+      ${writeSizeSliderHTML('writeHintSize', hintPct, 50, 160, 'Размер подсказки')}
     </div>
   </div>`;
-  m.querySelectorAll('[data-write-key]').forEach(el=>{
+  m.querySelectorAll('.sn-switch[data-write-key]').forEach(el=>{
     const k=el.dataset.writeKey;
     el.onclick=()=>{
       if(k==='writeOutline') toggleWriteOutline();
       else if(k==='writeRand') toggleWriteRand();
       else if(k==='writeAnim') toggleWriteAnim();
       else if(k==='writeAudio') toggleWriteAudio();
+      else if(k==='writeHint') toggleWriteHint();
+      renderWriteSettings();  // П.6: перерисовать переключатели, чтобы состояние мгновенно отразилось
     };
   });
-}
-// подпись текущего слова в строке «◀ Назад | слово | Вперёд ▶»
-function updateWriteHeadLabel(){
-  const el=document.getElementById('writeHeadLabel'); if(!el) return;
-  el.textContent='';
-  if(hasStrokes()){
-    const ch=writeChars[writeCharIdx];
-    el.textContent=(writeCurItem?trJoined(writeCurItem)+' · ':'')+(ch||'');
-    el.style.display='';
-  }else{
-    el.textContent=writeCurItem?writeCurItem.hanzi:'';
-    el.style.display=writeCurItem?'':'none';
-  }
+  m.querySelectorAll('input[type=range][data-wsize-key]').forEach(r=>{
+    r.oninput=()=>{
+      const k=r.dataset.wsizeKey;
+      const v=Math.round(Number(r.value));
+      settings[k]=v/100; persist();
+      applyWriteToggles();
+      const val=m.querySelector(`[data-wsize-val="${k}"]`); if(val) val.textContent=v+'%';
+    };
+  });
 }
 
 // ============================== EXAM ==============================
@@ -2829,8 +2940,8 @@ function renderExamSettings(){
   m.querySelectorAll('[data-exam-key]').forEach(el=>{
     el.onclick=()=>{
       const k=el.dataset.examKey;
-      if(k==='tf') toggleExamMode('tf');
-      else if(k==='choice') toggleExamMode('choice');
+      if(k==='tf'){ toggleExamMode('tf'); renderExamSettings(); }
+      else if(k==='choice'){ toggleExamMode('choice'); renderExamSettings(); }
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
       else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
       else if(k==='match'){ closeModal('modalExamSettings'); matchStart(); }
@@ -3039,6 +3150,9 @@ function matchDraw(arr, n){
 }
 function matchStart(){
   Player.stop();
+  // П.11: в «Подборе» не должно работать 7-секундное повторение озвучки экзамена
+  clearExamIdle();
+  if('speechSynthesis' in window) speechSynthesis.cancel();
   matchRound=[]; matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   matchNextRound();
   if(examAudioOn && matchRound.length && matchRound[0]) examSpeakWord(matchRound[0]);
@@ -3174,6 +3288,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.8','04.10.26','Правки от 04.10.26 22:26: в «Учить» — главный иероглиф 100/134px, пиньинь 38/52px, перевод 28px (предложения ~72%), модалка «Настройки режима Изучение» с порядком Аудио→Иероглиф→Пиньинь→Перевод и подписями; в «Словаре» — «Уровень N / Повторов M» в 2 строки на телефоне, плавающая стрелка «Наверх» для длинных списков, перевод чёрный жирный; в «Письме» — переключатели Контур/Аудио/Анимация/Рандом (Анимация выкл по умолчанию), «Настройки режима Письмо», Назад/Вперед по краям с ползунком размера, шестерёнка справа от «Вперед», компактная подсказка с переключателем и ползунком, убрана строка с иероглифом и переводом между кнопками, список слов строго по порядку добавления (свежие первыми); в «Экзамене» — шестерёнка справа, переключатели перерисовываются сразу, в «Подборе» нет 7-сек повтора озвучки экзамена и карточки одной высоты; на «Ещё → Синхронизация» журнал обновляется сразу после синка, а «Новое имя этого устройства» задаёт имя для будущих записей журнала'],
   ['1.8.7','04.10.26','В «Учить» под карточкой — размеры иероглифа / пиньиня / перевода в пикселях и процентах; модалка шестерёнки переименована в «Настройки режима» и получила ползунки размера (50–200%, шаг 10) под «Пиньин», «Перевод» и новое поле «Иероглиф» с переключателем; шестерёнка — заливной классический значок; дубли сегментов размера из общих «Настроек» убраны'],
   ['1.8.6','04.10.26','Большие правки удобства: главный иероглиф/слово в «Учить» — 100px на телефоне и 140px на десктопе (предложения остаются компактными); шестерёнка настроек — у «Учить» янтарная, у «Экзамена» и «Письма» своя справа сверху (меню: Верно-неверно, Выбор ответов, 4-6-8-10, Все переводы, Подбор, Аудио / Контур, Рандом, Анимация, Аудио); убран дубль кнопок 4-6-8-10; в «Письме» под переводом — список всех слов в порядке добавления; в «Словаре» новая кнопка ✍️ «писать это слово», кнопка «Наверх» в конце списка и карточка в 3 колонки с рядом ★ 🔊 ✍️ ↑ ↓ и статусом справа («Уровень N. Повторов M» / «Уровень 5. Выучено»); скролл нигде не заезжает под нижнее меню; у конфликтов синхронизации показываются только 2 самые свежие карточки, а при явно свежих данных на одной стороне загрузка происходит автоматически; исправлена ошибка запуска после удаления старого тулбара экзамена'],
   ['1.8.5','04.10.26','Длинные слова и предложения больше не выталкивают кнопки за экран и не прячутся под ними ни в одном режиме: размер текста подбирается по длине (1 символ крупно, 2–4 средне, предложение компактно) — в «Экзамене», «Учить», письме-печати и «Подборе»; зона вопроса/подбора прокручивается, когда контент выше экрана'],
@@ -4180,6 +4295,11 @@ function syncWriteOrderSeg(){
   const seg=document.getElementById('writeOrderSeg'); if(!seg) return;
   seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.v===(writeRandOn()?'rand':'seq')));
 }
+function syncWriteHintSeg(){
+  // синхронизирует сегмент «Письмо: подсказка» в Ещё с модалкой Письма
+  const seg=document.getElementById('writeHintSeg'); if(!seg) return;
+  seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.v===(writeHintOn()?'on':'off')));
+}
 function onWriteHintChange(){
   // режим печати (en/tr/ar): перестраиваем карточку, чтобы слово-подсказка появилось/исчезло
   if(!hasStrokes()){
@@ -4939,6 +5059,8 @@ async function doSync(){
       conflictProgress:confProgress, conflictProgressLocal:confProgressLocal, conflictProgressCloud:confProgressCloud
     });
     syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
+    // П.13: если вкладка «Синхронизация» открыта — сразу обновляем её журнал после успешного синка
+    if(moreTab==='sync') renderSyncPanel();
   }catch(e){
     // откат к снапшоту — локальные данные не тронуты
     items=snap.items; settings=snap.settings; statsByLang=snap.statsByLang; stats=statsByLang[activeLang]; _sigSet=snap.sigSet; _sigStatsMap=snap.sigStats;
@@ -5095,7 +5217,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   studyAudioOn=settings.studyAudio!==false;
   studyPyOn=settings.studyPy!==false;
   studyTrOn=settings.studyTr!==false;
