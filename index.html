@@ -936,7 +936,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.13';
+const APP_VERSION='1.8.14';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3406,6 +3406,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.14','05.10.26','Исправлена ошибка синхронизации, появившаяся в 1.8.13: при записи в облако поднималась скрытая ошибка «Assignment to constant variable» и синхронизация падала на любом устройстве; восстановление карточки из облака теперь не ломается на строке без данных'],
   ['1.8.13','05.10.26','Дедупликация карточек: одинаковый материал (язык + слово) больше не плодится — новые карточки получают стабильный id из слова, поэтому дубли не рождаются при повторном добавлении/стартовом наборе; при старте и при синхронизации одинаковые карточки склеиваются (прогресс объединяется максимумами), а лишние облачные строки удаляются — уже удвоенная база сама складывается в один экземпляр на первом же синке'],
   ['1.8.12','05.10.26','Исправлена потеря статистики после чистки кэша: пустая статистика/настройки больше не получают метку «сейчас», поэтому не побеждали реальную историю в синхронизации; облачная история восстанавливается поверх затёртых пустышек; флажки языков в настройках теперь рисуются инлайн-SVG и видны на Windows (раньше эмодзи-флаги пропадали)'],
   ['1.8.11','05.10.26','Режим «Экзамен» теперь показывает вопрос теми же размерами, что «Учить» (иероглиф/пиньинь/перевод — один источник, ползунки «Учить» действуют и в экзамене); service worker обновлён: index.html всегда берётся из сети, поэтому новые версии больше не «застревают» в кэше браузера'],
@@ -4740,23 +4741,24 @@ function audioPathOf(cardId, slot){ return _syncUser?(_syncUser.id+'/'+cardId+'/
 // Восстановление карточки из облака: числовые поля приводим к числам; аудио — как метаданные
 // со ссылкой-путём (blob-кэш подтянется локально при hydrateRecordings, если файл есть на устройстве).
 function cardFromCloud(data, u, pu){
-  const recs=(data.recordings||[]).map(r=>({speed:r.speed, name:r.name||'', path:r.path||null, url:null}));
-  const it={...data,
+  const src=data||{};                 // data может быть null — не падаем, трактуем как пустую карточку
+  const recs=(src.recordings||[]).map(r=>({speed:r.speed, name:r.name||'', path:r.path||null, url:null}));
+  const it={...src,
     recordings:recs,
-    box:Math.max(1,Math.min(5,+data.box||1)),
-    dueSess:+data.dueSess||0, correct:+data.correct||0, wrong:+data.wrong||0,
-    correctStreak:+data.correctStreak||0, correctStreakDays:+data.correctStreakDays||0,
-    nsStreak:+data.nsStreak||0, nsSess:+data.nsSess||0,
-    nsGood:+data.nsGood||0,
-    nsDoneSess:data.nsDoneSess==null?null:data.nsDoneSess,
-    nsLastGoodShow:data.nsLastGoodShow==null?null:data.nsLastGoodShow,
-    lastShowN:+data.lastShowN||0, lastSeen:+data.lastSeen||0, nextDue:+data.nextDue||0,
-    newDone:+data.newDone||0, starred:!!data.starred,
-    lastCorrectDay:data.lastCorrectDay||'', learnedOn:data.learnedOn||'', addedOn:data.addedOn||'',
-    lang:data.lang||'zh',
+    box:Math.max(1,Math.min(5,+src.box||1)),
+    dueSess:+src.dueSess||0, correct:+src.correct||0, wrong:+src.wrong||0,
+    correctStreak:+src.correctStreak||0, correctStreakDays:+src.correctStreakDays||0,
+    nsStreak:+src.nsStreak||0, nsSess:+src.nsSess||0,
+    nsGood:+src.nsGood||0,
+    nsDoneSess:src.nsDoneSess==null?null:src.nsDoneSess,
+    nsLastGoodShow:src.nsLastGoodShow==null?null:src.nsLastGoodShow,
+    lastShowN:+src.lastShowN||0, lastSeen:+src.lastSeen||0, nextDue:+src.nextDue||0,
+    newDone:+src.newDone||0, starred:!!src.starred,
+    lastCorrectDay:src.lastCorrectDay||'', learnedOn:src.learnedOn||'', addedOn:src.addedOn||'',
+    lang:src.lang||'zh',
     // Фаза 8: авторитетные метки читаем из колонок; data.* — только запасной вариант (для старых row).
-    updated_at:(u!==undefined ? (+u||0) : (+data.updated_at||0)),
-    prog_at:(pu!==undefined ? (+pu||0) : (+data.prog_at||0))
+    updated_at:(u!==undefined ? (+u||0) : (+src.updated_at||0)),
+    prog_at:(pu!==undefined ? (+pu||0) : (+src.prog_at||0))
   };
   seedCardSigs(it);
   return it;
@@ -4815,7 +4817,7 @@ function dedupeCloudCards(cards){
   return {cards:cards.filter(r=>!dead.has(r.id)), removed:dead.size, deadIds:Array.from(dead)};
 }
 async function pullCloudRows(u){
-  const cards=[];
+  let cards=[];
   let from=0;
   for(;;){
     const r=await sbClient().from('cards').select('id,lang,data,updated_at,prog_at').eq('user_id',u.id).range(from,from+999);
