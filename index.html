@@ -936,7 +936,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.12';
+const APP_VERSION='1.8.13';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1087,6 +1087,31 @@ function seedCardSigs(it){
   it.__sigP=itemProgSig(it);
   delete it.__sig;   // старый комбинированный признак больше не используется
 }
+// ============================== ДЕДУПЛИКАЦИЯ КАРТОЧЕК ==============================
+// Ключ «дубля»: язык + слово (свёрнутое сравнение). Два вхождения с одинаковым ключом —
+// один и тот же материал (случайные id от разных устройств не совпадают, поэтому сверять
+// нужно СОДЕРЖАНИЕ, а не id). Пиньинь в ключ не входит — он выводится автоматически и
+// может разойтись в регистре без изменения смысла.
+function keyFolded(s){
+  return String(s||'').trim().toLowerCase()
+    .normalize('NFC')
+    .replace(/[ً-ْٰ]/g,'')   // арабская огласовка (харакат) не участвует
+    .replace(/[«»„“”"'`´()[\]]/g,'')
+    .replace(/\s+/g,' ');
+}
+function dupKeyOfLang(it){ return langOf(it)+'|'+keyFolded(it.hanzi); }
+function dupKeyOf(it){ return dupKeyOfLang(it)+'|'+keyFolded(it.translation); }
+// Прогресс при склейке одинаковых карточек: берём максимум по каждому полю — ничего не теряем.
+function mergeDupProgress(dst, src){
+  const nums=['box','dueSess','newDone','nsGood','nsStreak','nsSess','correct','wrong','wrongStreak','correctStreak','correctStreakDays','lastSeen','nextDue'];
+  for(const k of nums) if((src[k]||0)>(dst[k]||0)) dst[k]=src[k];
+  const dates=['lastCorrectDay','learnedOn'];
+  for(const k of dates) if(String(src[k]||'')>String(dst[k]||'')) dst[k]=src[k];
+  if((src.nsDoneSess||0)>(dst.nsDoneSess||0)) dst.nsDoneSess=src.nsDoneSess;
+  if((src.nsLastGoodShow||0)>(dst.nsLastGoodShow||0)) dst.nsLastGoodShow=src.nsLastGoodShow;
+}
+// Перевод ДЛЯ ОТЧЁТА о склейке (нужен для наглядности; в реальных данных ничего не трогаем).
+function dupTranslate(it){ return (String(it.translation||'').trim()||'')+(it.trs&&it.trs.length?' +'+it.trs.length:''); }
 // Нормализация карточки, пришедшей из IndexedDB/облака/импорта: приводит скаляры, но НИКОГДА
 // не трогает таймстампы. Отсутствующей метке ставим 0 («возраст неизвестен»): такой контент/прогресс
 // никогда не победит сторону с положительной меткой при авто-мерже (защита от затирания).
@@ -1106,6 +1131,55 @@ function normalizeAppItem(it){
   if(!Array.isArray(it.recordings)) it.recordings=[];
   seedCardSigs(it);
   return it;
+}
+// Склейка локальных дублей: входы с одинаковым ключом «язык|слово» сливаем в одного
+// выжившего. Правило выживания ДЕТЕРМИНИРОВАННОЕ — меньший id (строково) — поэтому все
+// устройства и удаление лишних облачных строк (prepareCloudDedupe) выбирают одну и ту же
+// копию, и после синка снова не размножается пара. Прогресс объединяем максимумами,
+// таймстампы клампим максимумом (не «омолаживаем» насильно). Возвращает число склеенных.
+function mergeDupInto(surv, loser){
+  if((loser.updated_at||0)>(surv.updated_at||0)) surv.updated_at=loser.updated_at;
+  if((loser.prog_at||0)>(surv.prog_at||0)) surv.prog_at=loser.prog_at;
+  mergeDupProgress(surv, loser);
+}
+function makeLocalUnique(){
+  let merged=0;
+  const map=new Map();   // ключ «язык|слово» → карточка-победитель
+  const out=[];          // итоговый порядок (карточки без слова сохраняются как есть)
+  for(const it of items){
+    if(!String(it.hanzi||'').trim()){ out.push(it); continue; }   // без слова — не с чем совпадать
+    const k=dupKeyOfLang(it);
+    const s=map.get(k);
+    if(s===undefined){ map.set(k,it); out.push(it); continue; }
+    let surv=it, loser=s;
+    if(s.id<it.id){ surv=s; loser=it; }
+    if(surv===it){ const idx=out.indexOf(s); if(idx>=0) out[idx]=it; }  // новый выживший занял место прежнего
+    map.set(k,surv);
+    mergeDupInto(surv, loser);
+    revokeAll(loser);
+    merged++;
+  }
+  items=out;
+  for(const it of items) seedCardSigs(it);
+  return merged;
+}
+// Стабильный id для новой карточки: 64-битный FNV-1a хэш «язык|свёрнутое слово». Один и тот
+// же материал на разных устройствах получает ОДИН id — дубли вообще перестают рождаться при
+// повторном добавлении одинакового слова. Возвращает присвоенный id.
+function hash64(s){
+  // FNV-1a 64-bit (basis 0xcbf29ce484222325, prime 0x100000001b3) на BigInt — точнее,
+  // чем эмуляция через два 32-битных полуслова в double.
+  let h=0xcbf29ce484222325n;
+  const prime=0x100000001b3n, mask=(1n<<64n)-1n;
+  for(let i=0;i<s.length;i++){
+    h^=BigInt(s.charCodeAt(i));
+    h=(h*prime)&mask;
+  }
+  return h.toString(16).padStart(16,'0');
+}
+function assignStableId(it){
+  it.id='k'+hash64(dupKeyOfLang(it));
+  return it.id;
 }
 // Сигнатуры settings/stats для LWW. Исключаем updated_at (сама метка) и sessN
 // (локальный счётчик сессий — меняется при каждом входе в режим, но это не пользовательская настройка).
@@ -1691,6 +1765,10 @@ function openItemModal(id){
     const p=m.querySelector('#fPinyin');
     if(p) p.value=toPinyin(h);
   };
+  // Стабильный id — при создании новой карточки, как только введено слово (и до «Сохранить»).
+  // Звук прикрепляется в текущей модалке по editingItem.id, поэтому важно обновить id ДО сохранения.
+  const hz=m.querySelector('#fHanzi');
+  hz.onchange=()=>{ if(isNewItem && hz.value.trim()) assignStableId(editingItem); };
 }
 // Альтернативные переводы: «Перевод», «Перевод 2» … «Перевод 5» (максимум 5 полей).
 // «Перевод» имеет только плюс; «Перевод 2–4» — плюс и минус; «Перевод 5» — только минус.
@@ -1880,6 +1958,9 @@ async function saveItem(){
   editingItem.tag=document.getElementById('fTag').value.trim();
   editingItem.starred=document.getElementById('fStarred').checked;
   editingItem.kind='word';
+  // Стабильный id для новых карточек (страховка, если onchange по полю слова не сработал —
+  // например, автозаполнение). Один и тот же материал получит один id на любом устройстве.
+  if(isNewItem && editingItem.hanzi.trim()) assignStableId(editingItem);
   // --- пишем в БД только при «Сохранить» (аудио из памяти формы + снятые записи) ---
   for(const s of AUDIO_SLOTS){
     const p=pendingRec[s];
@@ -1949,7 +2030,9 @@ function saveBatch(){
     }
     if(!hanzi) return;
     if(!pinyin && hasStrokes()) pinyin=toPinyin(hanzi);
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()});
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()};
+    assignStableId(it);
+    items.push(it);
     n++;
   });
   persist().then(()=>{ closeModal('modalBatch'); renderDict(); updateChips(); toast('Добавлено: '+n); });
@@ -3323,6 +3406,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.13','05.10.26','Дедупликация карточек: одинаковый материал (язык + слово) больше не плодится — новые карточки получают стабильный id из слова, поэтому дубли не рождаются при повторном добавлении/стартовом наборе; при старте и при синхронизации одинаковые карточки склеиваются (прогресс объединяется максимумами), а лишние облачные строки удаляются — уже удвоенная база сама складывается в один экземпляр на первом же синке'],
   ['1.8.12','05.10.26','Исправлена потеря статистики после чистки кэша: пустая статистика/настройки больше не получают метку «сейчас», поэтому не побеждали реальную историю в синхронизации; облачная история восстанавливается поверх затёртых пустышек; флажки языков в настройках теперь рисуются инлайн-SVG и видны на Windows (раньше эмодзи-флаги пропадали)'],
   ['1.8.11','05.10.26','Режим «Экзамен» теперь показывает вопрос теми же размерами, что «Учить» (иероглиф/пиньинь/перевод — один источник, ползунки «Учить» действуют и в экзамене); service worker обновлён: index.html всегда берётся из сети, поэтому новые версии больше не «застревают» в кэше браузера'],
   ['1.8.10','05.10.26','«Учить» — ползунки размера теперь отсчитываются от золотого стандарта: на десктопе 100% = иероглиф 57px / пиньинь 29px / перевод 19px (телефон 100/38/27), а у тех, кто раньше держал 60/60/70, ползунки один раз сами встали на 100% — крутить вручную не нужно'],
@@ -4380,6 +4464,7 @@ async function doImportFile(file){
     items=[];
     for(const d of (j.items||[])){
       const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
+      if(String(d.hanzi||'').trim()) assignStableId(it);   // одинаковый материал = одинаковый id при импорте
       migrateItem(it);
       seedCardSigs(it);
       for(const r of (d.recordings||[])){
@@ -4387,6 +4472,7 @@ async function doImportFile(file){
       }
       items.push(it);
     }
+    const dupN=makeLocalUnique();   // бэкап мог сам содержать дубли — склеиваем сразу
     if(j.settings) settings={...settings,...j.settings};
     // статистика: новый формат — карта по языкам; старый — объект stats активного языка
     if(j.statsByLang){ statsByLang=j.statsByLang; }
@@ -4394,7 +4480,7 @@ async function doImportFile(file){
     if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
     stats=statsByLang[activeLang];
     await persist(); await refreshAll();
-    toast('Импортировано: '+items.length);
+    toast(dupN>0 ? ('Импортировано: '+items.length+' (склеено дублей: '+dupN+')') : ('Импортировано: '+items.length));
   }catch(e){ toast('Ошибка импорта'); console.error(e); }
 }
 
@@ -4466,7 +4552,9 @@ function sampleData(skipConfirm){
   if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
   const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
-    items.push({id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()});
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()};
+    assignStableId(it);
+    items.push(it);
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
 }
@@ -4708,6 +4796,24 @@ function normalizeCloudRecs(recs){
 }
 
 // ---------- PULL (Supabase → память) ----------
+// Дедупликация облака: три одинаковые карточки (но с разными случайными id) после чистки
+// кэша размножились в базе. Здесь «лишние» строки детерминированно отбрасываются (остаётся
+// наименьший id) и удаляются из облака, чтобы повторный синк не вернул их снова.
+// Ключ совпадения — язык+слово (свёрнутое), payload читаем из jsonb-колонки data.
+function dedupeCloudCards(cards){
+  const dead=new Set();
+  const seen=new Map();
+  for(const row of cards){
+    const c=cardFromCloud(row.data||{}, row.updated_at, row.prog_at);
+    c.lang=row.lang||c.lang;
+    const k=dupKeyOfLang(c);
+    const s=seen.get(k);
+    if(s===undefined){ seen.set(k,row.id); continue; }
+    if(row.id<s){ dead.add(s); seen.set(k,row.id); }   // выживает меньший id
+    else dead.add(row.id);
+  }
+  return {cards:cards.filter(r=>!dead.has(r.id)), removed:dead.size, deadIds:Array.from(dead)};
+}
 async function pullCloudRows(u){
   const cards=[];
   let from=0;
@@ -4717,6 +4823,15 @@ async function pullCloudRows(u){
     const rows=r.data||[]; cards.push(...rows);
     if(rows.length<1000) break; from+=1000;
   }
+  // Дедупликация облака: одинаковые строки сворачиваются, лишние удаляем из базы сразу
+  // (их не должен увидеть мерж ниже). Ошибку удаления не роняем: строки просто останутся,
+  // а защиту на следующем синке повторит этот же блок.
+  const dd=dedupeCloudCards(cards);
+  if(dd.removed){
+    try{ await sbClient().from('cards').delete().eq('user_id',u.id).in('id',dd.deadIds); }
+    catch(e){ /* не удалились — повторим при следующей синхронизации */ }
+  }
+  cards=dd.cards;
   const sR=await sbClient().from('user_settings').select('data,updated_at').eq('user_id',u.id).limit(1).maybeSingle();
   if(sR.error) throw sR.error;
   const stR=await sbClient().from('user_stats').select('lang,data,updated_at').eq('user_id',u.id);
@@ -4974,6 +5089,47 @@ async function doSync(){
     await uploadPendingAudio();
     const cloudById={};                 // облачные карточки ВСЕХ языков
     for(const row of cloud.cards) cloudById[row.id]={u:row.updated_at||0, pu:row.prog_at||0, data:row.data, lang:row.lang};
+
+    // --- крос-дедупликация: одинаковый материал (язык+слово) с РАЗНЫМИ id ---
+    // По-id мерж такие не ловит (id случайны). Если локальная и облачная копии — дубли,
+    // склеиваем их детерминированно (меньший id выживает), прогресс — максимумы.
+    for(let i=0;i<items.length;i++){
+      const it=items[i];
+      if(!String(it.hanzi||'').trim()) continue;
+      const k=dupKeyOfLang(it);
+      // находим облачную копию с тем же ключом, но другим id
+      let clRow=null;
+      for(const rid of Object.keys(cloudById)){
+        if(rid===it.id) continue;
+        const row=cloudById[rid];
+        if(row._dupKey===undefined) row._dupKey=dupKeyOfLang(cardFromCloud(row.data||{}, row.u, row.pu));
+        if(row._dupKey===k){ clRow={id:rid, row}; break; }
+      }
+      if(!clRow) continue;
+      const cloudIt=cardFromCloud(clRow.row.data||{}, clRow.row.u, clRow.row.pu);
+      let survIt, loserIt;
+      if(it.id<clRow.id){
+        survIt=it; loserIt=cloudIt;
+        // выживает локальная: вливаем прогресс облака и удаляем облачную строку
+        delete cloudById[clRow.id];
+        const dr=await sbClient().from('cards').delete().eq('user_id',u.id).eq('id',clRow.id);
+        if(dr.error) throw dr.error;
+      }else{
+        survIt=cloudIt; loserIt=it;
+        // выживает облачная: из локальной забираем только прогресс; локальную убираем из items
+        mergeDupInto(survIt, loserIt);
+        revokeAll(it);
+        items.splice(i,1); i--;
+        // облачную строку обновим обычным пушем: проставим merged-прогресс выжившему
+        cloudById[clRow.id]={u:survIt.updated_at||0, pu:survIt.prog_at||0, data:cloudCard(survIt), lang:survIt.lang};
+        const pu=await sbClient().from('cards').upsert({id:clRow.id, user_id:u.id, lang:survIt.lang, data:cloudCard(survIt), updated_at:survIt.updated_at||0, prog_at:survIt.prog_at||0},{onConflict:'id'});
+        if(pu.error) throw pu.error;
+        continue;
+      }
+      mergeDupInto(it, cloudIt);
+    }
+    // подписи после крос-склейки (таймстампы могли сдвинуться максимумами)
+    for(const it of items) seedCardSigs(it);
 
     // --- карточки (все языки): план мержа по каждой части ---
     const localSeen={};
@@ -5302,6 +5458,7 @@ async function boot(){
   for(const it of items) migrateItem(it);
   for(const it of items) await migrateNormAudio(it);
   for(const it of items) normalizeAppItem(it);   // Фаза 8: скаляры + сеем __sigC/__sigP; таймстампы НЕ трогаем
+  const dupMerged=makeLocalUnique();             // склейка одинаковых карточек (язык+слово) до синка
   SHOW_N=items.reduce((m,it)=>Math.max(m, it.lastShowN||0), 0);
   for(const it of items) await hydrateRecordings(it);
   // Фаза 8 (жёсткое правило): таймстампы НЕ ставим в now() при загрузке/миграции.
