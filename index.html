@@ -232,9 +232,14 @@ html[data-theme="dark"] .dc.py{color:#7db8f2}
 .icon-btn.starred{color:var(--amber); background:#fff4dd}
 .icon-btn.arrow{font-size:21px; font-weight:900; color:var(--ink)}
 .dc-stat{font-size:11px; color:var(--mut); white-space:nowrap; margin-left:2px; text-align:right}
+/* На десктопе статус — одной строкой «Уровень N. Повторов M.»: разделитель «. » и точка в конце. */
+.dc-stat span+span::before{content:'. '}
+.dc-stat span:last-child::after{content:'.'}
 /* На телефоне «Уровень N» и «Повторов M» — на разных строках (П.3 «правки 22.26») */
 @media (max-width:1023px){
   .dc-stat{display:flex; flex-direction:column; gap:1px; line-height:1.35}
+  .dc-stat span+span::before{content:none}
+  .dc-stat span:last-child::after{content:none}
 }
 /* Плавающая кнопка «Наверх» в словаре (П.4): показывается скроллом ниже 15-й карточки */
 .dict-up-fab{
@@ -936,7 +941,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.14';
+const APP_VERSION='1.8.15';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1006,6 +1011,42 @@ function dayStr(d){
   const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
   return y+'-'+m+'-'+dd;
 }
+// ---- Точный момент добавления карточки (для строгого порядка в словаре) ----
+// addedAt — epoch-ms создания. Новые карточки получают монотонно растущую метку
+// (внутри одной миллисекунды идём вперёд, чтобы у партии порядок не «слипался»).
+let _lastAddedAt=0;
+function newAddedAt(){
+  const t=Date.now();
+  return (_lastAddedAt = (t>_lastAddedAt ? t : _lastAddedAt+1));
+}
+// Восстановление момента создания для СТАРЫХ карточек (до поля addedAt):
+// id вида uid() = 'i'+Date.now().toString(36)+'…' хранит base36-таймстамп создания.
+function idCreationMs(id){
+  const s=String(id||'');
+  if(s[0]!=='i') return 0;
+  const rest=(s.slice(1).match(/^[0-9a-z]+/i)||[])[0];
+  if(!rest) return 0;
+  for(let len=Math.min(rest.length,10); len>=7; len--){
+    const cand=parseInt(rest.slice(0,len),36);
+    if(cand>1e12 && cand<=Date.now()+86400000) return cand;
+  }
+  return 0;
+}
+// День добавления 'YYYY-MM-DD' → начало суток (местное время), если дата валидна.
+function dayStartMs(day){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day||''));
+  if(!m) return 0;
+  const t=new Date(+m[1], +m[2]-1, +m[3]).getTime();
+  return (t>0 && t<=Date.now()+86400000) ? t : 0;
+}
+// Проставляет addedAt, если его нет: сначала по id (точный момент), затем по дню addedOn.
+function ensureAddedAt(it){
+  const at=+it.addedAt||0;
+  if(at>0){ it.addedAt=at; return; }
+  it.addedAt=idCreationMs(it.id)||dayStartMs(it.addedOn)||0;
+}
+// Эффективный момент добавления для сортировки (см. ensureAddedAt).
+function addedOrderTs(it){ return +it.addedAt||0; }
 function normBox(it){ let b=+it.box||1; return b<1?1:(b>5?5:b); }
 function isNewWord(it){ return !it.newDone; }            // «новое» = ещё не набрало 4 верных ответа
 function isLearned(it){ return normBox(it)>=5; }         // коробка 5 — выучено
@@ -1061,7 +1102,7 @@ function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; sta
 // Причина: раньше один updated_at перештамповывался при любой смене единой сигнатуры, и бутовая
 // миграция делала всю старую базу «свежей» — старая база затирала свежий прогресс другого устройства.
 // Теперь таймстамп двигается ТОЛЬКО при реальном действии пользователя, по своей части.
-const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn'];
+const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn','addedAt'];
 const P_FIELDS=['box','dueSess','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow',
                 'correct','wrong','wrongStreak','correctStreak','correctStreakDays','lastCorrectDay','learnedOn'];
 // Сигнатура контента: что пользователь ввёл/пометил/записал. Аудио — по слотам (speed+имя файла),
@@ -1070,7 +1111,7 @@ function itemContentSig(it){
   const recSig=(it.recordings||[]).filter(r=>r&&r.speed).map(r=>r.speed+':'+(r.name||'')).sort().join('|');
   return JSON.stringify([
     it.id, it.lang, it.kind, it.hanzi, it.pinyin, it.translation, it.trs, it.note, it.tag,
-    it.starred, it.addedOn, recSig
+    it.starred, it.addedOn, it.addedAt, recSig
   ]);
 }
 // Сигнатура прогресса: SRS-состояние (коробка, счётчики, повторы, даты заучивания).
@@ -1128,6 +1169,7 @@ function normalizeAppItem(it){
   it.newDone=+it.newDone||0; it.starred=!!it.starred;
   it.lastCorrectDay=it.lastCorrectDay||''; it.learnedOn=it.learnedOn||'';
   it.addedOn=it.addedOn||''; it.lang=it.lang||'zh'; it.kind=it.kind||'word';
+  ensureAddedAt(it);
   if(!Array.isArray(it.recordings)) it.recordings=[];
   seedCardSigs(it);
   return it;
@@ -1535,9 +1577,10 @@ function dictFiltered(){
   // расширенные фильтры (окно «Фильтр») применяются поверх «Все слова / Избранное»
   if(fltActive()) arr=arr.filter(passesFilter);
   if(q) arr=arr.filter(it=> it.hanzi.toLowerCase().includes(q) || (it.pinyin&&it.pinyin.toLowerCase().includes(q)) || (trJoined(it)&&trJoined(it).toLowerCase().includes(q)) || (it.tag&&it.tag.toLowerCase().includes(q)));
-  // Новые слова вверху: сортировка по дате добавления (addedOn) по убыванию.
-  // Формат 'YYYY-MM-DD' сортируется как строка; при равной дате сохраняем прежний порядок.
-  arr.sort((a,b)=>(b.addedOn||'').localeCompare(a.addedOn||''));
+  // Новые слова вверху: строго по моменту добавления (addedAt, epoch-ms) по убыванию.
+  // У карточек без точной метки добавление восстановлено из id/addedOn в normalizeAppItem,
+  // поэтому addedAt есть у всех. При равенстве (пара слов одной партии) — более свежий id сверху.
+  arr.sort((a,b)=>((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||'')));
   return arr;
 }
 // подписи-счётчики «N выучено» + подсветка активной кнопки + бейдж «Фильтра»
@@ -1723,7 +1766,7 @@ function openItemModal(id){
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
     isNewItem=true;
-    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()};
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
   }else{
     hydrateRecordings(editingItem);
   }
@@ -2030,7 +2073,7 @@ function saveBatch(){
     }
     if(!hanzi) return;
     if(!pinyin && hasStrokes()) pinyin=toPinyin(hanzi);
-    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()};
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
     assignStableId(it);
     items.push(it);
     n++;
@@ -3406,6 +3449,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.15','05.10.26','Словарь: строгий порядок слов по времени добавления (каждое новое слово — в самый верх; у карточек появилась точная метка момента добавления, у старых она восстанавливается из id/дня добавления); на компьютере статус карточки теперь одной строкой «Уровень N. Повторов M.», на телефоне остаются две строки'],
   ['1.8.14','05.10.26','Исправлена ошибка синхронизации, появившаяся в 1.8.13: при записи в облако поднималась скрытая ошибка «Assignment to constant variable» и синхронизация падала на любом устройстве; восстановление карточки из облака теперь не ломается на строке без данных'],
   ['1.8.13','05.10.26','Дедупликация карточек: одинаковый материал (язык + слово) больше не плодится — новые карточки получают стабильный id из слова, поэтому дубли не рождаются при повторном добавлении/стартовом наборе; при старте и при синхронизации одинаковые карточки склеиваются (прогресс объединяется максимумами), а лишние облачные строки удаляются — уже удвоенная база сама складывается в один экземпляр на первом же синке'],
   ['1.8.12','05.10.26','Исправлена потеря статистики после чистки кэша: пустая статистика/настройки больше не получают метку «сейчас», поэтому не побеждали реальную историю в синхронизации; облачная история восстанавливается поверх затёртых пустышек; флажки языков в настройках теперь рисуются инлайн-SVG и видны на Windows (раньше эмодзи-флаги пропадали)'],
@@ -4447,7 +4491,7 @@ async function doExport(){
       const rec=await DB.get('aud:'+it.id+':'+r.speed);
       recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
     }
-    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,lang:langOf(it),updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,addedAt:it.addedAt||0,lang:langOf(it),updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
   }));
   const blob=new Blob([JSON.stringify({items:out,settings,statsByLang},null,1)],{type:'application/json'});
   downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
@@ -4464,9 +4508,10 @@ async function doImportFile(file){
     for(const each of items) revokeAll(each);
     items=[];
     for(const d of (j.items||[])){
-      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',addedAt:+d.addedAt||0,lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
       if(String(d.hanzi||'').trim()) assignStableId(it);   // одинаковый материал = одинаковый id при импорте
       migrateItem(it);
+      ensureAddedAt(it);   // старые бэкапы без addedAt — по дню добавления
       seedCardSigs(it);
       for(const r of (d.recordings||[])){
         if(r.data){ const {buf,mime}=b64ToBuf(r.data); await DB.put('aud:'+it.id+':'+r.speed,{name:r.name,type:mime,buf}); it.recordings.push({speed:r.speed,name:r.name,url:URL.createObjectURL(new Blob([buf],{type:mime}))}); }
@@ -4553,7 +4598,7 @@ function sampleData(skipConfirm){
   if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
   const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
-    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),lang:activeLang,updated_at:now(),prog_at:now()};
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
     assignStableId(it);
     items.push(it);
   }
@@ -4754,7 +4799,7 @@ function cardFromCloud(data, u, pu){
     nsLastGoodShow:src.nsLastGoodShow==null?null:src.nsLastGoodShow,
     lastShowN:+src.lastShowN||0, lastSeen:+src.lastSeen||0, nextDue:+src.nextDue||0,
     newDone:+src.newDone||0, starred:!!src.starred,
-    lastCorrectDay:src.lastCorrectDay||'', learnedOn:src.learnedOn||'', addedOn:src.addedOn||'',
+    lastCorrectDay:src.lastCorrectDay||'', learnedOn:src.learnedOn||'', addedOn:src.addedOn||'', addedAt:+src.addedAt||0,
     lang:src.lang||'zh',
     // Фаза 8: авторитетные метки читаем из колонок; data.* — только запасной вариант (для старых row).
     updated_at:(u!==undefined ? (+u||0) : (+src.updated_at||0)),
