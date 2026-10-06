@@ -14,3 +14,4 @@ hanzi-trainer-offline*.html
 
 # Актуальная офлайн-сборка — загружаем, поэтому исключаем из запрета
 !hanzi-trainer-offline 1.8.15.html
+!hanzi-trainer-offline 1.8.16.html

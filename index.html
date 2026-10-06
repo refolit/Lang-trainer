@@ -941,7 +941,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.15';
+const APP_VERSION='1.8.16';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1430,9 +1430,12 @@ function tracksFor(it, opts){
 // В режиме «Учить» слово озвучивается один раз на обычной скорости.
 // Повтор — только при продолжительном простое (см. studyIdle) или кнопкой «Повторить».
 function studySpeeds(){ return ['norm']; }
-function playItem(it, opts){
+// Проигрывание для «Учить»: mp3 могло прийти из облака с path, но без локального файла —
+// сначала подтягиваем его (кэш/сеть), затем собираем плейлист из файлов, иначе TTS.
+async function playItem(it, opts){
   opts=opts||{};
   if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
+  await ensureCardAudio(it, opts.mode==='exam' ? ['norm'] : (opts.speeds||studySpeeds()));
   const el=document.getElementById('studySpeed');
   Player.onSpeedChange=(label)=> el.textContent=label?('🔊 '+label):'';
   Player.onDone=()=>{ if(opts.onDone) opts.onDone(); };
@@ -3033,18 +3036,22 @@ function startExamRepeat(it){
     examSpeakWord(it);
   }, EXAM_REPEAT_MS);
 }
-// повтор слова целиком (обычный темп)
-function examSpeakWord(it){
+// повтор слова целиком (обычный темп). Если у слова есть сохранённое mp3 (в том числе
+// пришедшее из облака — подтягиваем его по path), играем файл; иначе синтез речи.
+async function examSpeakWord(it){
   if(!examAudioOn) return;
   if(!it||!it.hanzi) return;
-  speak(it.hanzi,1);
+  await ensureCardAudio(it, ['norm']);
+  const r=liveRec(it, 'norm');
+  if(r && r.url){ Player.stop(); Player.play([{kind:'file',url:r.url,reps:1,label:'обычно'}], {gap:0}); }
+  else speak(it.hanzi,1);
 }
 function toggleExamAudio(){
   examAudioOn=!examAudioOn;
   settings.examAudio=examAudioOn; persist();
   clearExamIdle();
   if(!examAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-  else { const it=examCurrentIt; if(it&&it.hanzi){ speak(it.hanzi,1); startExamRepeat(it); } }
+  else { const it=examCurrentIt; if(it&&it.hanzi){ examSpeakWord(it); startExamRepeat(it); } }
 }
 function toggleExamAllTr(){
   examAllTr=!examAllTr;
@@ -3449,6 +3456,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.16','06.10.26','Кэш-бастер версии: service worker теперь всегда забирает свежий index.html (обновления видны без чистки кэша), а имя кэша привязано к версии; исправлено проигрывание mp3 на других устройствах — режимы «Учить» и «Экзамен» теперь подтягивают аудио из облака и играют файл вместо синтеза речи'],
   ['1.8.15','05.10.26','Словарь: строгий порядок слов по времени добавления (каждое новое слово — в самый верх; у карточек появилась точная метка момента добавления, у старых она восстанавливается из id/дня добавления); на компьютере статус карточки теперь одной строкой «Уровень N. Повторов M.», на телефоне остаются две строки'],
   ['1.8.14','05.10.26','Исправлена ошибка синхронизации, появившаяся в 1.8.13: при записи в облако поднималась скрытая ошибка «Assignment to constant variable» и синхронизация падала на любом устройстве; восстановление карточки из облака теперь не ломается на строке без данных'],
   ['1.8.13','05.10.26','Дедупликация карточек: одинаковый материал (язык + слово) больше не плодится — новые карточки получают стабильный id из слова, поэтому дубли не рождаются при повторном добавлении/стартовом наборе; при старте и при синхронизации одинаковые карточки склеиваются (прогресс объединяется максимумами), а лишние облачные строки удаляются — уже удвоенная база сама складывается в один экземпляр на первом же синке'],
@@ -4913,6 +4921,17 @@ async function cacheRemoteAudio(it, slot){
     rec.url=URL.createObjectURL(new Blob([buf],{type}));
   }catch(e){ /* офлайн или нет файла — останется TTS */ }
 }
+// Подтягиваем mp3 для указанных слотов перед проигрыванием (облачные записи приходят
+// с path, но без локального файла — url пуст). После этого у записи есть url,
+// и playlist/экзамен играют файл вместо синтеза речи. Безопасно для офлайн-версии:
+// publicAudioUrl вернёт null (нет клиента) — ничего не делаем.
+async function ensureCardAudio(it, slots){
+  if(!it) return;
+  for(const s of (slots||AUDIO_SLOTS)){
+    const r=liveRec(it, s);
+    if(r && r.path && !r.url) await cacheRemoteAudio(it, s);
+  }
+}
 // Поднимаем локальную запись в Storage (если ещё не там) и проставляем path карточке.
 async function uploadAudio(it, slot){
   const rec=liveRec(it, slot);
@@ -5535,7 +5554,7 @@ boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.mess
 // PWA: service worker только на https/localhost (иначе — просто кэш браузера).
 // updateViaCache:'none' — браузер всегда берёт свежий sw.js, не кэшированный старый.
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
-  navigator.serviceWorker.register('sw.js', {updateViaCache:'none'}).catch(()=>{});
+  navigator.serviceWorker.register('sw.js?v='+encodeURIComponent(APP_VERSION), {updateViaCache:'none'}).catch(()=>{});
 }
 </script>
 </body>

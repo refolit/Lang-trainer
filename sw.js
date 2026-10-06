@@ -1,5 +1,9 @@
-// Service worker: кэширует приложение и данные иероглифов для офлайн-работы
-const CACHE = 'hanzi-trainer-v2';
+// Service worker: кэширует приложение и данные иероглифов для офлайн-работы.
+// Имя кэша привязано к номеру сборки: когда выходит новая версия, старый кэш
+// автоматически удаляется при активации нового SW — на устройство не оседает
+// устаревший index.html/библиотеки.
+const VERSION = '1.8.16';
+const CACHE = `hanzi-trainer-${VERSION}`;
 
 const LIBS = [
   'https://cdn.jsdelivr.net/npm/hanzi-writer@3.6/dist/hanzi-writer.min.js',
@@ -42,7 +46,8 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // html/фреймы с того же origin — network-first, чтобы правки index.html сразу попадали на экран
+  // html/фреймы с того же origin — network-first: каждую перезагрузку сверяемся с сетью,
+  // чтобы новая версия index.html появлялась без ручной чистки кэша.
   const sameOrigin = url.origin === location.origin;
   const isPage = e.request.mode === 'navigate' || (/\.html?$/.test(url.pathname) && sameOrigin);
 
