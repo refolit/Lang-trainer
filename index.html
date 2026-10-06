@@ -133,8 +133,12 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .btn-row{display:flex; gap:10px}
 .btn-row .btn{flex:1}
 .btn-col{display:flex; flex-direction:column; gap:10px; width:100%}
-/* «Вперёд ▶» в режиме «Учить» — в 1,5 раза выше остальных кнопок (~44px → 66px) */
-#studyKnow{min-height:66px}
+/* «Учить»: три кнопки в ряд — «◀ Назад» и «✍️ Писать это» по 25% ширины, «Вперёд ▶» 50%. */
+.study-btns{display:flex; gap:10px; width:100%}
+.study-btns .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px}
+.study-btns #studyBack{flex-grow:1}
+.study-btns #studyAgain{flex-grow:1}
+.study-btns #studyKnow{flex-grow:2; min-height:66px}
 
 /* Big display — размером каждой части управляют CSS-переменные (mul-h/p/t) */
 :root{ --mul-h:1; --mul-p:1; --mul-t:1; }
@@ -664,10 +668,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <div class="bigtr" id="studyTr"></div>
         <div class="bigsize" id="studySize"></div>
       </div>
-      <div class="btn-col">
-        <button class="btn ok" id="studyKnow">Вперёд ▶</button>
+      <div class="study-btns">
         <button class="btn sec" id="studyBack">◀ Назад</button>
         <button class="btn warn" id="studyAgain">✍️ Писать это</button>
+        <button class="btn ok" id="studyKnow">Вперёд ▶</button>
       </div>
     </div>
     <div class="empty hidden" id="studyEmpty">
@@ -941,7 +945,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.16';
+const APP_VERSION='1.8.17';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2341,7 +2345,15 @@ function updateStudySize(){
     const pct=Math.round(px/width*1000)/10;
     parts.push(short+' '+px+' px · '+pct+'%');
   }
-  el.textContent=parts.join(' / ');
+  // первая строка — размеры; вторая (тем же шрифтом) — статус текущей карточки:
+  // «Уровень X . Повторов Y» (у выученных — «Уровень 5 . Выучено», как в словаре).
+  const sizeLine=parts.join(' / ');
+  const it=studyQueue[studyIdx];
+  let statusLine='';
+  if(it && studyQueue.length){
+    statusLine='Уровень '+levelOf(it)+(isLearned(it) ? ' . Выучено' : (' . Повторов '+(it.correct||0)));
+  }
+  el.innerHTML=escapeHtml(sizeLine)+(statusLine?'<br>'+escapeHtml(statusLine):'');
 }
 // пересчитывать размеры при повороте/изменении ширины и после смены слайдеров
 window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
@@ -2642,12 +2654,10 @@ function writeGoto(idx){
 }
 function writeWordList(){
   // ВСЕ слова/предложения словаря строго в порядке добавления: чем позже добавлено —
-  // тем выше (П.9 «правки 22.26»). Внутри одного дня — по таймстампу id (время создания).
+  // тем выше (П.9 «правки 22.26»). Сортировка — по точному моменту добавления addedAt
+  // (epoch-ms), как в словаре; при равенстве (одна партия) — более свежий id сверху.
   const list=writableItems().slice().sort((a,b)=>{
-    const ta=String(a.addedOn||'')+' '+String(a.id||'');
-    const tb=String(b.addedOn||'')+' '+String(b.id||'');
-    if(ta!==tb) return ta>tb?-1:1;   // дата больше (новее) — сверху; id новее — сверху
-    return (a.id||'').localeCompare(b.id||'');
+    return ((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||''));
   });
   return list;
 }
@@ -3456,6 +3466,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.17','06.10.26','«Учить»: под размерами — строка «Уровень N . Повторов M» текущей карточки; три кнопки в ряд Назад/Писать это/Вперёд (25% / 25% / 50% ширины); «Письмо»: список слов строго по моменту добавления (свежее сверху); аудио на чужих устройствах — подписанный URL как запасной путь, если bucket остался приватным'],
   ['1.8.16','06.10.26','Кэш-бастер версии: service worker теперь всегда забирает свежий index.html (обновления видны без чистки кэша), а имя кэша привязано к версии; исправлено проигрывание mp3 на других устройствах — режимы «Учить» и «Экзамен» теперь подтягивают аудио из облака и играют файл вместо синтеза речи'],
   ['1.8.15','05.10.26','Словарь: строгий порядок слов по времени добавления (каждое новое слово — в самый верх; у карточек появилась точная метка момента добавления, у старых она восстанавливается из id/дня добавления); на компьютере статус карточки теперь одной строкой «Уровень N. Повторов M.», на телефоне остаются две строки'],
   ['1.8.14','05.10.26','Исправлена ошибка синхронизации, появившаяся в 1.8.13: при записи в облако поднималась скрытая ошибка «Assignment to constant variable» и синхронизация падала на любом устройстве; восстановление карточки из облака теперь не ломается на строке без данных'],
@@ -4908,18 +4919,28 @@ function liveRec(it, slot){
 async function cacheRemoteAudio(it, slot){
   const rec=liveRec(it, slot);
   if(!rec || rec.url) return;
-  const url=publicAudioUrl(it, slot);
-  if(!url) return;
+  const path=rec.path;
+  if(!path || !sbClient()) return;
   const local=await DB.get('aud:'+it.id+':'+slot);
   if(local){ rec.url=URL.createObjectURL(new Blob([local.buf],{type:local.type})); return; }
+  // Пробуем публичный URL; если bucket остался приватным (403) — подписанный URL.
+  const urls=[sbClient().storage.from('recordings').getPublicUrl(path).data.publicUrl];
   try{
-    const resp=await fetch(url);
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const buf=new Uint8Array(await resp.arrayBuffer());
-    const type=resp.headers.get('content-type')||'audio/mpeg';
-    await DB.put('aud:'+it.id+':'+slot, {name:rec.name||'audio', type, buf});
-    rec.url=URL.createObjectURL(new Blob([buf],{type}));
-  }catch(e){ /* офлайн или нет файла — останется TTS */ }
+    const {data,error}=await sbClient().storage.from('recordings').createSignedUrl(path, 3600);
+    if(!error && data && data.signedUrl) urls.push(data.signedUrl);
+  }catch(e){ /* подписанный не нужен — публичный сработает */ }
+  for(const url of urls){
+    try{
+      const resp=await fetch(url);
+      if(!resp.ok) continue;                  // 403/404 — пробуем следующий источник
+      const buf=new Uint8Array(await resp.arrayBuffer());
+      const type=resp.headers.get('content-type')||'audio/mpeg';
+      await DB.put('aud:'+it.id+':'+slot, {name:rec.name||'audio', type, buf});
+      rec.url=URL.createObjectURL(new Blob([buf],{type}));
+      return;
+    }catch(e){ /* офлайн/сеть упала — следующий источник или TTS */ }
+  }
+  // файла нет ни по одному адресу — останется TTS
 }
 // Подтягиваем mp3 для указанных слотов перед проигрыванием (облачные записи приходят
 // с path, но без локального файла — url пуст). После этого у записи есть url,
