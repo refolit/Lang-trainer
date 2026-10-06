@@ -18,8 +18,12 @@ values ('recordings', 'recordings', true)
 on conflict (id) do update set public = true;
 
 -- Политики записи/удаления: только владелец (первый сегмент пути = auth.uid()).
--- select отключён политикой — публичное чтение обеспечивает флаг public выше.
+-- Чтение даёт флаг public выше (постоянный URL без подписи). НО select-политика владельцу
+-- нужна и для запасного пути createSignedUrl (клиент пробует подписанный URL, если bucket
+-- вдруг остался приватным): без select-политики createSignedUrl отвечает 403.
 drop policy if exists "recordings_select_own" on storage.objects;
+create policy "recordings_select_own" on storage.objects
+  for select using (bucket_id = 'recordings' and auth.uid()::text = (storage.foldername(name))[1]);
 drop policy if exists "recordings_insert_own" on storage.objects;
 create policy "recordings_insert_own" on storage.objects
   for insert with check (bucket_id = 'recordings' and auth.uid()::text = (storage.foldername(name))[1]

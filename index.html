@@ -120,6 +120,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
   border:0; border-radius:14px; padding:13px 16px; font-size:15px; font-weight:700; background:var(--red); color:#fff;
   display:inline-flex; align-items:center; justify-content:center; gap:7px; width:100%;
   box-shadow:0 4px 0 var(--red-d), 0 6px 14px rgba(198,40,40,.22);
+  touch-action:manipulation;
 }
 .btn:active{transform:translateY(3px); box-shadow:0 1px 0 var(--red-d), 0 2px 6px rgba(198,40,40,.22)}
 .btn.sec{background:var(--card); color:var(--ink); border:1.5px solid var(--line); box-shadow:0 4px 0 var(--sec-d), 0 4px 10px rgba(30,28,26,.07)}
@@ -139,6 +140,12 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .study-btns #studyBack{flex-grow:1}
 .study-btns #studyAgain{flex-grow:1}
 .study-btns #studyKnow{flex-grow:2; min-height:66px}
+/* На тач-экране кнопка при нажатии НЕ сдвигается вниз (`transform:translateY`) —
+   сдвиг сдвигает её из-под пальца, и отпускание происходит вне кнопки → click
+   теряется (то самое «Назад срабатывает через раз» на узких кнопках 25%). */
+@media (hover:none) and (pointer:coarse){
+  .btn:active,.btn.ok:active,.btn.sec:active,.btn.warn:active{ transform:none; }
+}
 
 /* Big display — размером каждой части управляют CSS-переменные (mul-h/p/t) */
 :root{ --mul-h:1; --mul-p:1; --mul-t:1; }
@@ -945,7 +952,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.17';
+const APP_VERSION='1.8.18';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2415,7 +2422,8 @@ function studyBack(){
   if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='';
   const it=studyQueue[studyIdx]; if(!it) return;
   Player.stop();
-  studyIdx=Math.max(0,studyIdx-1);
+  if(studyIdx<=0){ resetStudyQueue(); return; }   // на первой карточке: круг по очереди, индекс не застревает
+  studyIdx--;
   showStudyCard();
 }
 // --- результат ответа (общий для «Письма» и всех подрежимов «Экзамена») ---
@@ -3466,6 +3474,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.18','07.10.26','Аудио: после синхронизации приложение само докачивает mp3 из облака (одинаковая «База аудио» на всех устройствах, звук сразу в карточке); кнопки «Назад» в «Учить» больше не «проглатываются» на тач-экране (при нажатии кнопка не сдвигается под пальцем + touch-action:manipulation); «Назад» на первой карточке корректно уходит по кругу очереди; в репозитории — SQL-чинка SELECT-политики bucket `recordings` (создание подписанной ссылки исправно работает)'],
   ['1.8.17','06.10.26','«Учить»: под размерами — строка «Уровень N . Повторов M» текущей карточки; три кнопки в ряд Назад/Писать это/Вперёд (25% / 25% / 50% ширины); «Письмо»: список слов строго по моменту добавления (свежее сверху); аудио на чужих устройствах — подписанный URL как запасной путь, если bucket остался приватным'],
   ['1.8.16','06.10.26','Кэш-бастер версии: service worker теперь всегда забирает свежий index.html (обновления видны без чистки кэша), а имя кэша привязано к версии; исправлено проигрывание mp3 на других устройствах — режимы «Учить» и «Экзамен» теперь подтягивают аудио из облака и играют файл вместо синтеза речи'],
   ['1.8.15','05.10.26','Словарь: строгий порядок слов по времени добавления (каждое новое слово — в самый верх; у карточек появилась точная метка момента добавления, у старых она восстанавливается из id/дня добавления); на компьютере статус карточки теперь одной строкой «Уровень N. Повторов M.», на телефоне остаются две строки'],
@@ -4953,6 +4962,24 @@ async function ensureCardAudio(it, slots){
     if(r && r.path && !r.url) await cacheRemoteAudio(it, s);
   }
 }
+// После успешной синхронизации докачиваем mp3 для записей, у которых есть path из облака,
+// но нет локального кэша (например, новое устройство). Это делает «Данные → База аудио»
+// одинаковой на всех устройствах и гарантирует звук без предварительного открытия карточки.
+// Идём последовательно и не ждём завершения (фон), чтобы синк не подвисал.
+async function prefetchCloudAudio(){
+  if(!_syncUser || !sbClient()) return;
+  let n=0;
+  for(const it of items){
+    for(const r of (it.recordings||[])){
+      if(!r || !r.speed || !AUDIO_SLOTS.includes(r.speed)) continue;
+      if(!r.path || r.url) continue;
+      const local=await DB.get('aud:'+it.id+':'+r.speed);
+      if(local) continue;
+      try{ await cacheRemoteAudio(it, r.speed); n++; }catch(e){ /* сеть/офлайн — доберём при следующем синке */ }
+      if(n>=200) return;
+    }
+  }
+}
 // Поднимаем локальную запись в Storage (если ещё не там) и проставляем path карточке.
 async function uploadAudio(it, slot){
   const rec=liveRec(it, slot);
@@ -5339,8 +5366,9 @@ async function doSync(){
       cloudStatsU[lg]=Math.max(slU,sRU);
     }
 
-    // --- аудио (Фаза 6): записи, пришедшие из облака с path, но без локального кэша, подтянут файл
-    // по требованию (при проигрывании) — массовую предзагрузку не делаем, чтобы синхронизация была быстрой.
+    // --- аудио (Фаза 6): записи, пришедшие из облака с path, но без локального кэша, подтягиваем
+    // фоновой предзагрузкой после успешного мержа — иначе «База аудио» разнится между устройствами,
+    // а свежесинхронная запись не играет файл, пока её карточку не откроют вручную.
 
     // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул таймстампы) ---
     _sigSet=settingsSig(settings);
@@ -5348,6 +5376,8 @@ async function doSync(){
     await persist(); await refreshAll();
     lastSyncAt=now();
     await saveMeta();
+    // Фоновая докачка mp3 из облака (не блокирует финал синхронизации).
+    if(_syncUser && sbClient()) prefetchCloudAudio();
     // Журнал синхронизации (что откуда и куда ушло) — отдельная запись в БД, не влияет на мерж.
     await logSyncEvent({
       startedAt:syncStartedAt, durationMs:now()-syncStartedAt,
