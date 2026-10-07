@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#c62828">
+<meta name="referrer" content="no-referrer">
 <title>Language Trainer</title>
 <link rel="manifest" href='data:application/manifest+json,{"name":"汉语 тренажёр","short_name":"汉语","start_url":".","display":"standalone","background_color":"%23faf8f5","theme_color":"%23c62828","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E'>
@@ -136,10 +137,10 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .btn-col{display:flex; flex-direction:column; gap:10px; width:100%}
 /* «Учить»: три кнопки в ряд — «◀ Назад» и «✍️ Писать это» по 25% ширины, «Вперёд ▶» 50%. */
 .study-btns{display:flex; gap:10px; width:100%}
-.study-btns .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px}
+.study-btns .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; min-height:48px}
 .study-btns #studyBack{flex-grow:1}
 .study-btns #studyAgain{flex-grow:1}
-.study-btns #studyKnow{flex-grow:2; min-height:66px}
+.study-btns #studyKnow{flex-grow:2}
 /* На тач-экране кнопка при нажатии НЕ сдвигается вниз (`transform:translateY`) —
    сдвиг сдвигает её из-под пальца, и отпускание происходит вне кнопки → click
    теряется (то самое «Назад срабатывает через раз» на узких кнопках 25%). */
@@ -515,7 +516,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
 
 /* Изучение: маленькая кнопка настроек в правом верхнем углу экрана */
-.study-top{display:flex; justify-content:flex-end; margin:0 0 4px}
+.study-top{display:flex; justify-content:flex-end; align-items:center; margin:0 0 4px}
 /* Общий верхний ряд режимов: шестерёнка справа (Письмо) / чипы + шестерёнка (Экзамен) */
 .mode-top{display:flex; justify-content:flex-end; align-items:center; gap:8px; margin:0 0 4px; max-width:600px; margin-left:auto; margin-right:auto}
 .mode-top.exam-top{justify-content:center; flex-wrap:wrap}
@@ -537,14 +538,25 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   width:34px; height:34px;
   display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
   flex:0 0 auto; padding:0; background:transparent; border:0; box-shadow:none;
+  border-radius:10px;
 }
 .study-gear svg{width:34px; height:34px; display:block; fill:none; overflow:visible}
 .study-gear:active{transform:translateY(1px)}
+/* Лёгкий контурный вариант шестерёнки (П.1 «правки 07.10.26 16.02»): тонкий штрих вместо
+   металлического градиента, добавлена зона нажатия и превью-подложка под пальцем. */
+.study-gear.light{width:28px; height:28px}
+.study-gear.light svg{width:28px; height:28px}
+.study-gear.light svg path{fill:none; stroke:var(--mut); stroke-width:2.4; stroke-linejoin:round}
+.study-gear.light:hover{background:var(--soft)}
 /* Градиент металла шестерёнки (SVG-аналог «по мотивам» изображения DuckDuckGo) */
 .gg{stop-color:#dfe5ec}
 .gg.g2{stop-color:#9baab9}
 .gg.g3{stop-color:#5d7187}
 .gg.g4{stop-color:#8296aa}
+/* Лёгкая линия-индикатор в верхней строке изучения — активна, если виден весь блок */
+.study-status{display:flex; align-items:center; gap:8px; margin:0 0 6px}
+.study-status .chip{flex:0 0 auto; font-size:11px; padding:3px 9px}
+.study-status .stline{flex:1 1 auto; text-align:right; font-size:12px; color:var(--mut); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* Индикатор «какой-то блок отключён»: гасим всю иконку, не меняя форму/рамку */
 .study-gear.dim svg{opacity:.45}
 /* Блоки-тумблеры в окне настроек «Учить» + ползунки размеров */
@@ -662,18 +674,16 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <!-- ИЗУЧЕНИЕ -->
   <section class="screen" id="scr-study">
     <div id="studyWrap" class="study-wrap">
-      <div class="study-top">
-        <button class="study-gear" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
-      </div>
-      <div class="row" style="justify-content:space-between; margin-bottom:4px">
+      <div class="study-status">
         <span class="chip" id="studyProgress">0 / 0</span>
+        <span class="stline" id="studyStatusLine"></span>
         <span class="speaker" id="studySpeed"></span>
+        <button class="study-gear light" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 0 28 28" aria-hidden="true"><circle cx="14" cy="14" r="4.4"/><path d="M14 2.6 v3.1 M14 22.3 v3.1 M2.6 14 h3.1 M22.3 14 h3.1 M5.9 5.9 l2.2 2.2 M19.9 19.9 l2.2 2.2 M22.1 5.9 l-2.2 2.2 M8.1 19.9 l-2.2 2.2"/></svg></button>
       </div>
       <div class="bigwrap" id="studyCardArea">
         <div class="big" id="studyHanzi"></div>
         <div class="bigpy" id="studyPinyin"></div>
         <div class="bigtr" id="studyTr"></div>
-        <div class="bigsize" id="studySize"></div>
       </div>
       <div class="study-btns">
         <button class="btn sec" id="studyBack">◀ Назад</button>
@@ -812,6 +822,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
           </div>
           <label class="lbl">Голос встроенного синтеза (запасной)</label>
           <select id="voiceSel"></select>
+          <div class="muted" style="margin-top:6px" id="voiceHint"></div>
         </div>
 
         <div class="card">
@@ -952,7 +963,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.20';
+const APP_VERSION='1.8.21';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1147,9 +1158,14 @@ function seedCardSigs(it){
 function keyFolded(s){
   return String(s||'').trim().toLowerCase()
     .normalize('NFC')
-    .replace(/[ً-ْٰ]/g,'')   // арабская огласовка (харакат) не участвует
     .replace(/[«»„“”"'`´()[\]]/g,'')
     .replace(/\s+/g,' ');
+}
+// Свёртка для поиска-сравнения в арабском: огласовки (харакат) игнорируются, чтобы
+// «поиск „قلم“» находил и «قَلَم». НО в ключ дубля/id это НЕ подставляем: иначе слово
+// с огласовками и без получили бы один id и огласовки «схлопывались» при пересохранении.
+function keyFoldedAr(s){
+  return keyFolded(s).replace(/[ً-ْٰ]/g,'');
 }
 function dupKeyOfLang(it){ return langOf(it)+'|'+keyFolded(it.hanzi); }
 function dupKeyOf(it){ return dupKeyOfLang(it)+'|'+keyFolded(it.translation); }
@@ -1231,6 +1247,9 @@ function hash64(s){
   return h.toString(16).padStart(16,'0');
 }
 function assignStableId(it){
+  // Арабское слово с огласовками — ОТДЕЛЬНАЯ карточка: keyFolded для ar больше НЕ вырезает
+  // харакат (это делает только поиск через keyFoldedAr), поэтому «قَلَم» и «قلم» получают
+  // разные id и не «схлопываются» при пересохранении.
   it.id='k'+hash64(dupKeyOfLang(it));
   return it.id;
 }
@@ -1317,6 +1336,15 @@ function loadVoices(){
   sel.innerHTML='<option value="">Авто ('+ttsLang()+')</option>';
   VOICES.forEach(v=>{ const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=v.name+' ('+v.lang+')'; sel.appendChild(o); });
   if(settings.voiceURI) sel.value=settings.voiceURI;
+  // Подсказка, если у языка нет локального голоса: не молчим, а объясняем и говорим про fallback.
+  const hint=document.getElementById('voiceHint');
+  if(hint){
+    if(!VOICES.length){
+      hint.textContent='Для '+ttsLang()+' на этом устройстве нет голоса — синтез переключится на сетевой mp3 (или прикрепите запись).';
+    }else{
+      hint.textContent='';
+    }
+  }
 }
 if('speechSynthesis' in window){
   loadVoices();
@@ -1333,20 +1361,61 @@ function maxSpeechMs(text){
   return Math.max(2500, Math.min(15000, 1000+n*420));
 }
 function speak(text,rate){
-  return new Promise((res)=>{
-    if(!('speechSynthesis' in window)){ res(); return; }
-    if(!text||!String(text).trim()){ res(); return; }
+  return (async ()=>{
+    if(!text||!String(text).trim()) return;
     speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);
-    u.lang=ttsLang(); u.rate=rate||1;
-    const v=pickVoice(); if(v) u.voice=v;
-    let done=false, tmo=null;
-    const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
-    u.onend=finish; u.onerror=finish;
-    try{ speechSynthesis.speak(u); }catch(e){ finish(); return; }
-    // страховка: если onend/onerror так и не пришли (зависший TTS), отпускаем обещание
-    tmo=setTimeout(finish, maxSpeechMs(text));
-  });
+    if(('speechSynthesis' in window) && pickVoice()){
+      await new Promise((res)=>{
+        const u=new SpeechSynthesisUtterance(text);
+        u.lang=ttsLang(); u.rate=rate||1;
+        const v=pickVoice(); if(v) u.voice=v;
+        let done=false, tmo=null;
+        const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
+        u.onend=finish; u.onerror=finish;
+        try{ speechSynthesis.speak(u); }catch(e){ finish(); return; }
+        // страховка: если onend/onerror так и не пришли (зависший TTS), отпускаем обещание
+        tmo=setTimeout(finish, maxSpeechMs(text));
+      });
+    }else{
+      // локального голоса языка нет (напр. арабский на Windows) — играем сетевой mp3
+      const a=await fetchRemoteTTS(text);
+      if(a){
+        await new Promise((res)=>{
+          let tmo=null;
+          const finish=()=>{ try{ a.pause(); }catch(e){} a.onended=a.onerror=null; clearTimeout(tmo); res(); };
+          a.onended=finish; a.onerror=finish;
+          tmo=setTimeout(finish, Math.min(90000, 3000+String(text||'').length*450));
+          try{ a.play().catch(finish); }catch(e){ finish(); }
+        });
+      }
+    }
+  })();
+}
+// Внешний TTS (Google translate_tts): mp3 по тексту. Используется как запасной путь, когда
+// у языка НЕТ локального голоса (напр. арабский на Windows).
+// ВАЖНО-1: у translate_tts нет CORS-заголовков, поэтому fetch() для него запрещён —
+// используем прямой <audio src> (воспроизведение медиа не ограничено CORS).
+// ВАЖНО-2: сервис отдаёт 404, если к запросу прикреплён заголовок Referer с чужим origin
+// (наш <meta referrer=no-referrer> снимает его со ВСЕХ исходящих запросов страницы).
+// Лимит длины: у `translate_tts` текст условно до ~200 знаков; длиннее не отправляем.
+const G_TRANSLATE_TTS='https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=TTL&q=';
+async function fetchRemoteTTS(text, langTag){
+  const MAX=200;
+  const t=String(text||'').trim();
+  if(!t) return null;
+  const tag=(langTag||ttsLang()||'zh-CN').toLowerCase();
+  const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tag))+encodeURIComponent(t.slice(0,MAX));
+  try{
+    const a=new Audio(url);
+    a.preload='auto';
+    let failed=false;
+    a.addEventListener('error',()=>{ failed=true; }, {once:true});
+    await Promise.race([
+      new Promise(ok=>a.addEventListener('canplaythrough',ok,{once:true})),
+      new Promise(ok=>setTimeout(ok,4000))
+    ]);
+    return failed ? null : a;
+  }catch(e){ return null; }
 }
 
 // ============================== AUDIO SEQUENCE PLAYER ==============================
@@ -1398,13 +1467,25 @@ const Player={
       let done=false, tmo=null;
       const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
       if(t.kind==='tts'){
-        if(!('speechSynthesis' in window)){ res(); return; }
-        const u=new SpeechSynthesisUtterance(t.text);
-        u.lang=ttsLang(); u.rate=t.rate||1;
-        const v=pickVoice(); if(v) u.voice=v;
-        u.onend=finish; u.onerror=finish;
-        try{ speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){ finish(); return; }
-        tmo=setTimeout(finish, maxSpeechMs(t.text));
+        (async()=>{
+          if(('speechSynthesis' in window) && pickVoice()){
+            const u=new SpeechSynthesisUtterance(t.text);
+            u.lang=ttsLang(); u.rate=t.rate||1;
+            const v=pickVoice(); if(v) u.voice=v;
+            u.onend=finish; u.onerror=finish;
+            try{ speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){ finish(); return; }
+            tmo=setTimeout(finish, maxSpeechMs(t.text));
+          }else{
+            // локального голоса нет — сетевой mp3 (fallback)
+            const a=await fetchRemoteTTS(t.text);
+            if(!a){ finish(); return; }
+            if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
+            this.cur=a;
+            a.onended=finish; a.onerror=finish;
+            tmo=setTimeout(finish, Math.min(90000, 3000+String(t.text||'').length*450));
+            try{ a.play().catch(finish); }catch(e){ finish(); }
+          }
+        })();
       }else{
         let a;
         try{ a=new Audio(t.url); }catch(e){ res(); return; }
@@ -1590,7 +1671,7 @@ function dictFiltered(){
   else if(dictFilter==='learned') arr=arr.filter(isLearned);
   // расширенные фильтры (окно «Фильтр») применяются поверх «Все слова / Избранное»
   if(fltActive()) arr=arr.filter(passesFilter);
-  if(q) arr=arr.filter(it=> it.hanzi.toLowerCase().includes(q) || (it.pinyin&&it.pinyin.toLowerCase().includes(q)) || (trJoined(it)&&trJoined(it).toLowerCase().includes(q)) || (it.tag&&it.tag.toLowerCase().includes(q)));
+  if(q) arr=arr.filter(it=> it.hanzi.toLowerCase().includes(q) || keyFoldedAr(it.hanzi).includes(keyFoldedAr(q)) || (it.pinyin&&it.pinyin.toLowerCase().includes(q)) || (trJoined(it)&&trJoined(it).toLowerCase().includes(q)) || (it.tag&&it.tag.toLowerCase().includes(q)));
   // Новые слова вверху: строго по моменту добавления (addedAt, epoch-ms) по убыванию.
   // У карточек без точной метки добавление восстановлено из id/addedOn в normalizeAppItem,
   // поэтому addedAt есть у всех. При равенстве (пара слов одной партии) — более свежий id сверху.
@@ -2218,7 +2299,6 @@ function renderStudySettings(){
       const v=Math.round(Number(r.value));
       settings[k]=v/100; persist();
       applyStudySizes();
-      requestAnimationFrame(()=>requestAnimationFrame(updateStudySize));
       const val=m.querySelector(`[data-val-key="${k}"]`); if(val) val.textContent=v+'%';
     };
   });
@@ -2282,8 +2362,10 @@ function showStudyCard(){
   // один класс на все случаи: точный размер задаёт applyStudySizes
   big.className='big';
   applyStudySizes();
-  // фактические размеры (после перерисовки; двойной rAF — чтобы CJK-шрифт успел отрисоваться)
-  requestAnimationFrame(()=>requestAnimationFrame(()=>updateStudySize()));
+  // строка статуса: уровень/повторы текущей карточки (компактно, вверху справа)
+  const stLine=document.getElementById('studyStatusLine');
+  const statusLine='Уровень '+levelOf(it)+(isLearned(it) ? ' · Выучено' : (' · Повторов '+(it.correct||0)));
+  if(stLine) stLine.textContent=statusLine;
   // пиньинь и перевод видны сразу (и крупно); скрыты, если выключены в тулбаре
   document.getElementById('studyPinyin').textContent=it.pinyin||'';
   document.getElementById('studyTr').textContent=trJoined(it)||'';
@@ -2299,14 +2381,22 @@ const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=29;
 const STUDY_TR_MOBILE=27, STUDY_TR_DESKTOP=19;
 const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
+const STUDY_SENT_MIN=0.52;        // предложение: нижняя граница масштаба (не сжимаем в ноль)
+const STUDY_DECAY=0.05;           // предложение: насколько уменьшается масштаб за каждый знак сверх 2
 function studyFonts(chars){
   const desktop=innerWidth>=1024;
   const sent=chars>=STUDY_SENT_BREAK;
   const mulH=settings.mulH||1, mulP=settings.mulP||1, mulT=settings.mulT||1;
-  const hz=(desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)*STUDY_SENT_RATIO*mulH;
-  const py=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP;
-  const tr=(desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE)*mulT;
-  return {desktop, sent, hz, py, tr};
+  // Плавный масштаб по числу знаков (П.1 «правки 07.10.26 16.02»): один знак заметно меньше базы,
+  // 2–4 знака — база, 5+ плавно ужимается, у длинных фраз включается предложенческий режим.
+  // Раньше был только жёсткий порог 4→5, и длина текста на размер не влияла.
+  const cur = sent
+    ? Math.max(STUDY_SENT_MIN, 1 - Math.max(0, chars-2) * STUDY_DECAY)
+    : Math.min(1, 0.72 + Math.max(0, chars-1) * 0.14);
+  const hz=(desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)*STUDY_SENT_RATIO*mulH*cur;
+  const py=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP*Math.min(1, cur*1.05);
+  const tr=(desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE)*mulT*Math.min(1, cur*1.05);
+  return {desktop, sent, hz, py, tr, cur};
 }
 function applyStudySizes(){
   const n=document.getElementById('studyHanzi'); if(!n) return;
@@ -2334,33 +2424,10 @@ function eqSizesStyle(hanzi, opts){
   return lines.join(';');
 }
 function updateStudySize(){
-  const el=document.getElementById('studySize'); if(!el) return;
-  const scr=document.getElementById('scr-study'); if(scr && !scr.classList.contains('active')) return;
-  const width=innerWidth||1;
-  // иероглиф / пиньинь / перевод — каждый в пикселях и в процентах от ширины экрана
-  const parts=[];
-  const rows=[['studyHanzi','иер'],['studyPinyin','пин'],['studyTr','пер']];
-  for(const [pid,short] of rows){
-    const n=document.getElementById(pid); if(!n) continue;
-    let px=Math.round(n.getBoundingClientRect().height);
-    if(!px){
-      // скрытая строка (выключена в настройках) — не показываем её в подписи
-      if(n.style.display==='none' || getComputedStyle(n).display==='none') continue;
-      // CJK-шрифт может отработать на кадр позже: тогда берём размер из font-size
-      const fs=parseFloat(getComputedStyle(n).fontSize); if(!isFinite(fs)||!fs) continue; px=Math.round(fs*1.12);
-    }
-    const pct=Math.round(px/width*1000)/10;
-    parts.push(short+' '+px+' px · '+pct+'%');
-  }
-  // первая строка — размеры; вторая (тем же шрифтом) — статус текущей карточки:
-  // «Уровень X . Повторов Y» (у выученных — «Уровень 5 . Выучено», как в словаре).
-  const sizeLine=parts.join(' / ');
-  const it=studyQueue[studyIdx];
-  let statusLine='';
-  if(it && studyQueue.length){
-    statusLine='Уровень '+levelOf(it)+(isLearned(it) ? ' . Выучено' : (' . Повторов '+(it.correct||0)));
-  }
-  el.innerHTML=escapeHtml(sizeLine)+(statusLine?'<br>'+escapeHtml(statusLine):'');
+  // Дебаг-строка «иер px · % / пин … / пер …» удалена (П.1 «правки 07.10.26 16.02»):
+  // она крала высоту у слова и не нужна пользователю. Размер теперь видно сразу по слову,
+  // а уровень/повторы выведены в верхнюю строку (showStudyCard). Функция оставлена пустой,
+  // чтобы старые вызовы (resize/slider) ничего не ломали.
 }
 // пересчитывать размеры при повороте/изменении ширины и после смены слайдеров
 window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
@@ -3474,6 +3541,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.21','07.10.26','Режим «Учить»: компактные кнопки Назад/Писать это/Вперёд, лёгкая шестерёнка в строке статуса («1 / 204» → «Номер / Всего» + «Уровень N · Повторов M»), размер шрифта плавно подстраивается под длину текста (одиночный знак больше не вымахивает); арабский: огласовки (фатха/касра/дамма и др.) теперь сохраняются и различают карточки (раньше вычищались и склеивались), поиск их учитывает; TTS-фолбэк: арабская озвучка работает на компьютере без локального голоса — mp3 с Google translate_tts (прямой <audio>, meta referrer=no-referrer, т.к. сервис отдаёт 404 при чужом Referer)'],
   ['1.8.20','07.10.26','Аудио: ссылка на mp3 теперь доставляется в облако при любом исходе синхронизации (раньше при «вытащил из облака»/конфликте path снова оставался null, и другие устройства играли синтез речи); pull больше не стирает локальную ссылку на файл; если облако уже знает path, а устройство нет — ссылка перенимается молча и mp3 докачивается'],
   ['1.8.19','07.10.26','Аудио: исправлена доставка ссылки на mp3 в облако — после выгрузки файла приложение само отправляет path карточке (раньше он оставался null и другие устройства играли синтез речи вместо записи); теперь mp3 из «Базы аудио» звучит на всех устройствах после синхронизации'],
   ['1.8.18','07.10.26','Аудио: после синхронизации приложение само докачивает mp3 из облака (одинаковая «База аудио» на всех устройствах, звук сразу в карточке); кнопки «Назад» в «Учить» больше не «проглатываются» на тач-экране (при нажатии кнопка не сдвигается под пальцем + touch-action:manipulation); «Назад» на первой карточке корректно уходит по кругу очереди; в репозитории — SQL-чинка SELECT-политики bucket `recordings` (создание подписанной ссылки исправно работает)'],
