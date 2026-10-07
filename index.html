@@ -952,7 +952,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.19';
+const APP_VERSION='1.8.20';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3474,6 +3474,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.20','07.10.26','Аудио: ссылка на mp3 теперь доставляется в облако при любом исходе синхронизации (раньше при «вытащил из облака»/конфликте path снова оставался null, и другие устройства играли синтез речи); pull больше не стирает локальную ссылку на файл; если облако уже знает path, а устройство нет — ссылка перенимается молча и mp3 докачивается'],
   ['1.8.19','07.10.26','Аудио: исправлена доставка ссылки на mp3 в облако — после выгрузки файла приложение само отправляет path карточке (раньше он оставался null и другие устройства играли синтез речи вместо записи); теперь mp3 из «Базы аудио» звучит на всех устройствах после синхронизации'],
   ['1.8.18','07.10.26','Аудио: после синхронизации приложение само докачивает mp3 из облака (одинаковая «База аудио» на всех устройствах, звук сразу в карточке); кнопки «Назад» в «Учить» больше не «проглатываются» на тач-экране (при нажатии кнопка не сдвигается под пальцем + touch-action:manipulation); «Назад» на первой карточке корректно уходит по кругу очереди; в репозитории — SQL-чинка SELECT-политики bucket `recordings` (создание подписанной ссылки исправно работает)'],
   ['1.8.17','06.10.26','«Учить»: под размерами — строка «Уровень N . Повторов M» текущей карточки; три кнопки в ряд Назад/Писать это/Вперёд (25% / 25% / 50% ширины); «Письмо»: список слов строго по моменту добавления (свежее сверху); аудио на чужих устройствах — подписанный URL как запасной путь, если bucket остался приватным'],
@@ -5036,7 +5037,16 @@ function applyContentSrc(dst, src){
   for(const k of C_FIELDS){ if(src[k]!==undefined) dst[k]=src[k]; }
   const keepLocal=(dst.recordings||[]).filter(r=>r&&r.url&&r.url.startsWith('blob:'));
   const by={}; for(const r of keepLocal) by[r.speed]=r;
-  dst.recordings=(src.recordings||[]).map(r=>({...r, url: by[r.speed] ? by[r.speed].url : (r.url||null)}));
+  // Локальный path mp3 не должен исчезать при pull: если облачная копия слота ещё без path
+  // (старая версия не доставила ссылку), подставляем локальный путь поверх облачного null.
+  // Иначе pull «съедает» ссылку на файл — и другие устройства так и не получают mp3, а это
+  // устройство после пулла перестаёт играть запись (TTS вместо файла).
+  const localPath={}; for(const r of (dst.recordings||[])){ if(r && r.path) localPath[r.speed]=r.path; }
+  dst.recordings=(src.recordings||[]).map(r=>({
+    ...r,
+    path: (!r.path && localPath[r.speed]) ? localPath[r.speed] : r.path,
+    url: by[r.speed] ? by[r.speed].url : (r.url||null)
+  }));
   dst.updated_at=src.updated_at||0;
 }
 // Копируем прогресс из источника (облако) в цель.
@@ -5053,6 +5063,23 @@ function missingCloudPaths(loc, cl){
   const c={}; for(const r of (cl.recordings||[])) if(r && r.path) c[r.speed]=r.path;
   for(const r of (loc.recordings||[])){ if(r && r.path && c[r.speed]!==r.path) return true; }
   return false;
+}
+// Обратное направление: облако знает path слота, а локальная запись — нет (или name пуст).
+// Такое бывает при 'none' (таймстампы и recSig равны → ни pull, ни push не срабатывают):
+// на устройстве, которое ещё не видело mp3, path так и оставался null и играл TTS.
+// Здесь мы молча перенимаем path из облака (метаданные — не влияют ни на recSig, ни на updated_at),
+// после чего prefetchCloudAudio докачает сам файл.
+function adoptCloudPaths(loc, cl){
+  const c={}; for(const r of (cl.recordings||[])){ if(r && r.path) c[r.speed]={path:r.path,name:r.name||''}; }
+  let changed=false;
+  for(const r of (loc.recordings||[])){
+    if(!r || !r.speed || r.path) continue;
+    const v=c[r.speed];
+    // Берём path из облака только если это ТА ЖЕ запись (совпало имя) или локальное имя пустое.
+    // Если имя разное — это другая запись, чужой path не подставляем.
+    if(v && (!r.name || r.name===v.name)){ r.path=v.path; if(!r.name) r.name=v.name; changed=true; }
+  }
+  return changed;
 }
 // Как решается каждая часть при авто-мерже: push/pull/none/conflict.
 // Конфликт — когда обе стороны реально меняли часть (оба ts>0) с разным payload.
@@ -5302,15 +5329,20 @@ async function doSync(){
       const resolvePart=(auto, picked)=> auto==='conflict' ? (picked==='local'?'push':'pull') : auto;
       const cd=resolvePart(plan.content, ch.content);
       const pd=resolvePart(plan.progress, ch.progress);
-      // Фаза 6.2: если mp3 уже в Storage (есть локальный path), а у облачной копии его нет —
-      // принудительно доставляем метаданные. Иначе path остаётся null в облаке, и другие
-      // устройства играют TTS вместо файла.
-      const pushPaths = cd==='none' && (it.updated_at||0)===(plan.cloudIt.updated_at||0)
-                        && missingCloudPaths(it, plan.cloudIt);
+      // Фаза 6.2: local path mp3 (файл уже в Storage) обязан доехать до облака при ЛЮБОМ
+      // исходе мержа — не только при 'none'+равных таймстампах. Раньше при 'pull' или конфликте
+      // pushCard не вызывался, и cloud хранил recordings[].path=null → другие устройства играли TTS.
       if(cd==='pull'){ applyContentSrc(it, plan.cloudIt); pulledN++; cPull++; }
       if(pd==='pull'){ applyProgressSrc(it, plan.cloudIt); pulledN++; pPull++; }
+      let pushPaths = missingCloudPaths(it, plan.cloudIt);
+      // Путь mp3 есть в облаке, а локально не подхватился (не было ни pull, ни push —
+      // 'none' при равных сигнатурах) → перенимаем path молча; prefetch докачает файл.
+      if(!pushPaths) adoptCloudPaths(it, plan.cloudIt);
       if(cd==='push'){ cPush++; }
       if(pd==='push'){ pPush++; }
+      // Проверяем ПОСЛЕ пулла: локальная копия в итоге знает путь, которого нет в облаке?
+      // Тогда принудительно пушим метаданные (path), даже если направление мержа было 'pull'.
+      pushPaths = missingCloudPaths(it, plan.cloudIt);
       if(cd==='push' || pd==='push' || pushPaths){
         await pushCard(it, u);
         pushedN++;
