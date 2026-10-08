@@ -84,6 +84,13 @@ header.top .ver{font-size:11px; color:var(--mut); font-weight:700; letter-spacin
 /* Screens. Скролл-зона заканчивается НАД нижним меню: сама полоса прокрутки
    не уезжает под панель вкладок (и последний контент тоже). */
 main{flex:1 1 auto; overflow:hidden; position:relative}
+/* Метка «Фильтр: N слов» в режимах Учить/Письмо/Экзамен (видна только при активном фильтре) */
+.flt-mode-badge{
+  display:inline-flex; align-items:center; gap:4px;
+  background:var(--amber); color:#3b2f00; border:1px solid #d6930b;
+  border-radius:999px; padding:3px 10px; font-size:11px; font-weight:800; white-space:nowrap;
+}
+.flt-mode-badge.hidden{display:none}
 .screen{
   position:absolute; left:0; right:0; top:0; bottom:calc(84px + env(safe-area-inset-bottom));
   overflow-y:auto; padding:10px 16px 14px; display:none;
@@ -230,6 +237,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
    1) иероглиф / пиньин / перевод — 3 РАВНЫЕ колонки;
    2) слева кнопки в ряд (★ ✍️ ↑ 🔊 ↓), справа статус «Уровень N. Повторов M». */
 #dictList{max-width:560px; margin:0 auto}
+.dict-month{font-size:11px; color:var(--mut); font-weight:700; letter-spacing:.04em; text-transform:none; margin:14px 2px 4px}
+.dict-month:first-child{margin-top:0}
 .dict-card{display:flex; flex-direction:column; gap:9px}
 .dc-cols{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:baseline; min-width:0}
 .dc{min-width:0; overflow-wrap:anywhere}
@@ -690,6 +699,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <span class="chip" id="studyProgress">0 / 0</span>
         <span class="stline" id="studyStatusLine"></span>
         <span class="speaker" id="studySpeed"></span>
+        <span class="flt-mode-badge hidden" id="studyFltBadge"></span>
         <button class="study-gear light" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
       </div>
     </div>
@@ -704,6 +714,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   <section class="screen" id="scr-write">
     <div class="write-head">
       <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
+      <span class="flt-mode-badge hidden" id="writeFltBadge"></span>
       <div class="write-head-right">
         <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
         <button class="study-gear" id="writeSettingsBtn" title="Настройки письма" aria-label="Настройки письма"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
@@ -723,6 +734,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
     <div class="mode-top exam-top">
       <span class="chip" id="examProgress"></span>
       <span class="chip" id="examScore"></span>
+      <span class="flt-mode-badge hidden" id="examFltBadge"></span>
       <button class="study-gear" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
     </div>
     <div id="examBody" style="display:flex; flex-direction:column; align-items:center; width:100%; max-width:600px; margin:0 auto"></div>
@@ -965,7 +977,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.23';
+const APP_VERSION='1.8.24';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1315,6 +1327,7 @@ function go(scrId, writeIt){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(scrId).classList.add('active');
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.scr===scrId));
+  refreshModeFilterBadges();
   if(scrId==='scr-dict') renderDict();
   if(scrId==='scr-study') startStudy();
   if(scrId==='scr-write') startWrite(writeIt);
@@ -1698,9 +1711,9 @@ function updateDictFilterChips(){
 }
 // ====== Окно «Фильтр» (уровни + метки + «повторить сейчас») ======
 // flt = {lvls:Set<1..5>, tags:Set<string>, due:bool}
-let flt={lvls:new Set(), tags:new Set(), due:false};
-function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due; }
-function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0); }
+let flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false};
+function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due || flt.thisMonth || flt.lastMonth; }
+function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0) + (flt.thisMonth?1:0) + (flt.lastMonth?1:0); }
 function passesFilter(it){
   if(flt.lvls.size && !flt.lvls.has(normBox(it))) return false;
   if(flt.tags.size){
@@ -1708,7 +1721,22 @@ function passesFilter(it){
     if(!t || !flt.tags.has(t)) return false;
   }
   if(flt.due && !(it.translation && isDue(it))) return false;
+  if(flt.thisMonth || flt.lastMonth){
+    const d=dictMonthDate(it);
+    if(!d) return false;
+    const now=new Date();
+    const isThis=d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+    const prevY=now.getMonth()===0 ? now.getFullYear()-1 : now.getFullYear();
+    const prevM=now.getMonth()===0 ? 11 : now.getMonth()-1;
+    const isLast=d.getFullYear()===prevY && d.getMonth()===prevM;
+    if(!((flt.thisMonth && isThis) || (flt.lastMonth && isLast))) return false;
+  }
   return true;
+}
+// Все карточки языка с учётом активного фильтра словаря (если он включён).
+// Им сужаются режимы Учить/Письмо/Экзамен/Подбор; сброс фильтра возвращает полную колоду.
+function filteredLangItems(){
+  return fltActive() ? langItems().filter(passesFilter) : langItems();
 }
 function allTags(){
   const set=new Set();
@@ -1720,7 +1748,7 @@ function openFilterModal(){
   const m=document.getElementById('modalFilter');
   const tags=allTags();
   // tmp — рабочая копия фильтра в окне; в flt она попадает только по «Применить».
-  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due};
+  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due, thisMonth:flt.thisMonth, lastMonth:flt.lastMonth};
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Фильтр</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalFilter')">✕</button></div>
     <label class="lbl">Уровни</label>
@@ -1730,6 +1758,11 @@ function openFilterModal(){
     <label class="lbl">Метки</label>
     <div class="flt-sec" id="fltTags">
       ${tags.length?tags.map(t=>`<button class="flt-chip ${tmp.tags.has(t)?'on':''}" data-flt-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(''):'<div class="auth-hint" style="margin:0">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
+    </div>
+    <label class="lbl">Когда добавлено</label>
+    <div class="flt-sec" id="fltMonth">
+      <button class="flt-chip ${tmp.thisMonth?'on':''}" data-flt-month="this">Этот месяц</button>
+      <button class="flt-chip ${tmp.lastMonth?'on':''}" data-flt-month="last">Прошлый месяц</button>
     </div>
     <label class="lbl">Другое</label>
     <div class="flt-sec" id="fltDue">
@@ -1746,19 +1779,30 @@ function openFilterModal(){
   m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.lvls, +b.dataset.fltLvl); b.classList.toggle('on', tmp.lvls.has(+b.dataset.fltLvl)); });
   m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.tags, b.dataset.fltTag); b.classList.toggle('on', tmp.tags.has(b.dataset.fltTag)); });
   m.querySelector('[data-flt-due]').onclick=e=>{ tmp.due=!tmp.due; e.currentTarget.classList.toggle('on', tmp.due); };
+  m.querySelectorAll('[data-flt-month]').forEach(b=>b.onclick=()=>{ const k=b.dataset.fltMonth==='this'?'thisMonth':'lastMonth'; tmp[k]=!tmp[k]; b.classList.toggle('on', tmp[k]); });
   m.querySelector('#fltReset').onclick=()=>{
-    flt={lvls:new Set(), tags:new Set(), due:false};
-    tmp.lvls=new Set(); tmp.tags=new Set(); tmp.due=false;
+    flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false};
+    tmp.lvls=new Set(); tmp.tags=new Set(); tmp.due=false; tmp.thisMonth=false; tmp.lastMonth=false;
     m.querySelectorAll('.flt-chip').forEach(c=>c.classList.remove('on'));
-    renderDict(); updateFilterBadge();
+    renderDict(); updateFilterBadge(); refreshModeFilterBadges();
   };
   m.querySelector('#fltApply').onclick=()=>{
-    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due};
-    renderDict(); updateFilterBadge();
+    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due, thisMonth:tmp.thisMonth, lastMonth:tmp.lastMonth};
+    renderDict(); updateFilterBadge(); refreshModeFilterBadges();
     closeModal('modalFilter');
   };
 }
 function toggleSet(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
+// Метка «Фильтр: N слов» в режимах Учить/Письмо/Экзамен — видна только при активном фильтре.
+function refreshModeFilterBadges(){
+  const on=fltActive();
+  const n=filteredLangItems().length;
+  ['studyFltBadge','writeFltBadge','examFltBadge'].forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    if(on){ el.textContent='Фильтр: '+n+' сл.'; el.classList.remove('hidden'); }
+    else { el.textContent=''; el.classList.add('hidden'); }
+  });
+}
 function updateFilterBadge(){
   const el=document.getElementById('fltBadge'); if(!el) return;
   const n=fltCount();
@@ -1788,6 +1832,22 @@ function promoteLevel(id){
   persist().then(()=>{ renderDict(); toastShort('Уровень этого слова повышен'); });
 }
 function levelOf(it){ return normBox(it); }
+// Месяц добавления карточки — для заголовков-групп в словаре.
+// Точная метка addedAt есть у всех (нормализуется в normalizeAppItem), но на случай
+// старых бэкапов делаем fallback на addedOn 'YYYY-MM-DD'.
+function dictMonthDate(it){
+  let d=null;
+  const at=+it.addedAt||0;
+  if(at>0){ d=new Date(at); if(!isNaN(d)) return d; }
+  const m=/^(\d{4})-(\d{2})/.exec(String(it.addedOn||''));
+  if(m){ d=new Date(+m[1], +m[2]-1, 1); if(!isNaN(d)) return d; }
+  return null;
+}
+function dictMonthKey(it){
+  const d=dictMonthDate(it);
+  if(!d) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
 function renderDict(){
   const list=document.getElementById('dictList');
   const arr=dictFiltered();
@@ -1821,6 +1881,27 @@ function renderDict(){
       </div>
     </div>`;
   }).join('');
+  // Подпись месяца на самой свежей карточке каждого месяца (слева над группой).
+  // Порядок карточек не меняем — только вставляем заголовки между группами, если
+  // встречаем новую метку месяца. Показываются и в поиске/фильтрах; у карточек без
+  // даты addedOn/addedAt (старые бэкапы) заголовка нет.
+  const MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  const nowYear=new Date().getFullYear();
+  let prevKey='';
+  list.querySelectorAll('.item-line').forEach(row=>{
+    const id=row.dataset.id;
+    const it=items.find(x=>x.id===id);
+    if(!it) return;
+    // Добавляем заголовок, когда меняется месяц (а при первом — всегда)
+    const curKey=dictMonthKey(it);
+    if(curKey && curKey!==prevKey){
+      prevKey=curKey;
+      const d=dictMonthDate(it);
+      const mName=MONTHS_RU[d.getMonth()];
+      const label=(d.getFullYear()===nowYear)?mName:(mName+' '+d.getFullYear());
+      row.insertAdjacentHTML('beforebegin', `<div class="dict-month">${escapeHtml(label)}</div>`);
+    }
+  });
   list.innerHTML+=`<button class="dict-up-fab hidden" id="dictUpFab" aria-label="Наверх"><svg viewBox="0 0 24 24"><path d="M12 5l6 7h-4v7h-4v-7H6z"/></svg></button>`;
   list.querySelectorAll('.item-line').forEach(el=>{
     const id=el.dataset.id;
@@ -2382,7 +2463,7 @@ function shuffle(a){
 }
 // Приоритет: звёзды наверху; внутри — «давно не видел — первым» (меньше lastSeen первым).
 function studyPool(){
-  const due=langItems().filter(it=>it.translation && isDue(it));
+  const due=filteredLangItems().filter(it=>it.translation && isDue(it));
   const seen=it=>(it.lastSeen||it.nextDue||0);
   return [].concat(
     due.filter(it=>it.starred).sort((a,b)=>seen(a)-seen(b)),
@@ -2668,8 +2749,8 @@ function applyWriteToggles(){
 }
 function writableItems(){
   // языки без иероглифов (en/tr/ar): «Письмо» — это все карточки с переводом
-  if(!hasStrokes()) return langItems().filter(it=>it.translation && trList(it).length);
-  return langItems().filter(it=>/[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi));
+  if(!hasStrokes()) return filteredLangItems().filter(it=>it.translation && trList(it).length);
+  return filteredLangItems().filter(it=>/[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi));
 }
 function startWrite(focusIt){
   Player.stop();
@@ -3459,8 +3540,8 @@ function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
 let matchRound=[], matchSelLeft=null, matchSelRight=null, matchSelRightEl=null;
 function matchDeck(){
   // звёздные в первую очередь, всё в полном рандоме
-  const star=langItems().filter(it=>it.translation&&it.starred);
-  const rest=langItems().filter(it=>it.translation&&!it.starred);
+  const star=filteredLangItems().filter(it=>it.translation&&it.starred);
+  const rest=filteredLangItems().filter(it=>it.translation&&!it.starred);
   return shuffle(star).concat(shuffle(rest));
 }
 function matchDraw(arr, n){
@@ -4799,7 +4880,7 @@ async function wipeAll(){
 
 // ============================== REFRESH ==============================
 async function refreshAll(){
-  renderDict(); renderMore(); updateChips(); renderVersion();
+  renderDict(); renderMore(); updateChips(); renderVersion(); refreshModeFilterBadges();
 }
 // ============================== NAV ==============================
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.scr));
