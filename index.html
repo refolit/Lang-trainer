@@ -965,7 +965,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.22';
+const APP_VERSION='1.8.23';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2152,34 +2152,76 @@ function openBatch(){
   const m=document.getElementById('modalBatch');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Добавить списком</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalBatch')">✕</button></div>
-    <div style="font-size:13px;color:var(--mut);line-height:1.5;margin:8px 0">По одной записи на строку:<br>
-      1) <b>你好 - здравствуй</b><br>
-      2) <b>我爱学汉语</b><br>
-      3) <b>再见 ; zài jiàn ; до свидания</b><br>
-      Разделитель « - » (или « — »). Если перевод не указан, он останется пустым. Точка с запятой « ; » — пиньинь и перевод.
+    <div style="font-size:13px;color:var(--mut);line-height:1.5;margin:8px 0">По одной записи на строку. Приложение само поймёт, где слово, пиньинь и перевод:<br>
+      1) <b>特别 tèbié — особенный; особенно</b><br>
+      2) <b>特别 — особенный; особенно</b> (пиньинь подставится сам)<br>
+      3) <b>再见 ; zài jiàn ; до свидания</b> (старый формат)<br>
+      « ; » делит переводы: первый — главный, остальные — «Перевод 2–5». Слово и перевод можно отделять « — », « - », « : », « , » или « ; ».
     </div>
-    <textarea id="batchText" placeholder="你好 - здравствуй"></textarea>
+    <textarea id="batchText" placeholder="特别 tèbié — особенный; особенно"></textarea>
     <div class="btn-row" style="margin-top:16px"><button class="btn ok" onclick="saveBatch()">Добавить</button></div>
   </div>`;
   m.classList.remove('hidden');
 }
+// Граница «слово ↔ перевод». Ищем САМОЕ ЛЕВОЕ вхождение любого разделителя:
+// тире-семейство (— – ―), « - », «:», «,», «;» или таб. Слово в строке идёт первым,
+// поэтому берём первый разделитель; всё, что правее, — переводы (их делим только по «;»).
+// Дефис «-» учитываем только с пробелами (« - »), чтобы не резать слова типа T-shirt.
+function batchBoundary(s){
+  const seps=['—','–','―',' - ','\t',' : ',':',';',',','，'];
+  let best=-1, len=0;
+  for(const sep of seps){
+    const i=s.indexOf(sep);
+    if(i>=0 && (best<0 || i<best)){ best=i; len=sep.length; }
+  }
+  return best<0 ? null : {i:best, len};
+}
 function saveBatch(){
   const txt=document.getElementById('batchText').value;
   const kind='word';
+  const zh=hasStrokes(); // китайский: иероглиф+пиньинь; иначе само слово — слово, пиньиня нет
+  const CJK=/[㐀-䶿一-鿿豈-﫿]/;
+  const LAT=/^[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ0-9]*$/; // латиница с тона́ми (пиньинь)
   let n=0;
   txt.split(/\n+/).forEach(line=>{
     line=line.trim(); if(!line) return;
-    let hanzi=line, pinyin='', tr='';
-    if(line.includes(';')){
-      const p=line.split(';').map(s=>s.trim());
-      hanzi=p[0]||''; pinyin=p[1]||''; tr=(p[2]||'').trim();
+    let hanzi='', pinyin='', tr='', trs=[];
+    let left='', right='';
+
+    if(zh){
+      // Старый формат «再见 ; zài jiàn ; до свидания»: части отделяются только «;»
+      const semi=line.split(/[;；]/).map(s=>s.trim()).filter(Boolean);
+      if(semi.length>=3 && CJK.test(semi[0]) && /^[A-Za-zÀ-ɏ]/.test(semi[1]) && /^[A-Za-zÀ-ɏ0-9 ’'·\s]+$/.test(semi[1])){
+        hanzi=semi[0]; pinyin=semi[1]; right=semi.slice(2).join('; ');
+      }else{
+        const b=batchBoundary(line);
+        if(b){ left=line.slice(0,b.i).trim(); right=line.slice(b.i+b.len).trim(); }
+        else { left=line; }
+        // Раскладываем левую часть по скрипту: CJK→иероглиф, латиница→пиньинь.
+        const hz=[], py=[];
+        left.split(/\s+/).forEach(tok=>{
+          if(!tok) return;
+          if(CJK.test(tok)) hz.push(tok);
+          else if(LAT.test(tok)) py.push(tok);
+        });
+        hanzi=hz.join('') || left;
+        pinyin=py.join(' ');
+      }
+      if(!pinyin && hanzi) pinyin=toPinyin(hanzi);
     }else{
-      const sep=line.match(/ - | — | – |\t/);
-      if(sep){ hanzi=line.slice(0,sep.index).trim(); tr=line.slice(sep.index+sep[0].length).trim(); }
+      // en/tr/ar: слово — это сам текст слева от разделителя; пиньиня нет
+      const b=batchBoundary(line);
+      if(b){ left=line.slice(0,b.i).trim(); right=line.slice(b.i+b.len).trim(); hanzi=left; }
+      else { hanzi=line; }
+      pinyin='';
     }
+
+    // Переводы: «;» делит их — первая часть главный перевод, остальные «Перевод 2–5»
+    const tparts=right.split(/[;；]/).map(s=>s.trim()).filter(Boolean);
+    tr=tparts[0]||'';
+    trs=tparts.slice(1,5); // максимум 4 дополнительных перевода
     if(!hanzi) return;
-    if(!pinyin && hasStrokes()) pinyin=toPinyin(hanzi);
-    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,trs,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
     assignStableId(it);
     items.push(it);
     n++;

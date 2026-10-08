@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Арабская пропись · прототип (Вариант 1)</title>
+<style>
+  :root{
+    --bg:#eef3f9; --card:#ffffff; --ink:#1c2836; --mut:#64748b;
+    --line:#dbe4ef; --guide:#b9c6d8; --guide-cur:#8fa3bd;
+    --lit:#2f6fed; --dot:#c98a1b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-user-select:none;user-select:none;}
+  h1{font-size:17px;margin:0 0 4px}
+  .sub{color:var(--mut);font-size:13px;margin:0 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(28,40,54,.06)}
+  .words{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 13px;font-size:14px;cursor:pointer}
+  .chip.on{background:#dbe7f5;border-color:#2f6fed}
+  .chip .ar{font-size:17px}
+  .chip .rm{color:var(--mut);font-size:12px;margin-left:6px}
+  .wordline{text-align:center;font-size:26px;line-height:1.3;margin:6px 0 2px;min-height:36px}
+  .wordline .cur{border-bottom:3px solid var(--lit);padding:0 2px}
+  .stage{display:flex;justify-content:center}
+  canvas{display:block;max-width:100%;touch-action:none;border-radius:10px;background:#fbfdff}
+  .status{display:flex;justify-content:space-between;align-items:center;font-size:14px;margin-top:8px;padding:0 4px}
+  .status .muted{color:var(--mut)}
+  #cnt{font-weight:600}
+  #done{color:var(--lit);font-weight:600}
+  .btns{display:flex;gap:10px;margin-top:12px}
+  .btns button{flex:1;min-height:48px;font-size:16px;border:1px solid var(--line);background:var(--card);
+    border-radius:12px;cursor:pointer;color:var(--ink);box-shadow:0 2px 0 var(--line)}
+  .btns button:active{transform:translateY(2px);box-shadow:0 0 0 var(--line)}
+  .note{color:var(--mut);font-size:12.5px;line-height:1.5;margin-top:12px}
+  @media (hover:none) and (pointer:coarse){ .btns button:active{transform:none} }
+</style>
+</head>
+<body>
+  <h1>Арабская пропись · прототип</h1>
+  <p class="sub">Черновые контуры 5 букв — проверяем механику: направляющие, обводка, автопереход, порядок справа налево.</p>
+
+  <div class="words" id="words"></div>
+
+  <div class="card">
+    <div class="wordline" id="wordline" dir="rtl"></div>
+    <div class="stage"><canvas id="cv"></canvas></div>
+    <div class="status">
+      <span id="cnt">—</span>
+      <span class="muted" id="form"></span>
+      <span id="done"></span>
+    </div>
+    <div class="btns">
+      <button id="prev" type="button">◀</button>
+      <button id="reset" type="button">Сбросить</button>
+      <button id="next" type="button">Вперёд ▶</button>
+    </div>
+  </div>
+
+  <p class="note">Веди пальцем/мышью по контуру <b>текущей</b> буквы — точки «зажигаются». Когда буква пройдена, происходит авто-переход к следующей, справа налево. Промах ничего не сбрасывает: просто веди дальше. Точки-огласовки (одна/две/жёлтые) — подсказка, их обводить не нужно.</p>
+
+<script>
+'use strict';
+/* ============================================================
+   АРАБСКАЯ ПРОПИСЬ · прототип Варианта 1
+   Данные штрихов — авторские, черновые (координаты 0–100, верхний левый угол).
+   В боевой версии будут уточнены; сейчас важна механика, а не каллиграфия.
+   ============================================================ */
+
+// Буквы, не соединяющиеся со следующей (слева): в прототипе только «ا»;
+// в полном наборе это ا د ذ ر ز و.
+const NON_JOINERS = new Set(['ا']);
+
+// Диакритики (харакаты) — убираем при разборе слова на буквы.
+const HARAKAT = /[ً-ْٰ]/g;
+
+// Точки-огласовки НЕ входят в обводку: рисуем их отдельно как подсказку.
+const AR = {
+  'ا': {
+    isolated:{ strokes:[ [[48,8],[47,32],[46,58],[45,84]] ], dots:[] },
+    final:   { strokes:[ [[82,76],[72,70],[58,60],[50,44],[47,28],[46,12]] ], dots:[] }
+  },
+  'ب': {
+    isolated:{ strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]] ], dots:[[50,82]] },
+    initial: { strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]], [[10,38],[1,38]] ], dots:[[50,82]] },
+    medial:  { strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]], [[10,38],[1,38]], [[99,38],[90,38]] ], dots:[[50,82]] },
+    final:   { strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]], [[99,38],[90,38]] ], dots:[[50,82]] }
+  },
+  'ت': {
+    isolated:{ strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]] ], dots:[[42,9],[58,9]] },
+    initial: { strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]], [[10,38],[1,38]] ], dots:[[42,9],[58,9]] },
+    medial:  { strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]], [[10,38],[1,38]], [[99,38],[90,38]] ], dots:[[42,9],[58,9]] },
+    final:   { strokes:[ [[80,22],[80,36],[72,46],[58,51],[40,52],[22,52],[10,50],[4,42],[3,32],[9,24],[20,18],[36,14],[54,14],[68,18],[76,22]], [[99,38],[90,38]] ], dots:[[42,9],[58,9]] }
+  },
+  'ن': {
+    isolated:{ strokes:[ [[78,34],[76,44],[66,52],[52,55],[36,55],[22,52],[14,46],[12,34],[20,27],[34,23],[52,23],[66,28],[74,32]] ], dots:[[50,8]] },
+    initial: { strokes:[ [[78,34],[76,44],[66,52],[52,55],[36,55],[22,52],[14,46],[12,34],[20,27],[34,23],[52,23],[66,28],[74,32]], [[10,38],[1,38]] ], dots:[[50,8]] },
+    medial:  { strokes:[ [[78,34],[76,44],[66,52],[52,55],[36,55],[22,52],[14,46],[12,34],[20,27],[34,23],[52,23],[66,28],[74,32]], [[10,38],[1,38]], [[99,38],[90,38]] ], dots:[[50,8]] },
+    final:   { strokes:[ [[78,34],[76,44],[66,52],[52,55],[36,55],[22,52],[14,46],[12,34],[20,27],[34,23],[52,23],[66,28],[74,32]], [[99,38],[90,38]] ], dots:[[50,8]] }
+  },
+  'م': {
+    isolated:{ strokes:[ [[64,14],[64,32],[56,44],[42,49],[28,49],[18,43],[14,32],[20,22],[32,16],[46,14],[58,14]], [[28,49],[24,66],[20,82],[12,84]] ], dots:[] },
+    initial: { strokes:[ [[64,14],[64,32],[56,44],[42,49],[28,49],[18,43],[14,32],[20,22],[32,16],[46,14],[58,14]], [[28,49],[24,66],[20,82],[12,84]], [[10,38],[1,38]] ], dots:[] },
+    medial:  { strokes:[ [[64,14],[64,32],[56,44],[42,49],[28,49],[18,43],[14,32],[20,22],[32,16],[46,14],[58,14]], [[28,49],[24,66],[20,82],[12,84]], [[10,38],[1,38]], [[99,38],[90,38]] ], dots:[] },
+    final:   { strokes:[ [[64,14],[64,32],[56,44],[42,49],[28,49],[18,43],[14,32],[20,22],[32,16],[46,14],[58,14]], [[28,49],[24,66],[20,82],[12,84]], [[99,38],[90,38]] ], dots:[] }
+  }
+};
+
+const WORDS = [
+  { word:'بِنت', roman:'bint',  meaning:'девочка' },
+  { word:'مَن',  roman:'min',  meaning:'от' }
+];
+
+const FORMS_RU = { isolated:'изолир.', initial:'нач.', medial:'сер.', final:'кон.' };
+
+// Позиционная форма каждой буквы слова (RTL-логика).
+function formsFor(word){
+  const chars = Array.from(word.replace(HARAKAT, ''));
+  return chars.map((ch, i)=>{
+    const prev = chars[i-1], next = chars[i+1];
+    const toNext = !!next && !NON_JOINERS.has(ch);   // соединение со следующей (левой) буквой
+    const toPrev = !!prev && !NON_JOINERS.has(prev); // соединение с предыдущей (правой) буквой
+    const form = (toNext && toPrev) ? 'medial' : toNext ? 'initial' : toPrev ? 'final' : 'isolated';
+    return { letter: ch, form };
+  });
+}
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+
+let state = { wordIdx: 0, letterIdx: 0 };
+let letters = [];   // [{letter,form}]
+let geo = null;     // [{box:{x,y,s}, pts:[{x,y,k}] , dots:[{x,y}]}]
+let lit = new Set(); // ключи "l:s:p"
+let drawing = false;
+let finished = false;
+
+function resize(){
+  const dpr = window.devicePixelRatio || 1;
+  const W = Math.min(460, window.innerWidth - 36);
+  const H = Math.round(W * 0.52);
+  cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { W, H };
+}
+
+function buildGeo(){
+  const { W, H } = resize();
+  const N = letters.length;
+  geo = letters.map((L, i)=>{
+    const bw = W / N;
+    // Порядок справа налево: i=0 — самая правая.
+    const bx = W - (i + 1) * bw;
+    const side = Math.min(bw * 0.82, H * 0.74);
+    const ox = bx + (bw - side) / 2;
+    const oy = (H - side) / 2;
+    const d = AR[L.letter] && AR[L.letter][L.form];
+    const pts = [];
+    if(d){
+      d.strokes.forEach((st, s)=>{
+        st.forEach((p, pidx)=>{ pts.push({ x: ox + (p[0]/100)*side, y: oy + (p[1]/100)*side, k: i+':'+s+':'+pidx }); });
+      });
+    }
+    const dots = (d ? d.dots : []).map(p=>({ x: ox + (p[0]/100)*side, y: oy + (p[1]/100)*side }));
+    return { i, side, ox, oy, bx, bw, pts, dots };
+  });
+}
+
+function smoothPath(points){
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for(let i=1; i<points.length-1; i++){
+    const p = points[i], n = points[i+1];
+    const mx = (p.x + n.x)/2, my = (p.y + n.y)/2;
+    ctx.quadraticCurveTo(p.x, p.y, mx, my);
+  }
+  ctx.lineTo(points[points.length-1].x, points[points.length-1].y);
+  ctx.stroke();
+}
+
+function draw(){
+  ctx.clearRect(0, 0, cv.width / (window.devicePixelRatio||1), cv.height / (window.devicePixelRatio||1));
+  geo.forEach((g, i)=>{
+    const cur = i === state.letterIdx;
+    const alpha = cur ? 1 : 0.32;
+    // рамка текущей буквы
+    if(cur){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(47,111,237,.25)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4,4]);
+      roundRect(g.bx + 2, 2, g.bw - 4, cv.height/(window.devicePixelRatio||1) - 4, 10);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // штрихи
+    const groups = {};
+    g.pts.forEach(p=>{ if(!groups[p.k.split(':')[1]]) groups[p.k.split(':')[1]] = []; groups[p.k.split(':')[1]].push(p); });
+    Object.values(groups).forEach(grp=>{
+      const allLit = grp.every(p=>lit.has(p.k));
+      const partial = grp.some(p=>lit.has(p.k)) && !allLit;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = allLit ? 'var(--lit)' : (cur ? 'var(--guide-cur)' : 'var(--guide)');
+      ctx.lineWidth = cur ? 3 : 2.5;
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      smoothPath(grp);
+      ctx.restore();
+      // пройденные точки — яркие
+      grp.forEach(p=>{
+        if(lit.has(p.k)){
+          ctx.save(); ctx.globalAlpha = alpha;
+          ctx.fillStyle = 'var(--lit)';
+          dotAt(p.x, p.y, 3.5);
+          ctx.restore();
+        }
+      });
+    });
+    // точки-огласовки (подсказка) — не входят в обводку
+    g.dots.forEach(p=>{
+      ctx.save(); ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'var(--dot)';
+      dotAt(p.x, p.y, 4);
+      ctx.restore();
+    });
+    // стартовая точка текущей буквы
+    if(cur && g.pts.length){
+      const p0 = g.pts[0];
+      ctx.save();
+      ctx.fillStyle = 'var(--lit)';
+      dotAt(p0.x, p0.y, 6);
+      ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p0.x, p0.y, 6, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+  });
+}
+
+function dotAt(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill(); }
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+function nearestPoint(x,y){
+  const g = geo[state.letterIdx];
+  let best=null, bd=1e9;
+  const R = Math.max(16, g.side * 0.16);
+  g.pts.forEach(p=>{
+    if(lit.has(p.k)) return;
+    const dx=p.x-x, dy=p.y-y, d=Math.hypot(dx,dy);
+    if(d < R && d < bd){ bd=d; best=p; }
+  });
+  return best;
+}
+
+function letterDone(){
+  const g = geo[state.letterIdx];
+  return g.pts.every(p=>lit.has(p.k));
+}
+
+function advance(){
+  if(state.letterIdx < letters.length - 1){
+    state.letterIdx++;
+    buildGeo(); draw(); renderStatus();
+  }else{
+    finished = true; renderStatus();
+  }
+}
+
+function paintAt(x,y){
+  if(finished) return;
+  const p = nearestPoint(x,y);
+  if(!p) return;
+  lit.add(p.k);
+  draw();
+  if(letterDone()){ setTimeout(()=>{ if(!finished || state.letterIdx < letters.length-1){ } advance(); }, 240); }
+}
+
+// --- ввод: мышь + палец ---
+cv.addEventListener('pointerdown', e=>{ drawing=true; try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+  paintAt(e.offsetX, e.offsetY); });
+cv.addEventListener('pointermove', e=>{ if(drawing) paintAt(e.offsetX, e.offsetY); });
+['pointerup','pointercancel','pointerleave'].forEach(ev=> cv.addEventListener(ev, ()=>{ drawing=false; }));
+
+// --- слово ---
+function loadWord(i){
+  state.wordIdx = (i + WORDS.length) % WORDS.length;
+  state.letterIdx = 0; finished = false;
+  lit = new Set();
+  letters = formsFor(WORDS[state.wordIdx].word);
+  buildGeo(); draw(); renderWordline(); renderChips(); renderStatus();
+}
+function renderChips(){
+  const el = document.getElementById('words');
+  el.innerHTML = WORDS.map((w,i)=>`<button class="chip ${i===state.wordIdx?'on':''}" data-i="${i}" type="button">
+    <span class="ar">${w.word}</span><span class="rm">${w.roman} — ${w.meaning}</span></button>`).join('');
+  el.querySelectorAll('.chip').forEach(b=> b.onclick=()=>loadWord(+b.dataset.i));
+}
+function renderWordline(){
+  const el = document.getElementById('wordline');
+  const base = Array.from(WORDS[state.wordIdx].word);
+  el.innerHTML = base.map((ch,i)=>{
+    const letterBase = letters[i] ? letters[i].letter : ch;
+    return `<span class="${i===state.letterIdx?'cur':''}">${letterBase}</span>`;
+  }).join('');
+}
+function renderStatus(){
+  document.getElementById('cnt').textContent = 'Буква ' + (state.letterIdx + 1) + ' / ' + letters.length;
+  const cur = letters[state.letterIdx];
+  document.getElementById('form').textContent = cur ? cur.letter + ' · ' + (FORMS_RU[cur.form]||cur.form) : '';
+  document.getElementById('done').textContent = finished ? 'Слово пройдено ✓' : '';
+}
+
+document.getElementById('next').onclick = ()=> loadWord(state.wordIdx + 1);
+document.getElementById('prev').onclick = ()=> loadWord(state.wordIdx - 1);
+document.getElementById('reset').onclick = ()=>{ state.letterIdx = 0; finished = false; lit = new Set(); buildGeo(); draw(); renderStatus(); };
+
+window.addEventListener('resize', ()=>{ buildGeo(); draw(); });
+
+loadWord(0);
+</script>
+</body>
+</html>
