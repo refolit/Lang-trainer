@@ -2,7 +2,7 @@
 // Имя кэша привязано к номеру сборки: когда выходит новая версия, старый кэш
 // автоматически удаляется при активации нового SW — на устройство не оседает
 // устаревший index.html/библиотеки.
-const VERSION = '1.8.21';
+const VERSION = '1.8.22';
 const CACHE = `hanzi-trainer-${VERSION}`;
 
 const LIBS = [
@@ -41,6 +41,26 @@ self.addEventListener('fetch', (e) => {
         const resp = await fetch(e.request);
         if (resp.ok) c.put(e.request, resp.clone());
         return resp;
+      })
+    );
+    return;
+  }
+
+  // Google-TTS mp3 — network-first с запасом в кэш: онлайн играем свежий звук (и кэшируем),
+  // офлайн отдаём ранее сохранённый (озвучка работает без интернета). Кэш отдельный,
+  // привязанный к версии сборки, чтобы не мешал основному кэшу приложения.
+  if (/translate\.google\.com\/translate_tts/.test(url.href)) {
+    e.respondWith(
+      caches.open(CACHE + '-tts').then(async (c) => {
+        try {
+          const resp = await fetch(e.request);
+          if (resp.ok) c.put(e.request, resp.clone()).catch(() => {});
+          return resp;
+        } catch (err) {
+          const hit = await c.match(e.request);
+          if (hit) return hit;
+          throw err;
+        }
       })
     );
     return;
