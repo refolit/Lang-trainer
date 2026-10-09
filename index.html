@@ -4971,6 +4971,7 @@ const SYNC_LANG='zh';                 // метка языка в кэше sync-
 let syncBusy=false;                   // идёт синхронизация (блокирует повторный клик)
 let lastSyncAt=0;                     // момент последней успешной синхронизации
 let _syncUser=null;                   // вошедший пользователь (обновляется в renderAuth)
+let _lastOtpReq=0;                    // момент последней отправки ссылки входа (защитный интервал)
 
 // --- кэш облака после последней синхронизации (для «Изменено: N» и «В сети · синхр.») ---
 let cloudRecs={};                     // id карточки → {u,pu} метки в облаке (все языки)
@@ -5743,7 +5744,7 @@ function openAuthModal(){
   const m=document.getElementById('modalAuth');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Вход по email</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
-    <div class="auth-hint" style="margin-top:6px">Введите email — пришлём на него ссылку для входа. Пароль не нужен.</div>
+    <div class="auth-hint" style="margin-top:6px" id="authHint">Введите email — пришлём на него ссылку для входа. Пароль не нужен.</div>
     <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px" inputmode="email" autocomplete="email">
     <button class="btn" id="authSend" style="margin-top:10px">Отправить ссылку</button>
     <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
@@ -5752,10 +5753,29 @@ function openAuthModal(){
   const inp=document.getElementById('authEmail');
   const send=document.getElementById('authSend');
   const msg=document.getElementById('authMsg');
+  const hint=document.getElementById('authHint');
   if(inp) setTimeout(()=>inp.focus(),60);
+  // После успешной отправки прячем поля и показываем явный итог: письмо ушло, ждём клик по ссылке.
+  const showSent=(email)=>{
+    const sheet=m.querySelector('.sheet');
+    if(sheet) sheet.innerHTML=`<div class="row"><h2>Проверьте почту</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
+      <div class="auth-hint" style="margin-top:10px;font-size:14px">Мы отправили ссылку для входа на <b>${escapeHtml(email)}</b>.</div>
+      <div class="auth-hint" style="margin-top:6px">Откройте письмо и нажмите в нём ссылку — вы вернётесь в приложение уже вошедшим. Если письма нет, загляните в «Спам».</div>
+      <button class="btn" id="authDone" style="margin-top:14px">Готово</button>`;
+    const done=m.querySelector('#authDone');
+    if(done) done.onclick=()=>closeModal('modalAuth');
+  };
   send.onclick=async ()=>{
     const email=inp.value.trim();
     if(!email){ msg.textContent='Введите email.'; return; }
+    // Защитный интервал: Supabase не разрешает повторную отправку ссылки чаще, чем раз
+    // в несколько секунд. Не даём слать повторно — иначе сервер вернёт «only request this
+    // after 3 seconds», и приложение покажет ошибку вместо уже ушедшего письма.
+    const wait=Date.now()-_lastOtpReq;
+    if(wait<15000){
+      msg.textContent='Ссылка уже отправляется. Подождите несколько секунд и проверьте почту.';
+      return;
+    }
     const c=sbClient();
     if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
     send.disabled=true; send.textContent='Отправляем…';
@@ -5764,9 +5784,18 @@ function openAuthModal(){
       options:{ emailRedirectTo: location.origin + location.pathname }
     });
     send.disabled=false; send.textContent='Отправить ссылку';
-    if(error){ toastShort('Ошибка: '+error.message); msg.textContent='Ошибка: '+error.message; }
-    else{
-      msg.textContent='Проверьте почту и откройте ссылку из письма — она вернёт вас в приложение уже вошедшим.';
+    if(!error){
+      _lastOtpReq=Date.now();
+      showSent(email);
+    }else{
+      // Повторный тап быстрее лимита → почти наверняка ссылка уже ушла. Говорим по-человечески.
+      if(/only request this after|security reason|too many|rate limit/i.test(error.message||'')){
+        _lastOtpReq=Date.now();
+        msg.textContent='Ссылка уже отправлена. Проверьте почту (в т.ч. папку «Спам»); повторно запросить можно через минуту.';
+      }else{
+        toastShort('Ошибка: '+error.message);
+        msg.textContent='Ошибка: '+error.message;
+      }
     }
   };
 }
