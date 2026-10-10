@@ -211,7 +211,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .write-toolbar .wbtn.on{background:var(--red); color:#fff; border-color:var(--red)}
 .write-head .wbtn.lg{width:auto; padding:7px 11px; font-size:13px; box-shadow:none}
 #writeWord{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin:2px 0 8px; font-family:var(--font-cjk)}
-#writeWord .wch{font-size:calc(30px * var(--whint,1)); padding:3px 12px; border-radius:10px; background:var(--soft); color:var(--mut); line-height:1.3}
+#writeWord .wch{font-size:calc(30px * var(--whint,1)); padding:3px 12px; border-radius:10px; background:var(--soft); color:var(--mut); line-height:1.3; border:0; cursor:pointer; font-family:inherit}
 #writeWord .wch.cur{background:var(--red); color:#fff; font-weight:700; box-shadow:0 1px 4px rgba(198,40,40,.4)}
 #writeCenter{width:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; max-width:620px; margin:0 auto}
 /* Окно письма — на всю ширину телефона, строгий квадрат 1:1; боковой отступ даёт padding экрана */
@@ -531,12 +531,17 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .mode-top{display:flex; justify-content:flex-end; align-items:center; gap:8px; margin:0 0 4px; max-width:600px; margin-left:auto; margin-right:auto}
 .mode-top.exam-top{justify-content:center; flex-wrap:wrap}
 .mode-top.exam-top .study-gear{margin-left:auto}
-/* Письмо: строка «◀ Назад» … «Вперёд ▶ | ⚙» — по краям контент-блока (П.8 «правки 22.26») */
-.write-head{display:flex; justify-content:space-between; align-items:center; gap:10px; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
-.write-head .wbtn.lg{width:auto}
-.write-head-right{display:flex; align-items:center; gap:8px; flex:0 0 auto}
+.mode-top .study-gear.light{color:var(--mut)}
+.mode-top .study-gear.light:hover{background:var(--soft)}
+/* Письмо: строка «◀ Назад» / «Вперёд ▶» и шестерёнка теперь ВНИЗУ, над нижним меню
+   (как статус-строка «Учить»); вверху остаётся только кликабельная подсказка-иероглиф. */
+.write-bottom{display:flex; align-items:center; gap:10px; margin:10px 0 0; width:100%}
+.write-bottom .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; min-height:44px}
+.write-bottom #writePrev{flex-grow:1}
+.write-bottom #writeNext{flex-grow:1}
+.write-bottom .study-gear{flex:0 0 auto}
 /* Размер кнопок Назад/Вперёд регулируется ползунком в настройках Письма (writeMulNav) */
-.write-head .wbtn.lg{font-size:calc(13px * var(--wbtn,1)); padding:calc(7px * var(--wbtn,1)) calc(11px * var(--wbtn,1))}
+.write-bottom .wbtn.lg{font-size:calc(13px * var(--wbtn,1)); padding:calc(7px * var(--wbtn,1)) calc(11px * var(--wbtn,1))}
 /* Пункты меню в окнах настроек Письма/Экзамена */
 .menu-item{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:15px; font-weight:700}
 .menu-item:last-child{border-bottom:0}
@@ -712,14 +717,6 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
   <!-- ПИСЬМО -->
   <section class="screen" id="scr-write">
-    <div class="write-head">
-      <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
-      <span class="flt-mode-badge hidden" id="writeFltBadge"></span>
-      <div class="write-head-right">
-        <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
-        <button class="study-gear" id="writeSettingsBtn" title="Настройки письма" aria-label="Настройки письма"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
-      </div>
-    </div>
     <div id="writeWord"></div>
     <div id="writeCenter">
       <div id="writeArea"></div>
@@ -727,6 +724,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div id="writeTr"></div>
     </div>
     <div id="writeList"></div>
+    <div class="write-bottom">
+      <span class="flt-mode-badge hidden" id="writeFltBadge"></span>
+      <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
+      <button class="btn sec wbtn lg" id="writeNext">Вперёд ▶</button>
+      <button class="study-gear light" id="writeSettingsBtn" title="Настройки письма" aria-label="Настройки письма"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
+    </div>
   </section>
 
   <!-- ЭКЗАМЕН -->
@@ -735,7 +738,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <span class="chip" id="examProgress"></span>
       <span class="chip" id="examScore"></span>
       <span class="flt-mode-badge hidden" id="examFltBadge"></span>
-      <button class="study-gear" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 0 34 34" aria-hidden="true"><path fill="url(#gradGear)" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z"/><path class="gear-tint" fill-rule="evenodd" d="M33.00 17.00 A16 16 0 0 1 32.04 22.47 L28.56 21.21 A12.3 12.3 0 0 1 25.70 25.70 L28.31 28.31 A16 16 0 0 1 23.76 31.50 L22.20 28.15 A12.3 12.3 0 0 1 17.00 29.30 L17.00 33.00 A16 16 0 0 1 11.53 32.04 L12.79 28.56 A12.3 12.3 0 0 1 8.30 25.70 L5.69 28.31 A16 16 0 0 1 2.50 23.76 L5.85 22.20 A12.3 12.3 0 0 1 4.70 17.00 L1.00 17.00 A16 16 0 0 1 1.96 11.53 L5.44 12.79 A12.3 12.3 0 0 1 8.30 8.30 L5.69 5.69 A16 16 0 0 1 10.24 2.50 L11.80 5.85 A12.3 12.3 0 0 1 17.00 4.70 L17.00 1.00 A16 16 0 0 1 22.47 1.96 L21.21 5.44 A12.3 12.3 0 0 1 25.70 8.30 L28.31 5.69 A16 16 0 0 1 31.50 10.24 L28.15 11.80 A12.3 12.3 0 0 1 29.30 17.00 Z M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/><path fill="url(#gradGearHub)" d="M13.8 12.6 H20.2 A1.2 1.2 0 0 1 21.4 13.8 V20.2 A1.2 1.2 0 0 1 20.2 21.4 H13.8 A1.2 1.2 0 0 1 12.6 20.2 V13.8 A1.2 1.2 0 0 1 13.8 12.6 Z"/></svg></button>
+      <button class="study-gear light" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
     </div>
     <div id="examBody" style="display:flex; flex-direction:column; align-items:center; width:100%; max-width:600px; margin:0 auto"></div>
     <div class="empty hidden" id="examEmpty">
@@ -977,7 +980,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.25';
+const APP_VERSION='1.8.26';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1324,6 +1327,7 @@ function go(scrId, writeIt){
   stopAllAudio();
   clearExamIdle();
   clearStudyIdle();
+  clearWritePlay();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(scrId).classList.add('active');
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.scr===scrId));
@@ -1553,7 +1557,7 @@ async function playItem(it, opts){
   if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
   ensureCardAudio(it, opts.mode==='exam' ? ['norm'] : (opts.speeds||studySpeeds()));  // в фоне: не блокируем старт звука
   const el=document.getElementById('studySpeed');
-  Player.onSpeedChange=(label)=> el.textContent=label?'🔊':'';
+  Player.onSpeedChange=(label)=>{ if(el) el.textContent=label?'🔊':''; };
   Player.onDone=()=>{ if(opts.onDone) opts.onDone(); };
   Player.play(tracksFor(it,opts));
 }
@@ -2790,6 +2794,7 @@ function startWrite(focusIt){
 }
 function setWriteItem(it, keepIdx){
   if(!it) return;
+  clearWritePlay();
   writeCurItem=it;
   markShown(it);
   writeChars=Array.from(it.hanzi).filter(c=>/[一-鿿]/.test(c));
@@ -2803,12 +2808,18 @@ function renderWriteWord(){
   const el=document.getElementById('writeWord');
   if(!writeChars.length || !writeHintOn()){ el.innerHTML=''; el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  el.innerHTML=writeChars.map((c,i)=>`<span class="wch ${i===writeCharIdx?'cur':''}">${c}</span>`).join('');
+  // Подсказка-иероглифы кликабельны: клик переключает письмо на этот символ (цикл контура — на нём же).
+  el.innerHTML=writeChars.map((c,i)=>`<button type="button" class="wch ${i===writeCharIdx?'cur':''}" data-wi="${i}">${c}</button>`).join('');
+  el.querySelectorAll('.wch').forEach(b=>{
+    const i=Number(b.dataset.wi);
+    b.onclick=()=>{ if(i===writeCharIdx) return; writeGoto(i); };
+  });
 }
 // ===== ПИСЬМО: КЛАВИАТУРНЫЙ ВВОД (en/tr/ar — языки без кисти) =====
 function writeTypeSeq(){ return writeSeq.length?writeSeq:writeWordList(); }
 function setWriteItemTyping(it, speakNow){
   if(!it) return;
+  clearWritePlay();
   writeCurItem=it;
   writeChars=Array.from(it.hanzi);
   markShown(it);
@@ -2935,31 +2946,47 @@ function writeNavTyping(dir){ // прокрутка слов в режиме п�
 }
 
 function stopWriteAnim(){ writeToken++; } // прерывает отложенную перестройку
-// --- озвучка при возобновлении рисования после паузы ---
-// слово целиком произносится сразу при появлении иероглифа; если пользователь бросил
-// рисовать на 3 секунды и снова повёл пальцем/стилусом — слово повторяется.
-let writeLastMove=0;
-function writeSpeakWord(){
+// --- озвучка «Письма»: как в «Учить» ---
+// Бесконечный повтор слова целиком на обычной скорости через Player (mp3 или TTS),
+// с той же паузой, что и «Учить» (studyRepeatDelay). Останавливается:
+// сменой слова/переходом к другому иероглифу (writePlayGen), уходом с экрана,
+// выключением «🔊 Аудио». Рисование повтор НЕ прерывает — слово крутится на фоне.
+let writePlayGen=0, writePlayTmo=null;
+function clearWritePlay(){ writePlayGen++; if(writePlayTmo){ clearTimeout(writePlayTmo); writePlayTmo=null; } }
+function writePlayLoop(it){
+  writePlayGen++; Player.stop();
+  if(!it || !it.hanzi) return;
   if(!writeAudioOn) return;
-  const full=(writeCurItem&&writeCurItem.hanzi)||writeChars.join('');
-  if(full) speak(full,1);
-}
-function initWriteResume(){
-  const area=document.getElementById('writeArea');
-  if(!area || area._resumeBound) return;
-  area._resumeBound=true;
-  area.addEventListener('pointerdown',()=>{ writeLastMove=Date.now(); });
-  area.addEventListener('pointermove',()=>{
-    const t=Date.now();
-    if(writeLastMove && (t-writeLastMove)>=3000) writeSpeakWord();
-    writeLastMove=t;
-  });
+  const my=writePlayGen;
+  const step=()=>{
+    if(writePlayGen!==my) return;
+    const scr=document.getElementById('scr-write');
+    if(!scr || !scr.classList.contains('active')) return;
+    if(!writeCurItem || writeCurItem.id!==it.id) return;
+    if(!writeAudioOn) return;
+    playItem(it, {onDone:()=>{
+      if(writePlayGen!==my) return;
+      const scr2=document.getElementById('scr-write');
+      if(!scr2 || !scr2.classList.contains('active')) return;
+      if(!writeCurItem || writeCurItem.id!==it.id) return;
+      if(!writeAudioOn) return;
+      writePlayTmo=setTimeout(()=>{
+        if(writePlayGen!==my) return;
+        const scr3=document.getElementById('scr-write');
+        if(!scr3 || !scr3.classList.contains('active')) return;
+        if(!writeCurItem || writeCurItem.id!==it.id) return;
+        if(!writeAudioOn) return;
+        Player.stop();
+        step();
+      }, studyRepeatDelay(it.hanzi));
+    }});
+  };
+  step();
 }
 function startWriteChar(quiet){
   const token=++writeToken;
   writeAnimRunning=false;
   if(!writeChars.length) return;
-  writeLastMove=0; initWriteResume();
   renderWriteWord(); renderWriteLabels(); renderWriteList();
   const area=document.getElementById('writeArea');
   area.classList.remove('type');
@@ -2987,7 +3014,7 @@ function startWriteChar(quiet){
       skip.onclick=()=>{ if(writeAnimRunning) return; blinkWriteArea(()=>writeGoto(writeCharIdx+1)); };
       area.appendChild(skip);
       freeDraw(cv);
-      if(!quiet){ writeSpeakWord(); toast('Подключитесь к интернету, иероглиф недоступен'); }
+      if(!quiet){ toast('Подключитесь к интернету, иероглиф недоступен'); }
       return;
     }
     // библиотека могла ещё не загрузиться (CDN подгружается асинхронно) — подождём её
@@ -3009,7 +3036,7 @@ function startWriteChar(quiet){
       skip.onclick=()=>{ if(writeAnimRunning) return; blinkWriteArea(()=>writeGoto(writeCharIdx+1)); };
       area.appendChild(skip);
       freeDraw(cv);
-      if(!quiet){ writeSpeakWord(); toast('Подключитесь к интернету, иероглиф недоступен'); }
+      if(!quiet){ toast('Подключитесь к интернету, иероглиф недоступен'); }
       return;
     }
     attachGuide(area, size);
@@ -3020,10 +3047,23 @@ function startWriteChar(quiet){
       showOutline:writeOutlineOn,
       charDataLoader:(c,ok,err)=>ok(data)
     });
-    startWriteQuiz();
-    if(writeAnimOn) playWriteAnim();
-    if(!quiet) writeSpeakWord();
+    // «Контур» (без «Анимации») — бесконечный цикл показа, пока не выключен.
+    // В этом режиме quiz не запускаем: loopCharacterAnimation сам отменяет quiz, а «обводить»
+    // по крутящемуся контуру нельзя — обводка доступна при выключенном «Контуре».
+    if(writeAnimOn){ startWriteQuiz(); playWriteAnim(); }
+    else if(writeOutlineOn){ writeLoopOutline(writer); }
+    else { startWriteQuiz(); }
+    if(!quiet) writePlayLoop(writeCurItem);
   });
+}
+// Цикл контура: показываем иероглиф бегущим контуром по кругу, без остановки,
+// пока «Контур» не выключен. Статичный контур-подложку прячем, чтобы не двоился;
+// сетка-направляющая (attachGuide) остаётся фоном. Режим «Анимация» — не смешиваем.
+function writeLoopOutline(w){
+  if(!w || !writeOutlineOn || writeAnimOn) return;
+  try{ w.cancelQuiz(); }catch(e){}
+  try{ w.hideOutline(); }catch(e){}
+  w.loopCharacterAnimation();
 }
 function startWriteQuiz(){
   if(!writer) return;
@@ -3035,9 +3075,9 @@ function startWriteQuiz(){
   });
 }
 function onCharComplete(){
-  if(writeAnimRunning) return;
-  // слово засчитываем, когда дописан последний иероглиф целиком;
-  // тогда верное написание идёт в общий счётчик «нового» и двигает коробку.
+  // Написание символа завершено (даже если шёл одноразовый показ анимации) — переходим
+  // к следующему иероглифу. Раньше здесь стоял return по writeAnimRunning, из-за чего
+  // второй иероглиф «не включался» после первого.
   const isLast=writeCharIdx>=writeChars.length-1;
   if(isLast && writeCurItem){ good(writeCurItem); newGood(writeCurItem); persist(); updateChips(); }
   blinkWriteArea(()=>{ writeGoto(writeCharIdx+1); });
@@ -3052,8 +3092,8 @@ function toggleWriteAudio(){
   writeAudioOn=!writeAudioOn;
   settings.writeAudio=writeAudioOn; persist();
   applyWriteToggles();
-  if(!writeAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-  else { const full=(writeCurItem&&writeCurItem.hanzi)||writeChars.join(''); if(full) speak(full,1); }
+  if(!writeAudioOn){ clearWritePlay(); Player.stop(); if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  else if(writeCurItem){ writePlayLoop(writeCurItem); }
 }
 function toggleWriteOutline(){
   writeOutlineOn=!writeOutlineOn;
@@ -3704,6 +3744,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.8.26','10.10.26','«Письмо»: контур теперь крутится циклически, пока не выключен (кнопка «Дальше ▶» и клик по иероглифам-подсказкам переключают символы слова, после первого иероглифа корректно включается второй); аудио «Письма» — как в «Учить»: бесконечный повтор слова с паузой по длине текста (mp3 или синтез), повтор не прерывается рисованием, старый механизм с паузой в 3 секунды убран; строка Назад/Вперёд и шестерёнка перенесены вниз над меню (вверху остались только кликабельные подсказки), шестерёнки «Письма»/«Экзамена» — лёгкие, как в «Учить»'],
   ['1.8.25','10.10.26','Словарь: кнопки «★ Избранное» и «выучено» теперь сужают и режимы «Учить»/«Письмо»/«Экзамен» — пока включены, обучение идёт только по этим словам (в режимах метка «★ Избранное: N сл.» / «Выучено: N сл.»), возврат к «Все слова» возвращает полную колоду; вход в аккаунт: добавлена строка диагностики после «Отправить ссылку» (ответ Supabase, куда ведёт ссылка) для поиска причины недоставки письма'],
   ['1.8.24','09.10.26','Словарь: карточки сгруппированы по месяцам (заголовок «Октябрь» слева над самой свежей карточкой месяца, у старых лет добавляется год); включённый фильтр словаря теперь ограничивает и режимы «Учить»/«Письмо»/«Экзамен» (добавлен фильтр «Этот месяц»/«Прошлый месяц», в режимах — метка «Фильтр: N сл.», сброс возвращает полную колоду); вход в аккаунт: после «Отправить ссылку» поля заменяются подсказкой «Проверьте почту» и кнопкой «Готово»'],
   ['1.8.23','09.10.26','Пакетный ввод: умный разбор строки — поля определяются по типу символов (иероглиф → слово, латиница → пиньинь, кириллица → перевод), разделители «—»/«:»/«;» распознаются в любом порядке; переводы после «;» раскладываются по отдельным полям «Другие переводы»'],
@@ -4960,12 +5001,16 @@ function bindAudioLifecycle(){
   // цепочка автоповторов «Учить» при этом обрывается (иначе отложенный таймер включит звук в фоне),
   // а при возврате на карточку — возобновляется.
   document.addEventListener('visibilitychange', ()=>{
-    if(document.hidden){ stopAllAudio(); studyTouch(); }
+    if(document.hidden){ stopAllAudio(); studyTouch(); clearWritePlay(); }
     else{
       const scr=document.getElementById('scr-study');
       if(scr && scr.classList.contains('active') && studyAudioOn){
         const it=studyQueue[studyIdx];
         if(it) studyPlayLoop(it);
+      }
+      const wscr=document.getElementById('scr-write');
+      if(wscr && wscr.classList.contains('active') && writeAudioOn && writeCurItem){
+        writePlayLoop(writeCurItem);
       }
     }
   });
