@@ -145,7 +145,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .btn-col{display:flex; flex-direction:column; gap:10px; width:100%}
 /* «Учить»: три кнопки в ряд — «◀ Назад» и «✍️ Писать это» по 25% ширины, «Вперёд ▶» 50%. */
 .study-btns{display:flex; gap:10px; width:100%}
-.study-btns .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; min-height:48px}
+/* Кнопки «Учить»: были увеличены в 1,5 раза (48px) — вернули к обычной высоте 32px (48/1.5). */
+.study-btns .btn{flex:1 1 0; min-width:0; padding:6px 8px; min-height:32px}
 .study-btns #studyBack{flex-grow:1}
 .study-btns #studyAgain{flex-grow:1}
 .study-btns #studyKnow{flex-grow:2}
@@ -263,7 +264,17 @@ html[data-theme="dark"] .dc.py{color:#7db8f2}
   .dc-stat{display:flex; flex-direction:column; gap:1px; line-height:1.35}
   .dc-stat span+span::before{content:none}
   .dc-stat span:last-child::after{content:none}
+  /* «Учить»: меньше воздуха снизу — выигрываем место под иностр. текст + перевод (правки 12.10.26 0.22) */
+  #scr-study{padding-bottom:4px}
 }
+/* Круглая кнопка повторного озвучивания в строке статуса «Учить» (правки 12.10.26 0.22):
+   SVG-громкоговоритель перекрашивается в цвет текста (currentColor), чтобы жить в обеих темах. */
+.study-speak{
+  width:28px; height:28px; border-radius:50%; border:0; cursor:pointer; flex:0 0 auto; padding:0;
+  background:var(--soft); color:var(--mut); display:inline-flex; align-items:center; justify-content:center;
+}
+.study-speak svg{width:18px; height:18px; display:block; fill:currentColor}
+.study-speak:active{transform:scale(.94)}
 /* Плавающая кнопка «Наверх» в словаре (П.4): показывается скроллом ниже 15-й карточки */
 .dict-up-fab{
   position:sticky; bottom:12px; margin:14px 0 0 auto; z-index:5;
@@ -580,9 +591,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .gg.g3{stop-color:#5d7187}
 .gg.g4{stop-color:#8296aa}
 /* Лёгкая линия-индикатор в НИЖНЕЙ строке изучения (статус перенесён вниз, над меню вкладок) */
-.study-status{display:flex; align-items:center; gap:8px; margin:8px 0 0}
+.study-status{display:flex; align-items:center; gap:8px; margin:2px 0 0}
 .study-status .chip{flex:0 0 auto; font-size:11px; padding:3px 9px}
-.study-status .stline{flex:1 1 auto; text-align:right; font-size:12px; color:var(--mut); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.study-status .stline{flex:1 1 auto; text-align:left; font-size:12px; color:var(--mut); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 /* Индикатор «какой-то блок отключён»: гасим всю иконку, не меняя форму/рамку */
 .study-gear.dim svg{opacity:.45}
 /* Блоки-тумблеры в окне настроек «Учить» + ползунки размеров */
@@ -716,6 +727,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <span class="stline" id="studyStatusLine"></span>
         <span class="speaker" id="studySpeed"></span>
         <span class="flt-mode-badge hidden" id="studyFltBadge"></span>
+        <button class="study-speak" id="studySpeakBtn" title="Проиграть ещё раз" aria-label="Проиграть ещё раз"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
         <button class="study-gear light" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
       </div>
     </div>
@@ -991,7 +1003,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.0';
+const APP_VERSION='1.9.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2506,12 +2518,21 @@ let studyQueue=[], studyIdx=0;
 // Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
 let studyAudioOn=true, studyPyOn=true, studyTrOn=true, studyHanziOn=true;
 // Порядок полей в модалке «Настройки режима Изучение»: Аудио, Иероглиф, Пиньинь, Перевод.
+// Для арабского и турецкого: «Иероглиф» → «Иностр. текст», строка «Пиньин» скрыта (нет пиньиня).
 const STUDY_KEYS=[
   ['studyAudio','Аудио','🔊 озвучка + автоповтор', null],
   ['studyHanzi','Иероглиф','размер шрифта','mulH'],
   ['studyPy','Пиньин','размер шрифта','mulP'],
   ['studyTr','Перевод','размер шрифта','mulT'],
 ];
+function studyKeysForLang(){
+  const keys=STUDY_KEYS.map(k=>k.slice());
+  if(activeLang==='ar'||activeLang==='tr'){
+    if(keys[1]) keys[1][1]='Иностр. текст'; // подпись строки «Иероглиф» меняется только для ar/tr
+    keys.splice(2,1);                        // убрать «Пиньин» целиком (в ar/tr нет пиньиня)
+  }
+  return keys;
+}
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
   if(gear) gear.classList.toggle('dim', !(studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn));
@@ -2547,7 +2568,7 @@ function renderStudySettings(){
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Настройки режима Изучение</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
     <div style="margin-top:6px">
-    ${STUDY_KEYS.map(([key,label,hint,skey])=>{
+    ${studyKeysForLang().map(([key,label,hint,skey])=>{
       const v=studyFlag(key);
       return `<div class="sn-block">
         <div class="sn-row">
@@ -2781,6 +2802,14 @@ function studyBack(){
   if(studyIdx<=0){ resetStudyQueue(); return; }   // на первой карточке: круг по очереди, индекс не застревает
   studyIdx--;
   showStudyCard();
+}
+// Кнопка «громкоговоритель» в строке статуса «Учить»: проиграть текущее слово/предложение заново.
+function studySpeak(){
+  studyTouch();
+  const it=studyQueue[studyIdx]; if(!it) return;
+  Player.stop();
+  if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='🔊';
+  playItem(it,{mode:'study'});   // одно проговаривание обычной скорости, без автоповтора
 }
 // --- результат ответа (общий для «Письма» и всех подрежимов «Экзамена») ---
 // Верный ответ/написание → в следующую коробку. Ошибка → −2 коробки + повтор в текущей сессии.
@@ -3870,6 +3899,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.1','12.10.26','«Учить»: кнопки Назад/Писать это/Вперёд вернулись к обычной высоте (было 1,5× — стало 1×: 48 → 32px); Настройки режима Изучение — для арабского и турецкого подпись «Иероглиф» заменена на «Иностр. текст», строка «Пиньин» с ползунком полностью убрана (в ar/tr нет пиньиня); на телефоне уменьшены отступы между строкой статуса и нижним меню — иностранный текст с переводом свободно влезает в экран; строка «Уровень N · Повторов M» уехала к левому краю, шестерёнка осталась справа, между ними по центру — круглая кнопка-громкоговоритель (проигрывает слово/предложение ещё раз)'],
   ['1.9.0','11.10.26','Словарь: в окне «Фильтр» живой счётчик «Выбрано слов: N» (0 при пустом выборе, при выборе чипов показывает и суммирует число слов по ним; «Сбросить фильтр» сбрасывает всё и закрывает окно); над списком — «Всего слов N» (сколько слов видно сейчас: колонка «Все слова»/«★ Избранное»/«выучено» + фильтры + поиск); новые фильтры в «Фильтре» — «Добавлено недавно» (как в статистике, последняя партия за 7 дней), «★ Избранное», «Выучено», «Часто ошибаюсь» (слова с ошибками за последние 30 дней — их удобно отдельно отрабатывать); кнопка «Экспорт слов» с тремя галочками «пиньин»/«перевод»/«без предложений» (по умолчанию только «без предложений») — сохраняет txt со словами в строгом порядке добавления (новые сверху), имена exported_words[_pinyin][_russian]_ddmmyy.txt; стрелка «Наверх» больше не «проглатывается» на тач-экране; «＋ Слово» стала белой, как остальные; «Письмо»: строка Назад/Вперёд и шестерёнка поднята сразу под пиньинь и перевод, список иероглифов — под ней'],
   ['1.8.26','10.10.26','«Письмо»: контур теперь крутится циклически, пока не выключен (кнопка «Дальше ▶» и клик по иероглифам-подсказкам переключают символы слова, после первого иероглифа корректно включается второй); аудио «Письма» — как в «Учить»: бесконечный повтор слова с паузой по длине текста (mp3 или синтез), повтор не прерывается рисованием, старый механизм с паузой в 3 секунды убран; строка Назад/Вперёд и шестерёнка перенесены вниз над меню (вверху остались только кликабельные подсказки), шестерёнки «Письма»/«Экзамена» — лёгкие, как в «Учить»'],
   ['1.8.25','10.10.26','Словарь: кнопки «★ Избранное» и «выучено» теперь сужают и режимы «Учить»/«Письмо»/«Экзамен» — пока включены, обучение идёт только по этим словам (в режимах метка «★ Избранное: N сл.» / «Выучено: N сл.»), возврат к «Все слова» возвращает полную колоду; вход в аккаунт: добавлена строка диагностики после «Отправить ссылку» (ответ Supabase, куда ведёт ссылка) для поиска причины недоставки письма'],
@@ -5088,6 +5118,7 @@ document.getElementById('studyAgain').onclick=()=>{
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
+document.getElementById('studySpeakBtn').onclick=studySpeak;
 document.getElementById('writePrev').onclick=writePrev;
 document.getElementById('writeNext').onclick=writeNext;
 document.getElementById('writeSettingsBtn').onclick=openWriteSettings;
