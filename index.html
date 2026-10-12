@@ -1009,7 +1009,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.2';
+const APP_VERSION='1.9.3';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3433,6 +3433,8 @@ let examSettings={tf:true, choice:true, choiceN:8, match:false};
 let examAudioOn=true; // 🔊 Аудио в Экзамене (по умолчанию, как и в Письме)
 let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
 let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
+let examAudioDelay=0; // 🔇 Задержка озвучки нового слова в экзамене, в секундах (0–6, шаг 0,5)
+let examDelayTimer=null; // таймер отложенной озвучки (снимается при смене вопроса/уходе/выкл. аудио)
 
 // Случайный перевод слова для задания: либо главный, либо одна из альтернатив (если «Все переводы»).
 function examPickTr(it){
@@ -3529,6 +3531,7 @@ function nextExamQ(){
 }
 function clearExamIdle(){
   if(examIdleTimer){ clearInterval(examIdleTimer); examIdleTimer=null; }
+  if(examDelayTimer){ clearTimeout(examDelayTimer); examDelayTimer=null; }
 }
 // Повтор озвучки в экзамене: слово звучало при показе, затем повторяется фиксированно
 // каждые 7 секунд, пока вопрос на экране. Прекращается ответом, уходом с режима,
@@ -3548,6 +3551,16 @@ function startExamRepeat(it){
     if(examCurrentIt && examCurrentIt.id!==it.id) return;
     examSpeakWord(it);
   }, EXAM_REPEAT_MS);
+}
+// Озвучка нового слова в вопросе: с задержкой «Задержка аудио» (0–6 с).
+// При 0 — звучит сразу. Повторы каждые 7 с (startExamRepeat) не затрагиваются.
+function examSpeakDelayed(it){
+  if(!examAudioOn) return;
+  if(!it || !it.hanzi) return;
+  const delay=(examAudioDelay||0)*1000;
+  if(!delay){ examSpeakWord(it); return; }
+  clearTimeout(examDelayTimer);
+  examDelayTimer=setTimeout(()=>{ examDelayTimer=null; if(examAudioOn) examSpeakWord(it); }, delay);
 }
 // повтор слова целиком (обычный темп). Если у слова есть сохранённое mp3 (в том числе
 // пришедшее из облака — подтягиваем его по path), играем файл; иначе синтез речи.
@@ -3616,6 +3629,10 @@ function renderExamSettings(){
         <div class="mi-label">Аудио<span class="mi-hint">Озвучка слов в заданиях</span></div>
         <button class="sn-switch ${examAudioOn?'on':''}" data-exam-key="audio"></button>
       </div>
+      <div class="menu-item" style="display:block">
+        <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
+        <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
+      </div>
     </div>
   </div>`;
   m.querySelectorAll('[data-exam-key]').forEach(el=>{
@@ -3634,6 +3651,14 @@ function renderExamSettings(){
       examSettings.choiceN=+b.dataset.v;
       examChoiceChanged();
       renderExamSettings();
+    };
+  });
+  m.querySelectorAll('input[type=range][data-exam-delay]').forEach(r=>{
+    r.oninput=()=>{
+      const v=Math.round(Number(r.value)*2)/2;   // шаг 0,5 с
+      examAudioDelay=v;
+      settings.examAudioDelay=v; persist();
+      const val=m.querySelector('[data-exam-delay-val]'); if(val) val.textContent=v+' с';
     };
   });
 }
@@ -3760,7 +3785,7 @@ function renderExamTF(q){
     if(taskOk){ examCorrect(it); examFinish(1); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
-  examSpeakWord(it);
+  examSpeakDelayed(it);
 }
 
 // ---------- Выбор ответов ----------
@@ -3805,7 +3830,7 @@ function renderExamChoice(q){
     });
   }
   drawOpts(examChoiceN());
-  examSpeakWord(it);
+  examSpeakDelayed(it);
 }
 // ---------- Письменно: УБРАНО из экзамена (используется только отдельный режим «Письмо») ----------
 function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
@@ -3969,6 +3994,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.3','12.10.26','Экзамен: в настройках экзамена новый ползунок «Задержка аудио» (0–6 с, шаг 0,5 с) — пауза перед озвучкой нового слова в задании (при 0 с задержки нет); повтор каждые 7 с не затрагивается'],
   ['1.9.2','12.10.26','Слово «Пиньин» исправлено на «Пиньинь» везде (подпись в настройках, галочка экспорта, комментарии и история версий); «Учить»: новый переключатель «Подряд» в настройках режима Изучение (для всех языков) — слова/предложения показываются строго в порядке создания, от старых к новым, без чередования SRS «2 новых : 1 старое» и без приоритета звёзд (активные фильтры «★ Избранное»/«выучено»/фильтр словаря сужают список); автоповтор озвучки карточки ограничен 10 повторами (было бесконечно); словарь: внизу каждой карточки кнопка «Удалить» — после вопроса «Вы точно хотите удалить это слово?» (Да/Нет) слово удаляется вместе с аудио и из облака, чтобы не вернулось при следующей синхронизации'],
   ['1.9.1','12.10.26','«Учить»: кнопки Назад/Писать это/Вперёд вернулись к обычной высоте (было 1,5× — стало 1×: 48 → 32px); Настройки режима Изучение — для арабского и турецкого подпись «Иероглиф» заменена на «Иностр. текст», строка «Пиньинь» с ползунком полностью убрана (в ar/tr нет пиньиня); на телефоне уменьшены отступы между строкой статуса и нижним меню — иностранный текст с переводом свободно влезает в экран; строка «Уровень N · Повторов M» уехала к левому краю, шестерёнка осталась справа, между ними по центру — круглая кнопка-громкоговоритель (проигрывает слово/предложение ещё раз)'],
   ['1.9.0','11.10.26','Словарь: в окне «Фильтр» живой счётчик «Выбрано слов: N» (0 при пустом выборе, при выборе чипов показывает и суммирует число слов по ним; «Сбросить фильтр» сбрасывает всё и закрывает окно); над списком — «Всего слов N» (сколько слов видно сейчас: колонка «Все слова»/«★ Избранное»/«выучено» + фильтры + поиск); новые фильтры в «Фильтре» — «Добавлено недавно» (как в статистике, последняя партия за 7 дней), «★ Избранное», «Выучено», «Часто ошибаюсь» (слова с ошибками за последние 30 дней — их удобно отдельно отрабатывать); кнопка «Экспорт слов» с тремя галочками «пиньин»/«перевод»/«без предложений» (по умолчанию только «без предложений») — сохраняет txt со словами в строгом порядке добавления (новые сверху), имена exported_words[_pinyin][_russian]_ddmmyy.txt; стрелка «Наверх» больше не «проглатывается» на тач-экране; «＋ Слово» стала белой, как остальные; «Письмо»: строка Назад/Вперёд и шестерёнка поднята сразу под пиньинь и перевод, список иероглифов — под ней'],
@@ -6165,7 +6191,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
@@ -6191,6 +6217,7 @@ async function boot(){
   examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, match:false};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
+  examAudioDelay=Number(settings.examAudioDelay)||0;
   SESS=settings.sessN||0;
   for(const it of items) migrateItem(it);
   for(const it of items) await migrateNormAudio(it);
