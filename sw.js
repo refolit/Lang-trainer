@@ -2,8 +2,11 @@
 // Имя кэша привязано к номеру сборки: когда выходит новая версия, старый кэш
 // автоматически удаляется при активации нового SW — на устройство не оседает
 // устаревший index.html/библиотеки.
-const VERSION = '1.9.3';
+const VERSION = '1.9.4';
 const CACHE = `hanzi-trainer-${VERSION}`;
+// Отдельный ПОСТОЯННЫЙ кэш синтезированной озвучки (Google-TTS): не привязан к версии,
+// поэтому переживает обновления — офлайн-озвучка работает, повторные проигрывания идут из кэша.
+const TTS_CACHE = 'hanzi-trainer-tts';
 
 const LIBS = [
   'https://cdn.jsdelivr.net/npm/hanzi-writer@3.6/dist/hanzi-writer.min.js',
@@ -21,7 +24,8 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // Не удаляем TTS_CACHE — озвучка должна переживать обновление версии.
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== TTS_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -46,21 +50,17 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Google-TTS mp3 — network-first с запасом в кэш: онлайн играем свежий звук (и кэшируем),
-  // офлайн отдаём ранее сохранённый (озвучка работает без интернета). Кэш отдельный,
-  // привязанный к версии сборки, чтобы не мешал основному кэшу приложения.
+  // Google-TTS mp3 — cache-first с запасом в сеть: повторное проигрывание идёт из кэша
+  // мгновенно (без повторной загрузки), офлайн отдаём ранее сохранённый (озвучка работает
+  // без интернета). Кэш отдельный ПОСТОЯННЫЙ (TTS_CACHE), не привязан к версии сборки.
   if (/translate\.google\.com\/translate_tts/.test(url.href)) {
     e.respondWith(
-      caches.open(CACHE + '-tts').then(async (c) => {
-        try {
-          const resp = await fetch(e.request);
-          if (resp.ok) c.put(e.request, resp.clone()).catch(() => {});
-          return resp;
-        } catch (err) {
-          const hit = await c.match(e.request);
-          if (hit) return hit;
-          throw err;
-        }
+      caches.open(TTS_CACHE).then(async (c) => {
+        const hit = await c.match(e.request);
+        if (hit) return hit;
+        const resp = await fetch(e.request);
+        if (resp.ok) c.put(e.request, resp.clone()).catch(() => {});
+        return resp;
       })
     );
     return;

@@ -890,8 +890,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
           <div class="data-stats">
             <div class="ds-row"><span>📚 База слов</span><b id="dsWords">—</b></div>
             <div class="ds-row"><span>🔊 База аудио</span><b id="dsAudio">—</b></div>
+            <div class="ds-row"><span>💬 Кэш озвучки (синтез)</span><b id="dsTts">—</b></div>
           </div>
           <div class="data-stats-note" id="dsNote"></div>
+          <div class="btn-row">
+            <button class="btn ghost" id="btnClearTts" style="width:auto">Очистить кэш озвучки</button>
+          </div>
           <div class="btn-row">
             <button class="btn sec" id="btnExport">Экспорт JSON (все языки)</button>
             <button class="btn sec" id="btnImport">Импорт JSON (все языки)</button>
@@ -978,6 +982,31 @@ const DB = {
   del(k){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').delete(k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); }
 };
 
+// ============================== КЭШ ОЗВУЧКИ (отдельное хранилище) ==============================
+// Синтезированная озвучка (Google translate_tts) хранится ОТДЕЛЬНО от карточек и своих mp3:
+// в хранилище Cache Storage браузера с именем `hanzi-trainer-tts` (его пишет service worker —
+// у translate_tts нет CORS-заголовков, поэтому страница не может скачать байты в IndexedDB,
+// но запрос <audio> идёт через SW, который и кладёт ответ в кэш). Это чистый кэш:
+// переживает обновления версии (SW его не удаляет), в экспорт/импорт не входит,
+// восстанавливается сам при первом проигрывании и целиком удаляется кнопкой «Очистить».
+const TTS_CACHE_NAME='hanzi-trainer-tts';
+// Размер кэша озвучки (для строки в «Настройки → Данные»): число файлов и суммарный объём.
+async function ttsCacheSize(){
+  try{
+    const c=await caches.open(TTS_CACHE_NAME);
+    const ks=await c.keys();
+    let bytes=0;
+    for(const k of ks){
+      try{ const r=await c.match(k); if(r){ const b=await r.blob(); bytes += b.size||0; } }catch(e){}
+    }
+    return {count:ks.length, bytes};
+  }catch(e){ return {count:0, bytes:0}; }
+}
+// Полная очистка кэша озвучки (кнопка «Очистить»).
+async function clearTtsCache(){
+  try{ await caches.delete(TTS_CACHE_NAME); }catch(e){}
+}
+
 // ============================== STATE ==============================
 let items = [];            // array of item
 let settings = {
@@ -1009,7 +1038,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.3';
+const APP_VERSION='1.9.4';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1407,17 +1436,33 @@ function getVoiceByURI(uri){
   if(!uri) return null;
   return VOICES.find(v=>v.voiceURI===uri) || null;
 }
+// Региональные варианты Google-озвучки (сетевой mp3): у одного языка разные акценты.
+// Ключ voice в «Голос озвучки» имеет вид «g:<тег>», обычный «google» — авто (ttsLang()).
+const GOOGLE_VOICES={
+  zh:[{tag:'zh-CN',label:'Китайский (материковый)'},{tag:'zh-TW',label:'Китайский (тайваньский)'}],
+  en:[{tag:'en-US',label:'English (US)'},{tag:'en-GB',label:'English (UK)'},{tag:'en-AU',label:'English (AU)'},{tag:'en-IN',label:'English (IN)'}],
+  tr:[{tag:'tr-TR',label:'Türkçe'}],
+  ar:[{tag:'ar-SA',label:'العربية (SA)'},{tag:'ar',label:'العربية'}]
+};
+// «google» / «» → авто-тег; «g:zh-TW» → конкретный региональный тег; иначе локальный voiceURI.
+function googleTag(v){
+  if(v && v.indexOf('g:')===0) return v.slice(2);
+  return null;
+}
+function isGoogleVoice(v){ return v==='google' || (v && v.indexOf('g:')===0); }
 // страховочный таймаут для TTS: если onend/onerror не пришли (зависание очереди),
 // обещание завершаем принудительно — речь не «висит» в фоне.
 function maxSpeechMs(text){
   const n=String(text||'').trim().length;
   return Math.max(2500, Math.min(15000, 1000+n*420));
 }
-function speak(text,rate){
+function speak(text,rate,voice){
   return (async ()=>{
     if(!text||!String(text).trim()) return;
     speechSynthesis.cancel();
-    if(('speechSynthesis' in window) && pickVoice()){
+    // разрешаем региональный Google-тег, если передан «g:<тег>»
+    const gtag=googleTag(voice);
+    if(!isGoogleVoice(voice) && ('speechSynthesis' in window) && pickVoice()){
       await new Promise((res)=>{
         const u=new SpeechSynthesisUtterance(text);
         u.lang=ttsLang(); u.rate=rate||1;
@@ -1431,7 +1476,7 @@ function speak(text,rate){
       });
     }else{
       // локального голоса языка нет (напр. арабский на Windows) — играем сетевой mp3
-      const a=await fetchRemoteTTS(text);
+      const a=await fetchRemoteTTS(text, gtag||undefined);
       if(a){
         await new Promise((res)=>{
           let tmo=null;
@@ -1520,11 +1565,15 @@ const Player={
     return new Promise(res=>{
       let done=false, tmo=null;
       const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
+      // запуск отменён (нажали «Вперёд», сменили карточку, вызвали stop) — гасим и выходим
+      const stale=()=> this.stopFlag || my!==this.gen;
       if(t.kind==='tts'){
         (async()=>{
-          const forcedV= t.voice==='google' ? null : (t.voice ? getVoiceByURI(t.voice) : null);
-          const v = forcedV || pickVoice();
-          if(t.voice!=='google' && v){
+          // разрешаем голос: «google»/«g:<тег>» → сетевой Google-mp3 (региональный);
+          // иначе локальный voiceURI устройства, если он есть.
+          const gtag=googleTag(t.voice);
+          const v = isGoogleVoice(t.voice) ? null : (t.voice ? getVoiceByURI(t.voice) : pickVoice());
+          if(!isGoogleVoice(t.voice) && v){
             const u=new SpeechSynthesisUtterance(t.text);
             u.lang=ttsLang(); u.rate=t.rate||1;
             u.voice=v;
@@ -1532,9 +1581,10 @@ const Player={
             try{ speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){ finish(); return; }
             tmo=setTimeout(finish, maxSpeechMs(t.text));
           }else{
-            // Google голос (выбор по умолчанию) или нет локального голоса — сетевой mp3 (fallback)
-            const a=await fetchRemoteTTS(t.text);
-            if(!a){ finish(); return; }
+            // Google голос (по умолчанию/региональный) или нет локального голоса — сетевой mp3
+            const a=await fetchRemoteTTS(t.text, gtag||undefined);
+            if(stale() || !a){ try{ if(a){ a.pause(); a.onended=a.onerror=null; } }catch(e){} finish(); return; }
+            // гасим ПРЕДЫДУЩИЙ звук перед стартом нового (единая точка — наложения не будет)
             if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
             this.cur=a;
             a.onended=finish; a.onerror=finish;
@@ -1592,6 +1642,40 @@ async function playItem(it, opts){
   Player.play(tracksFor(it,opts));
 }
 function stopPlayer(){ Player.stop(); }
+
+// ============================== ПРЕДЗАГРУЗКА ОЗВУЧКИ ==============================
+// Пока пользователь смотрит текущую карточку, заранее «прогреваем» mp3 следующих слов
+// (создаём <audio> с URL — запрос проходит через service worker и попадает в TTS-кэш).
+// Тогда при переходе слово заиграет мгновенно, без задержки загрузки из Google.
+function prefetchGoogleTTS(text, tag){
+  try{
+    if(!text) return;
+    const t=String(text).trim().slice(0,200);
+    if(!t) return;
+    const tt=(tag||ttsLang()||'zh-CN').toLowerCase();
+    const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tt))+encodeURIComponent(t);
+    const a=new Audio(); a.preload='auto';
+    a.src=url;                                   // просто подписка на src запускает загрузку → SW кэширует
+    setTimeout(()=>{ try{ a.src=''; }catch(e){} }, 60000);  // отпускаем объект
+  }catch(e){}
+}
+// Слова впереди по очереди (Учить/Экзамен), у которых нет своего mp3 — только синтез.
+function prefetchNextTTS(queue, idx, lookahead=2){
+  try{
+    if(!queue || !Array.isArray(queue)) return;
+    const gtag=googleTag(settings.studyVoice||'google');
+    const tag=gtag||undefined;
+    let n=0;
+    for(let i=idx+1; i<queue.length && n<lookahead; i++){
+      const it=queue[i];
+      if(!it || !it.hanzi) continue;
+      const rec=liveRec(it,'norm');
+      if(rec && (rec.url || rec.path)) continue; // есть своё mp3 (локально или в облаке) — синтез не нужен
+      prefetchGoogleTTS(it.hanzi, tag);
+      n++;
+    }
+  }catch(e){}
+}
 async function playWordNorm(it){
   // проигрывание слова в обычной скорости (из карточки словаря и в экзамене)
   if(!it) return;
@@ -1601,8 +1685,8 @@ async function playWordNorm(it){
   if(rec){
     if(!rec.url && rec.path) await cacheRemoteAudio(it,'norm');
     if(rec.url) Player.play([{kind:'file',url:rec.url}]);
-    else speak(it.hanzi,1);
-  }else speak(it.hanzi,1);
+    else speak(it.hanzi,1, settings.studyVoice||'google');
+  }else speak(it.hanzi,1, settings.studyVoice||'google');
 }
 
 // ============================== RECORDINGS / AUDIO FILES ==============================
@@ -2127,16 +2211,20 @@ const DICT_UP_AFTER=15;
 let _dictUpBound=false;
 function bindDictUpFab(){
   const scr=document.getElementById('scr-dict'); if(!scr) return;
-  if(_dictUpBound) return;
-  _dictUpBound=true;
-  scr.addEventListener('scroll', updateDictUpFab, {passive:true});
-  const fab=document.getElementById('dictUpFab');
-  if(fab) fab.onclick=()=>{ scr.scrollTo({top:0, behavior:'smooth'}); };
+  if(!_dictUpBound){
+    _dictUpBound=true;
+    scr.addEventListener('scroll', updateDictUpFab, {passive:true});
+  }
   updateDictUpFab();
 }
 function updateDictUpFab(){
   const scr=document.getElementById('scr-dict'); if(!scr) return;
   const fab=document.getElementById('dictUpFab'); if(!fab) return;
+  // Кнопка пересоздаётся при каждом renderDict, поэтому клик вешаем на каждый новый узел.
+  if(!fab._bound){
+    fab._bound=true;
+    fab.onclick=()=>{ scr.scrollTo({top:0, behavior:'smooth'}); };
+  }
   const rows=scr.querySelectorAll('#dictList .item-line');
   if(rows.length<=DICT_UP_AFTER){ fab.classList.add('hidden'); return; }
   const ref=rows[DICT_UP_AFTER-1]; // 15-я карточка (счёт сверху вниз)
@@ -2654,10 +2742,19 @@ function renderStudySettings(){
     };
   });
 }
-// Выбор голоса «Учить»: Google (сетевой, по умолчанию) или локальный голос устройства.
+// Выбор голоса «Учить»: Google (сетевой, по умолчанию) + его региональные варианты
+// + локальные голоса устройства (speechSynthesis).
 function studyVoiceSelectHTML(){
   const cur=settings.studyVoice||'google';
   const opts=['<option value="google"'+(cur==='google'?' selected':'')+'>Google (сетевой)</option>'];
+  // региональные Google-варианты активного языка (сетевой mp3, разные акценты)
+  const gv=(GOOGLE_VOICES[activeLang]||[]);
+  if(gv.length>1){
+    gv.forEach(g=>{
+      const val='g:'+g.tag;
+      opts.push('<option value="'+val+'"'+(cur===val?' selected':'')+'>Google · '+escapeHtml(g.label)+'</option>');
+    });
+  }
   VOICES.forEach(v=>{
     opts.push('<option value="'+escapeHtml(v.voiceURI)+'"'+(cur===v.voiceURI?' selected':'')+'>'+escapeHtml(v.name+' ('+v.lang+')')+'</option>');
   });
@@ -2747,6 +2844,7 @@ function showStudyCard(){
   document.getElementById('studyTr').textContent=trJoined(it)||'';
   if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
   else studyPlayLoop(it);
+  prefetchNextTTS(studyQueue, studyIdx);
 }
 // Точные размеры «Учить» при 100% (золотой стандарт, пользователь утвердил 05.10.26):
 // телефон — иероглиф 100px / пиньинь 38px / перевод 27px;
@@ -3528,6 +3626,9 @@ function nextExamQ(){
   else renderExamTF(q);
   // в «Подборе» на экране 5 слов сразу и озвучка по клику — фиксированный повтор не нужен
   if(q.mode!=='match') startExamRepeat(q.it);
+  // предзагружаем озвучку следующих вопросов (синтез) — переходы без паузы
+  const ahead=examSeq.slice(examIdx+1, examIdx+3).map(q=>q.it);
+  prefetchNextTTS(ahead, -1);
 }
 function clearExamIdle(){
   if(examIdleTimer){ clearInterval(examIdleTimer); examIdleTimer=null; }
@@ -3994,7 +4095,8 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.9.3','12.10.26','Экзамен: в настройках экзамена новый ползунок «Задержка аудио» (0–6 с, шаг 0,5 с) — пауза перед озвучкой нового слова в задании (при 0 с задержки нет); повтор каждые 7 с не затрагивается'],
+  ['1.9.4','14.10.26','Аудио: озвучка из Google больше не накладывается (при быстром переключении отменённый звук гасится до старта нового — раньше могли звучать до 10 одновременно); загрузка ускорена — mp3 кэшируется в отдельном постоянном кэше `hanzi-trainer-tts` (переживает обновления) и предзагружается для следующих 2 слов в «Учить»/«Экзамен»; новые региональные голоса Google в «Голос озвучки» — китайский (материковый/тайваньский), английский (US/UK/AU/IN), турецкий, арабский; Настройки → Данные: строка «Кэш озвучки (синтез)» с размером и кнопкой «Очистить кэш озвучки» (слова и свои mp3 не трогает)'],
+  ['1.9.3','12.10.26','Экзамен: в настройках экзамена новый ползунок «Задержка аудио» (0–6 с, шаг 0,5 с) — пауза перед озвучкой нового слова в задании (при 0 с задержки нет); повтор каждые 7 с не затрагивается; словарь: кнопка «Наверх» снова работает после смены фильтра/избранного (клик привязывается к каждой перерисованной кнопке, а не только к первой)'],
   ['1.9.2','12.10.26','Слово «Пиньин» исправлено на «Пиньинь» везде (подпись в настройках, галочка экспорта, комментарии и история версий); «Учить»: новый переключатель «Подряд» в настройках режима Изучение (для всех языков) — слова/предложения показываются строго в порядке создания, от старых к новым, без чередования SRS «2 новых : 1 старое» и без приоритета звёзд (активные фильтры «★ Избранное»/«выучено»/фильтр словаря сужают список); автоповтор озвучки карточки ограничен 10 повторами (было бесконечно); словарь: внизу каждой карточки кнопка «Удалить» — после вопроса «Вы точно хотите удалить это слово?» (Да/Нет) слово удаляется вместе с аудио и из облака, чтобы не вернулось при следующей синхронизации'],
   ['1.9.1','12.10.26','«Учить»: кнопки Назад/Писать это/Вперёд вернулись к обычной высоте (было 1,5× — стало 1×: 48 → 32px); Настройки режима Изучение — для арабского и турецкого подпись «Иероглиф» заменена на «Иностр. текст», строка «Пиньинь» с ползунком полностью убрана (в ar/tr нет пиньиня); на телефоне уменьшены отступы между строкой статуса и нижним меню — иностранный текст с переводом свободно влезает в экран; строка «Уровень N · Повторов M» уехала к левому краю, шестерёнка осталась справа, между ними по центру — круглая кнопка-громкоговоритель (проигрывает слово/предложение ещё раз)'],
   ['1.9.0','11.10.26','Словарь: в окне «Фильтр» живой счётчик «Выбрано слов: N» (0 при пустом выборе, при выборе чипов показывает и суммирует число слов по ним; «Сбросить фильтр» сбрасывает всё и закрывает окно); над списком — «Всего слов N» (сколько слов видно сейчас: колонка «Все слова»/«★ Избранное»/«выучено» + фильтры + поиск); новые фильтры в «Фильтре» — «Добавлено недавно» (как в статистике, последняя партия за 7 дней), «★ Избранное», «Выучено», «Часто ошибаюсь» (слова с ошибками за последние 30 дней — их удобно отдельно отрабатывать); кнопка «Экспорт слов» с тремя галочками «пиньин»/«перевод»/«без предложений» (по умолчанию только «без предложений») — сохраняет txt со словами в строгом порядке добавления (новые сверху), имена exported_words[_pinyin][_russian]_ddmmyy.txt; стрелка «Наверх» больше не «проглатывается» на тач-экране; «＋ Слово» стала белой, как остальные; «Письмо»: строка Назад/Вперёд и шестерёнка поднята сразу под пиньинь и перевод, список иероглифов — под ней'],
@@ -4191,7 +4293,7 @@ function utf8Bytes(s){
 // слова — карточки без аудио-файлов: размер сериализованных полей (текст/пиньинь/переводы и т.п.);
 // аудио — прикреплённые mp3: сумма буферов в IndexedDB.
 async function renderDataStats(){
-  const wEl=document.getElementById('dsWords'), aEl=document.getElementById('dsAudio'), nEl=document.getElementById('dsNote');
+  const wEl=document.getElementById('dsWords'), aEl=document.getElementById('dsAudio'), nEl=document.getElementById('dsNote'), tEl=document.getElementById('dsTts');
   if(!wEl) return;
   const list=langItems();
   const auList=list.filter(it=>it.recordings && it.recordings.length);
@@ -4208,6 +4310,9 @@ async function renderDataStats(){
     if(rec && rec.buf) ab += rec.buf.byteLength||rec.buf.length||0;
   }
   aEl.textContent=slots.length+' шт · '+fmtBytes(ab);
+  // кэш озвучки (синтез) — отдельное хранилище Cache Storage
+  if(tEl) tEl.textContent='…';
+  ttsCacheSize().then(({count,bytes})=>{ if(tEl) tEl.textContent=count+' шт · '+fmtBytes(bytes); });
   nEl.textContent='Для активного языка · без учёта облака';
 }
 
@@ -5225,6 +5330,12 @@ document.getElementById('btnImport').onclick=()=>document.getElementById('fileIm
 document.getElementById('fileImport').onchange=e=>{ if(e.target.files[0]) doImportFile(e.target.files[0]); e.target.value=''; };
 document.getElementById('btnSample').onclick=sampleData;
 document.getElementById('btnWipe').onclick=wipeAll;
+document.getElementById('btnClearTts').onclick=async ()=>{
+  if(!confirm('Очистить кэш озвучки (синтезированный звук)? Офлайн-озвучка перекачается заново при следующем проигрывании. Слова и ваши mp3 не пострадают.')) return;
+  await clearTtsCache();
+  renderDataStats();
+  toast('Кэш озвучки очищен');
+};
 document.getElementById('voiceSel').onchange=e=>{ settings.voiceURI=e.target.value; persist(); };
 // Вкладки «Ещё»: Статистика / Синхронизация / Настройки
 document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>{
