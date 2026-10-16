@@ -28,6 +28,31 @@ const DB = {
   del(k){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').delete(k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); }
 };
 
+// ============================== КЭШ ОЗВУЧКИ (отдельное хранилище) ==============================
+// Синтезированная озвучка (Google translate_tts) хранится ОТДЕЛЬНО от карточек и своих mp3:
+// в хранилище Cache Storage браузера с именем `hanzi-trainer-tts` (его пишет service worker —
+// у translate_tts нет CORS-заголовков, поэтому страница не может скачать байты в IndexedDB,
+// но запрос <audio> идёт через SW, который и кладёт ответ в кэш). Это чистый кэш:
+// переживает обновления версии (SW его не удаляет), в экспорт/импорт не входит,
+// восстанавливается сам при первом проигрывании и целиком удаляется кнопкой «Очистить».
+const TTS_CACHE_NAME='hanzi-trainer-tts';
+// Размер кэша озвучки (для строки в «Настройки → Данные»): число файлов и суммарный объём.
+async function ttsCacheSize(){
+  try{
+    const c=await caches.open(TTS_CACHE_NAME);
+    const ks=await c.keys();
+    let bytes=0;
+    for(const k of ks){
+      try{ const r=await c.match(k); if(r){ const b=await r.blob(); bytes += b.size||0; } }catch(e){}
+    }
+    return {count:ks.length, bytes};
+  }catch(e){ return {count:0, bytes:0}; }
+}
+// Полная очистка кэша озвучки (кнопка «Очистить»).
+async function clearTtsCache(){
+  try{ await caches.delete(TTS_CACHE_NAME); }catch(e){}
+}
+
 // ============================== STATE ==============================
 let items = [];            // array of item
 let settings = {
@@ -59,7 +84,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.8.24';
+const APP_VERSION='1.9.5';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -70,8 +95,13 @@ const SB_OFFLINE=window.__NO_SUPABASE__===true; // в офлайн-сборке 
 
 // ============================== SRS (5 коробок, интервалы в сессиях) ==============================
 const BOX_INT=[0,2,3,5,8,12]; // сессий до следующего показа; индекс = коробка (1..5)
-const SRS_NEW_NEED=4;         // верных ответов суммарно, чтобы новое слово покинуло коробку 1
+const SRS_NEW_NEED=4;         // (старая схема) верных ответов суммарно, чтобы новое слово покинуло коробку 1
 const SRS_NEW_PER_SESS=10;    // максимум новых слов в очереди одной сессии
+// Новая стратегия (1.9.5): переходы по числу верных ПОДРЯД (boxStreak) — 6/6/6/7.
+// Выучено = коробка 5 (25 верных без ошибки). Ошибка = остаться на уровне + сброс boxStreak.
+const SRS_NEED_12=6, SRS_NEED_23=6, SRS_NEED_34=6, SRS_NEED_45=7;
+function srsNew(){ return settings.srsMode!=='legacy'; }  // 'legacy' — откат на старую схему (rollback)
+function srsNeedFrom(b){ return b===4?SRS_NEED_45:(b===3?SRS_NEED_34:(b===2?SRS_NEED_23:SRS_NEED_12)); }
 const SET='settings', ITEMS='items', STATS='stats';
 let SESS=0;                 // номер текущей сессии (Учить/Письмо/Экзамен)
 let SHOW_N=0;               // глобальный порядковый номер показа (для правила «между показами были другие слова»)
@@ -221,8 +251,8 @@ function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; sta
 // миграция делала всю старую базу «свежей» — старая база затирала свежий прогресс другого устройства.
 // Теперь таймстамп двигается ТОЛЬКО при реальном действии пользователя, по своей части.
 const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn','addedAt'];
-const P_FIELDS=['box','dueSess','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow',
-                'correct','wrong','wrongStreak','correctStreak','correctStreakDays','lastCorrectDay','learnedOn'];
+const P_FIELDS=['box','dueSess','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow','boxStreak',
+                'correct','wrong','wrongMonth','wrongDay','wrongStreak','correctStreak','correctStreakDays','lastCorrectDay','learnedOn'];
 // Сигнатура контента: что пользователь ввёл/пометил/записал. Аудио — по слотам (speed+имя файла),
 // без blob/cloud-URL: прикрепление/удаление записи делает карточку «новее», а смена URL — нет.
 function itemContentSig(it){
@@ -235,8 +265,8 @@ function itemContentSig(it){
 // Сигнатура прогресса: SRS-состояние (коробка, счётчики, повторы, даты заучивания).
 function itemProgSig(it){
   return JSON.stringify([
-    it.box, it.dueSess, it.newDone, it.nsGood, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow,
-    it.correct, it.wrong, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
+    it.box, it.dueSess, it.newDone, it.nsGood, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow, it.boxStreak,
+    it.correct, it.wrong, it.wrongMonth, it.wrongDay, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
     it.learnedOn
   ]);
 }
@@ -267,9 +297,9 @@ function dupKeyOfLang(it){ return langOf(it)+'|'+keyFolded(it.hanzi); }
 function dupKeyOf(it){ return dupKeyOfLang(it)+'|'+keyFolded(it.translation); }
 // Прогресс при склейке одинаковых карточек: берём максимум по каждому полю — ничего не теряем.
 function mergeDupProgress(dst, src){
-  const nums=['box','dueSess','newDone','nsGood','nsStreak','nsSess','correct','wrong','wrongStreak','correctStreak','correctStreakDays','lastSeen','nextDue'];
+  const nums=['box','dueSess','newDone','nsGood','nsStreak','nsSess','boxStreak','correct','wrong','wrongMonth','wrongStreak','correctStreak','correctStreakDays','lastSeen','nextDue'];
   for(const k of nums) if((src[k]||0)>(dst[k]||0)) dst[k]=src[k];
-  const dates=['lastCorrectDay','learnedOn'];
+  const dates=['lastCorrectDay','wrongDay','learnedOn'];
   for(const k of dates) if(String(src[k]||'')>String(dst[k]||'')) dst[k]=src[k];
   if((src.nsDoneSess||0)>(dst.nsDoneSess||0)) dst.nsDoneSess=src.nsDoneSess;
   if((src.nsLastGoodShow||0)>(dst.nsLastGoodShow||0)) dst.nsLastGoodShow=src.nsLastGoodShow;
@@ -283,14 +313,15 @@ function normalizeAppItem(it){
   it.updated_at=(+it.updated_at)||0;
   it.prog_at=(+it.prog_at)||0;
   it.box=Math.max(1, Math.min(5, +it.box||1));
-  it.dueSess=+it.dueSess||0; it.correct=+it.correct||0; it.wrong=+it.wrong||0;
+  it.dueSess=+it.dueSess||0; it.correct=+it.correct||0; it.wrong=+it.wrong||0; it.wrongMonth=+it.wrongMonth||0;
   it.correctStreak=+it.correctStreak||0; it.correctStreakDays=+it.correctStreakDays||0;
-  it.nsStreak=+it.nsStreak||0; it.nsSess=+it.nsSess||0; it.nsGood=+it.nsGood||0;
+  it.nsStreak=+it.nsStreak||0; it.nsSess=+it.nsSess||0; it.nsGood=+it.nsGood||0; it.boxStreak=+it.boxStreak||0;
   it.nsDoneSess=it.nsDoneSess==null?null:it.nsDoneSess;
   it.nsLastGoodShow=it.nsLastGoodShow==null?null:it.nsLastGoodShow;
   it.lastShowN=+it.lastShowN||0; it.lastSeen=+it.lastSeen||0; it.nextDue=+it.nextDue||0;
   it.newDone=+it.newDone||0; it.starred=!!it.starred;
   it.lastCorrectDay=it.lastCorrectDay||''; it.learnedOn=it.learnedOn||'';
+  it.wrongDay=String(it.wrongDay||'');
   it.addedOn=it.addedOn||''; it.lang=it.lang||'zh'; it.kind=it.kind||'word';
   ensureAddedAt(it);
   if(!Array.isArray(it.recordings)) it.recordings=[];
@@ -406,6 +437,7 @@ function go(scrId, writeIt){
   stopAllAudio();
   clearExamIdle();
   clearStudyIdle();
+  clearWritePlay();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(scrId).classList.add('active');
   document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.scr===scrId));
@@ -455,17 +487,33 @@ function getVoiceByURI(uri){
   if(!uri) return null;
   return VOICES.find(v=>v.voiceURI===uri) || null;
 }
+// Региональные варианты Google-озвучки (сетевой mp3): у одного языка разные акценты.
+// Ключ voice в «Голос озвучки» имеет вид «g:<тег>», обычный «google» — авто (ttsLang()).
+const GOOGLE_VOICES={
+  zh:[{tag:'zh-CN',label:'Китайский (материковый)'},{tag:'zh-TW',label:'Китайский (тайваньский)'}],
+  en:[{tag:'en-US',label:'English (US)'},{tag:'en-GB',label:'English (UK)'},{tag:'en-AU',label:'English (AU)'},{tag:'en-IN',label:'English (IN)'}],
+  tr:[{tag:'tr-TR',label:'Türkçe'}],
+  ar:[{tag:'ar-SA',label:'العربية (SA)'},{tag:'ar',label:'العربية'}]
+};
+// «google» / «» → авто-тег; «g:zh-TW» → конкретный региональный тег; иначе локальный voiceURI.
+function googleTag(v){
+  if(v && v.indexOf('g:')===0) return v.slice(2);
+  return null;
+}
+function isGoogleVoice(v){ return v==='google' || (v && v.indexOf('g:')===0); }
 // страховочный таймаут для TTS: если onend/onerror не пришли (зависание очереди),
 // обещание завершаем принудительно — речь не «висит» в фоне.
 function maxSpeechMs(text){
   const n=String(text||'').trim().length;
   return Math.max(2500, Math.min(15000, 1000+n*420));
 }
-function speak(text,rate){
+function speak(text,rate,voice){
   return (async ()=>{
     if(!text||!String(text).trim()) return;
     speechSynthesis.cancel();
-    if(('speechSynthesis' in window) && pickVoice()){
+    // разрешаем региональный Google-тег, если передан «g:<тег>»
+    const gtag=googleTag(voice);
+    if(!isGoogleVoice(voice) && ('speechSynthesis' in window) && pickVoice()){
       await new Promise((res)=>{
         const u=new SpeechSynthesisUtterance(text);
         u.lang=ttsLang(); u.rate=rate||1;
@@ -479,12 +527,16 @@ function speak(text,rate){
       });
     }else{
       // локального голоса языка нет (напр. арабский на Windows) — играем сетевой mp3
-      const a=await fetchRemoteTTS(text);
+      const a=await fetchRemoteTTS(text, gtag||undefined);
       if(a){
         await new Promise((res)=>{
           let tmo=null;
-          const finish=()=>{ try{ a.pause(); }catch(e){} a.onended=a.onerror=null; clearTimeout(tmo); res(); };
+          const finish=()=>{ try{ a.pause(); }catch(e){} a.onended=a.onerror=null; clearTimeout(tmo); if(Player.cur===a) Player.cur=null; res(); };
           a.onended=finish; a.onerror=finish;
+          // регистрируем в Player.cur: Player.stop() гасит и этот mp3 (иначе при переключении
+          // карточек «чужой» Google-mp3 продолжал звучать поверх новых).
+          if(Player.cur){ try{ Player.cur.pause(); Player.cur.onended=Player.cur.onerror=null; }catch(e){} }
+          Player.cur=a;
           tmo=setTimeout(finish, Math.min(90000, 3000+String(text||'').length*450));
           try{ a.play().catch(finish); }catch(e){ finish(); }
         });
@@ -500,24 +552,48 @@ function speak(text,rate){
 // (наш <meta referrer=no-referrer> снимает его со ВСЕХ исходящих запросов страницы).
 // Лимит длины: у `translate_tts` текст условно до ~200 знаков; длиннее не отправляем.
 const G_TRANSLATE_TTS='https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=TTL&q=';
+// Youdao dictvoice (второй сетевой источник): zh/en. type=2 — mp3. Поддерживает китайский и английский.
+// Не гоняем его для ar/tr (нет голосов) — там остаётся Google + локальный speechSynthesis.
+const YOUDAO_TTS='https://dict.youdao.com/dictvoice?audio=TXT&type=2';
+function youdaoTtsURL(text, tag){
+  const lang=(tag||'').toLowerCase();
+  if(lang.startsWith('zh')) return YOUDAO_TTS.replace('TXT', encodeURIComponent(String(text).slice(0,100)));
+  if(lang.startsWith('en')) return YOUDAO_TTS.replace('TXT', encodeURIComponent(String(text).slice(0,100)));
+  return null;
+}
+// Пробует загрузить mp3 по url: canplay в пределах timeout; error/таймаут → null.
+function tryRemoteAudio(url, timeout){
+  return new Promise(res=>{
+    if(!url){ res(null); return; }
+    const a=new Audio();
+    a.preload='auto';
+    let failed=false, done=false;
+    const finish=v=>{ if(done) return; done=true; a.onerror=null; try{ a.removeEventListener('canplay', onCan); }catch(e){} res(v); };
+    const onCan=()=>finish(failed?null:a);
+    a.addEventListener('canplay', onCan, {once:true});
+    a.addEventListener('error', ()=>{ failed=true; finish(null); }, {once:true});
+    a.src=url;                                  // src после подписки на error — не пропустим раннюю ошибку
+    setTimeout(()=>finish(failed?null:a), timeout); // страховка: canplay мог не прийти — отдаём что есть
+  });
+}
 async function fetchRemoteTTS(text, langTag){
   const MAX=200;
   const t=String(text||'').trim();
   if(!t) return null;
   const tag=(langTag||ttsLang()||'zh-CN').toLowerCase();
-  const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tag))+encodeURIComponent(t.slice(0,MAX));
-  try{
-    const a=new Audio();
-    a.preload='auto';
-    let failed=false;
-    a.addEventListener('error',()=>{ failed=true; }, {once:true});
-    a.src=url;                                  // src после подписки на error — не пропустим раннюю ошибку
-    await Promise.race([
-      new Promise(ok=>a.addEventListener('canplay',ok,{once:true})),   // canplay срабатывает раньше canplaythrough
-      new Promise(ok=>setTimeout(ok,1500))
-    ]);
-    return failed ? null : a;
-  }catch(e){ return null; }
+  const gUrl=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tag))+encodeURIComponent(t.slice(0,MAX));
+  const yUrl=youdaoTtsURL(t, tag);
+  // 1) Google translate_tts: до 2 попыток, таймаут 4 с (раньше 1,5 — сервер иногда не успевал отдать canplay).
+  for(let i=0;i<2;i++){
+    const a=await tryRemoteAudio(gUrl, 4000);
+    if(a) return a;
+  }
+  // 2) Youdao dictvoice (zh/en) — чтобы не было тишины, если Google недоступен.
+  if(yUrl){
+    const a=await tryRemoteAudio(yUrl, 4000);
+    if(a) return a;
+  }
+  return null;
 }
 
 // ============================== AUDIO SEQUENCE PLAYER ==============================
@@ -568,11 +644,15 @@ const Player={
     return new Promise(res=>{
       let done=false, tmo=null;
       const finish=()=>{ if(done) return; done=true; clearTimeout(tmo); res(); };
+      // запуск отменён (нажали «Вперёд», сменили карточку, вызвали stop) — гасим и выходим
+      const stale=()=> this.stopFlag || my!==this.gen;
       if(t.kind==='tts'){
         (async()=>{
-          const forcedV= t.voice==='google' ? null : (t.voice ? getVoiceByURI(t.voice) : null);
-          const v = forcedV || pickVoice();
-          if(t.voice!=='google' && v){
+          // разрешаем голос: «google»/«g:<тег>» → сетевой Google-mp3 (региональный);
+          // иначе локальный voiceURI устройства, если он есть.
+          const gtag=googleTag(t.voice);
+          const v = isGoogleVoice(t.voice) ? null : (t.voice ? getVoiceByURI(t.voice) : pickVoice());
+          if(!isGoogleVoice(t.voice) && v){
             const u=new SpeechSynthesisUtterance(t.text);
             u.lang=ttsLang(); u.rate=t.rate||1;
             u.voice=v;
@@ -580,9 +660,10 @@ const Player={
             try{ speechSynthesis.cancel(); speechSynthesis.speak(u); }catch(e){ finish(); return; }
             tmo=setTimeout(finish, maxSpeechMs(t.text));
           }else{
-            // Google голос (выбор по умолчанию) или нет локального голоса — сетевой mp3 (fallback)
-            const a=await fetchRemoteTTS(t.text);
-            if(!a){ finish(); return; }
+            // Google голос (по умолчанию/региональный) или нет локального голоса — сетевой mp3
+            const a=await fetchRemoteTTS(t.text, gtag||undefined);
+            if(stale() || !a){ try{ if(a){ a.pause(); a.onended=a.onerror=null; } }catch(e){} finish(); return; }
+            // гасим ПРЕДЫДУЩИЙ звук перед стартом нового (единая точка — наложения не будет)
             if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
             this.cur=a;
             a.onended=finish; a.onerror=finish;
@@ -635,11 +716,45 @@ async function playItem(it, opts){
   if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
   ensureCardAudio(it, opts.mode==='exam' ? ['norm'] : (opts.speeds||studySpeeds()));  // в фоне: не блокируем старт звука
   const el=document.getElementById('studySpeed');
-  Player.onSpeedChange=(label)=> el.textContent=label?'🔊':'';
+  Player.onSpeedChange=(label)=>{ if(el) el.textContent=label?'🔊':''; };
   Player.onDone=()=>{ if(opts.onDone) opts.onDone(); };
   Player.play(tracksFor(it,opts));
 }
 function stopPlayer(){ Player.stop(); }
+
+// ============================== ПРЕДЗАГРУЗКА ОЗВУЧКИ ==============================
+// Пока пользователь смотрит текущую карточку, заранее «прогреваем» mp3 следующих слов
+// (создаём <audio> с URL — запрос проходит через service worker и попадает в TTS-кэш).
+// Тогда при переходе слово заиграет мгновенно, без задержки загрузки из Google.
+function prefetchGoogleTTS(text, tag){
+  try{
+    if(!text) return;
+    const t=String(text).trim().slice(0,200);
+    if(!t) return;
+    const tt=(tag||ttsLang()||'zh-CN').toLowerCase();
+    const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tt))+encodeURIComponent(t);
+    const a=new Audio(); a.preload='auto';
+    a.src=url;                                   // просто подписка на src запускает загрузку → SW кэширует
+    setTimeout(()=>{ try{ a.src=''; }catch(e){} }, 60000);  // отпускаем объект
+  }catch(e){}
+}
+// Слова впереди по очереди (Учить/Экзамен), у которых нет своего mp3 — только синтез.
+function prefetchNextTTS(queue, idx, lookahead=2){
+  try{
+    if(!queue || !Array.isArray(queue)) return;
+    const gtag=googleTag(settings.studyVoice||'google');
+    const tag=gtag||undefined;
+    let n=0;
+    for(let i=idx+1; i<queue.length && n<lookahead; i++){
+      const it=queue[i];
+      if(!it || !it.hanzi) continue;
+      const rec=liveRec(it,'norm');
+      if(rec && (rec.url || rec.path)) continue; // есть своё mp3 (локально или в облаке) — синтез не нужен
+      prefetchGoogleTTS(it.hanzi, tag);
+      n++;
+    }
+  }catch(e){}
+}
 async function playWordNorm(it){
   // проигрывание слова в обычной скорости (из карточки словаря и в экзамене)
   if(!it) return;
@@ -649,8 +764,8 @@ async function playWordNorm(it){
   if(rec){
     if(!rec.url && rec.path) await cacheRemoteAudio(it,'norm');
     if(rec.url) Player.play([{kind:'file',url:rec.url}]);
-    else speak(it.hanzi,1);
-  }else speak(it.hanzi,1);
+    else speak(it.hanzi,1, settings.studyVoice||'google');
+  }else speak(it.hanzi,1, settings.studyVoice||'google');
 }
 
 // ============================== RECORDINGS / AUDIO FILES ==============================
@@ -791,11 +906,53 @@ function updateDictFilterChips(){
   document.querySelectorAll('[data-dict-filter]').forEach(b=>b.classList.toggle('active', b.dataset.dictFilter===dictFilter));
   updateFilterBadge();
 }
-// ====== Окно «Фильтр» (уровни + метки + «повторить сейчас») ======
-// flt = {lvls:Set<1..5>, tags:Set<string>, due:bool}
-let flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false};
-function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due || flt.thisMonth || flt.lastMonth; }
-function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0) + (flt.thisMonth?1:0) + (flt.lastMonth?1:0); }
+// ====== Окно «Фильтр» (уровни + метки + «повторить сейчас» + доп. фильтры) ======
+// flt = {lvls:Set<1..5>, tags:Set<string>, due:bool, thisMonth:bool, lastMonth:bool,
+//        star:bool, learned:bool, addedRecent:bool, oftenWrong:bool}
+let flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false};
+function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due || flt.thisMonth || flt.lastMonth || flt.star || flt.learned || flt.addedRecent || flt.oftenWrong; }
+function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0) + (flt.thisMonth?1:0) + (flt.lastMonth?1:0) + (flt.star?1:0) + (flt.learned?1:0) + (flt.addedRecent?1:0) + (flt.oftenWrong?1:0); }
+// «Добавлено недавно» (как в статистике): последняя партия карточек за 7 дней — самая свежая дата addedOn за неделю.
+function addedRecentCutoff(){
+  let last='';
+  for(const it of langItems()){
+    const d=String(it.addedOn||'');
+    if(d && d>=dayStr(new Date(Date.now()-7*86400000)) && d>last) last=d;
+  }
+  return last;
+}
+function isAddedRecently(it, cutoff){ return !!cutoff && String(it.addedOn||'')===cutoff; }
+// Проходной тест по ВРЕМЕННОЙ копии фильтра (окно «Фильтр», до «Применить»): для живого счётчика
+// «Выбрано слов». Отдельная функция — реальный flt трогать не должны до подтверждения.
+function passesFilterTmp(it, f){
+  if(f.lvls.size && !f.lvls.has(normBox(it))) return false;
+  if(f.tags.size){
+    const t=(it.tag||'').trim();
+    if(!t || !f.tags.has(t)) return false;
+  }
+  if(f.due && !(it.translation && isDue(it))) return false;
+  if(f.thisMonth || f.lastMonth){
+    const d=dictMonthDate(it);
+    if(!d) return false;
+    const now=new Date();
+    const isThis=d.getFullYear()===now.getFullYear() && d.getMonth()===now.getMonth();
+    const prevY=now.getMonth()===0 ? now.getFullYear()-1 : now.getFullYear();
+    const prevM=now.getMonth()===0 ? 11 : now.getMonth()-1;
+    const isLast=d.getFullYear()===prevY && d.getMonth()===prevM;
+    if(!((f.thisMonth && isThis) || (f.lastMonth && isLast))) return false;
+  }
+  if(f.star && !it.starred) return false;
+  if(f.learned && !isLearned(it)) return false;
+  if(f.addedRecent && !isAddedRecently(it, addedRecentCutoff())) return false;
+  if(f.oftenWrong && !isOftenWrong(it)) return false;
+  return true;
+}
+// отсчёт «ошибки за последний месяц»: скользящие 30 дней. wrongMonth — число ошибок,
+// wrongDay — день последней ошибки. Счётчик продолжается, пока ошибки свежие; когда последняя
+// ошибка устаревает (старше 30 дней), следующий srsBad сбрасывает счётчик перед прибавлением.
+function wrongWindow(){ return dayStr(new Date(Date.now()-30*86400000)); }
+function hasWrongRecent(it){ return !!it.wrongDay && it.wrongDay>=wrongWindow(); }
+function isOftenWrong(it){ return (it.wrongMonth||0)>0 && hasWrongRecent(it); }
 function passesFilter(it){
   if(flt.lvls.size && !flt.lvls.has(normBox(it))) return false;
   if(flt.tags.size){
@@ -813,6 +970,10 @@ function passesFilter(it){
     const isLast=d.getFullYear()===prevY && d.getMonth()===prevM;
     if(!((flt.thisMonth && isThis) || (flt.lastMonth && isLast))) return false;
   }
+  if(flt.star && !it.starred) return false;
+  if(flt.learned && !isLearned(it)) return false;
+  if(flt.addedRecent && !isAddedRecently(it, addedRecentCutoff())) return false;
+  if(flt.oftenWrong && !isOftenWrong(it)) return false;
   return true;
 }
 // Все карточки языка с учётом активных фильтров словаря (расширенный фильтр + кнопки
@@ -830,14 +991,69 @@ function allTags(){
   for(const it of langItems()){ const t=(it.tag||'').trim(); if(t) set.add(t); }
   return Array.from(set).sort((a,b)=>a.localeCompare(b));
 }
+// ---------- Окно «Метки» (П.10): переименование / удаление метки у всех карточек ----------
+function openTagsModal(){
+  closeAllModals();
+  renderTagsModal();
+}
+function renderTagsModal(){
+  const m=document.getElementById('modalTags');
+  const tags=allTags();
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Метки</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalTags')">✕</button></div>
+    <div class="muted" style="margin:8px 0 6px">Метки активного языка. Переименование/удаление применяется ко всем карточкам с этой меткой.</div>
+    ${tags.length?tags.map(t=>`
+      <div class="tag-row" data-tag="${escapeHtml(t)}">
+        <input type="text" class="tag-inp" value="${escapeHtml(t)}" data-tag-name="${escapeHtml(t)}">
+        <button class="btn ghost tag-save" style="width:auto">✓</button>
+        <button class="btn ghost tag-del" style="width:auto; color:var(--red)">🗑</button>
+      </div>`).join(''):'<div class="empty" style="padding:16px">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
+    <div class="btn-row" style="margin-top:14px"><button class="btn sec" id="tagsClose">Закрыть</button></div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelectorAll('.tag-row').forEach(row=>{
+    const old=row.dataset.tag;
+    row.querySelector('.tag-save').onclick=()=>{
+      const inp=row.querySelector('.tag-inp');
+      const nn=inp.value.trim();
+      if(!nn){ toast('Метка не может быть пустой'); return; }
+      if(nn===old){ renderTagsModal(); return; }
+      renameTag(old, nn);
+      renderTagsModal();
+    };
+    row.querySelector('.tag-del').onclick=()=>{
+      if(!confirm('Удалить метку «'+old+'» у всех карточек?')) return;
+      deleteTag(old);
+      renderTagsModal();
+    };
+  });
+  m.querySelector('#tagsClose').onclick=()=>closeModal('modalTags');
+}
+function renameTag(oldName, newName){
+  let n=0;
+  for(const it of items){
+    if(langOf(it)!==activeLang) continue;
+    if((it.tag||'').trim()===oldName){ it.tag=newName; n++; }
+  }
+  persist().then(()=>{ renderDict(); renderTagsModal(); toastShort('Метка переименована ('+n+' сл.)'); });
+}
+function deleteTag(oldName){
+  let n=0;
+  for(const it of items){
+    if(langOf(it)!==activeLang) continue;
+    if((it.tag||'').trim()===oldName){ it.tag=''; n++; }
+  }
+  persist().then(()=>{ renderDict(); renderTagsModal(); toastShort('Метка удалена ('+n+' сл.)'); });
+}
 function openFilterModal(){
   closeAllModals();
   const m=document.getElementById('modalFilter');
   const tags=allTags();
   // tmp — рабочая копия фильтра в окне; в flt она попадает только по «Применить».
-  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due, thisMonth:flt.thisMonth, lastMonth:flt.lastMonth};
+  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due, thisMonth:flt.thisMonth, lastMonth:flt.lastMonth, star:flt.star, learned:flt.learned, addedRecent:flt.addedRecent, oftenWrong:flt.oftenWrong};
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Фильтр</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalFilter')">✕</button></div>
+    <div class="flt-count" id="fltCount">Выбрано слов: 0</div>
     <label class="lbl">Уровни</label>
     <div class="flt-sec" id="fltLvls">
       ${[1,2,3,4,5].map(l=>`<button class="flt-chip ${tmp.lvls.has(l)?'on':''}" data-flt-lvl="${l}">Уровень ${l}</button>`).join('')}
@@ -850,10 +1066,22 @@ function openFilterModal(){
     <div class="flt-sec" id="fltMonth">
       <button class="flt-chip ${tmp.thisMonth?'on':''}" data-flt-month="this">Этот месяц</button>
       <button class="flt-chip ${tmp.lastMonth?'on':''}" data-flt-month="last">Прошлый месяц</button>
+      <button class="flt-chip ${tmp.addedRecent?'on':''}" data-flt-recent="1">Добавлено недавно</button>
     </div>
     <label class="lbl">Другое</label>
     <div class="flt-sec" id="fltDue">
       <button class="flt-chip ${tmp.due?'on':''}" data-flt-due="1">Повторить сейчас</button>
+      <button class="flt-chip ${tmp.star?'on':''}" data-flt-star="1">★ Избранное</button>
+      <button class="flt-chip ${tmp.learned?'on':''}" data-flt-learned="1">Выучено</button>
+      <button class="flt-chip ${tmp.oftenWrong?'on':''}" data-flt-wrong="1">Часто ошибаюсь</button>
+    </div>
+    <div class="export-row" style="margin-top:14px">
+      <button class="btn sec" id="fltExport">Экспорт слов</button>
+      <div class="chk-row">
+        <label class="chk"><input type="checkbox" id="fltChkPinyin"> пиньинь</label>
+        <label class="chk"><input type="checkbox" id="fltChkTr"> перевод</label>
+        <label class="chk"><input type="checkbox" id="fltChkNosent" checked> без предложений</label>
+      </div>
     </div>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn sec" id="fltReset">Сбросить фильтр</button>
@@ -861,25 +1089,74 @@ function openFilterModal(){
     </div>
   </div>`;
   m.classList.remove('hidden');
+  // живой счётчик «Выбрано слов»: 0, пока ничего не выбрано; иначе — сколько слов попадает
+  // под выбранные чипы (пересчитывается по рабочей копии при каждом клике).
+  const exportListBase=langItems().slice().sort((a,b)=>((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||'')));
+  const tmpActiveF=f=> f.lvls.size>0 || f.tags.size>0 || f.due || f.thisMonth || f.lastMonth || f.star || f.learned || f.addedRecent || f.oftenWrong;
+  function tmpCount(){
+    const n=tmpActiveF(tmp) ? exportListBase.filter(it=>passesFilterTmp(it, tmp)).length : 0;
+    document.getElementById('fltCount').textContent='Выбрано слов: '+n;
+  }
   // выбор чипов меняет только рабочую копию; к реальному flt ничего не применяется,
   // пока пользователь не нажмёт «Применить фильтр» (или «Сбросить» очистит выбор).
-  m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.lvls, +b.dataset.fltLvl); b.classList.toggle('on', tmp.lvls.has(+b.dataset.fltLvl)); });
-  m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.tags, b.dataset.fltTag); b.classList.toggle('on', tmp.tags.has(b.dataset.fltTag)); });
-  m.querySelector('[data-flt-due]').onclick=e=>{ tmp.due=!tmp.due; e.currentTarget.classList.toggle('on', tmp.due); };
-  m.querySelectorAll('[data-flt-month]').forEach(b=>b.onclick=()=>{ const k=b.dataset.fltMonth==='this'?'thisMonth':'lastMonth'; tmp[k]=!tmp[k]; b.classList.toggle('on', tmp[k]); });
+  m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.lvls, +b.dataset.fltLvl); b.classList.toggle('on', tmp.lvls.has(+b.dataset.fltLvl)); tmpCount(); });
+  m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.tags, b.dataset.fltTag); b.classList.toggle('on', tmp.tags.has(b.dataset.fltTag)); tmpCount(); });
+  m.querySelector('[data-flt-due]').onclick=e=>{ tmp.due=!tmp.due; e.currentTarget.classList.toggle('on', tmp.due); tmpCount(); };
+  m.querySelectorAll('[data-flt-month]').forEach(b=>b.onclick=()=>{ const k=b.dataset.fltMonth==='this'?'thisMonth':'lastMonth'; tmp[k]=!tmp[k]; b.classList.toggle('on', tmp[k]); tmpCount(); });
+  m.querySelector('[data-flt-recent]').onclick=e=>{ tmp.addedRecent=!tmp.addedRecent; e.currentTarget.classList.toggle('on', tmp.addedRecent); tmpCount(); };
+  m.querySelector('[data-flt-star]').onclick=e=>{ tmp.star=!tmp.star; e.currentTarget.classList.toggle('on', tmp.star); tmpCount(); };
+  m.querySelector('[data-flt-learned]').onclick=e=>{ tmp.learned=!tmp.learned; e.currentTarget.classList.toggle('on', tmp.learned); tmpCount(); };
+  m.querySelector('[data-flt-wrong]').onclick=e=>{ tmp.oftenWrong=!tmp.oftenWrong; e.currentTarget.classList.toggle('on', tmp.oftenWrong); tmpCount(); };
+  m.querySelector('#fltExport').onclick=()=>exportWords(tmp);
   m.querySelector('#fltReset').onclick=()=>{
-    flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false};
-    tmp.lvls=new Set(); tmp.tags=new Set(); tmp.due=false; tmp.thisMonth=false; tmp.lastMonth=false;
-    m.querySelectorAll('.flt-chip').forEach(c=>c.classList.remove('on'));
-    renderDict(); updateFilterBadge(); refreshModeFilterBadges();
-  };
-  m.querySelector('#fltApply').onclick=()=>{
-    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due, thisMonth:tmp.thisMonth, lastMonth:tmp.lastMonth};
+    flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false};
     renderDict(); updateFilterBadge(); refreshModeFilterBadges();
     closeModal('modalFilter');
   };
+  m.querySelector('#fltApply').onclick=()=>{
+    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due, thisMonth:tmp.thisMonth, lastMonth:tmp.lastMonth, star:tmp.star, learned:tmp.learned, addedRecent:tmp.addedRecent, oftenWrong:tmp.oftenWrong};
+    renderDict(); updateFilterBadge(); refreshModeFilterBadges();
+    closeModal('modalFilter');
+  };
+  tmpCount();
 }
 function toggleSet(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
+// Экспорт выбранного в окне фильтра в txt: одна строка — одно слово, строго в порядке добавления
+// (новые сверху). Пустой выбор = вся колода языка. «без предложений» по умолчанию включена.
+function exportWords(f){
+  const includePy=!!document.getElementById('fltChkPinyin')?.checked;
+  const includeTr=!!document.getElementById('fltChkTr')?.checked;
+  const noSent=!!document.getElementById('fltChkNosent')?.checked;
+  const list=langItems().slice().sort((a,b)=>((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||'')));
+  const lines=[];
+  for(const it of list){
+    if(noSent && String(it.kind||'word')==='sent') continue;
+    if(f && !passesFilterTmp(it, f)) continue;
+    const hanzi=String(it.hanzi||'').trim(); if(!hanzi) continue;
+    const py=(it.pinyin&&String(it.pinyin).trim())||(hasStrokes()?toPinyin(hanzi):'');
+    const tr=trJoined(it);
+    let line=hanzi;
+    if(includePy) line += ' - ' + py;
+    if(includeTr) line += ' - ' + tr;
+    lines.push(line);
+  }
+  if(!lines.length){ toast('Нет слов для экспорта'); return; }
+  const d=new Date();
+  const ddmmyy=String(d.getDate()).padStart(2,'0')+String(d.getMonth()+1).padStart(2,'0')+String(d.getFullYear()).slice(-2);
+  let suffix='';
+  if(includePy) suffix += '_pinyin';
+  if(includeTr) suffix += '_russian';
+  const name='exported_words'+suffix+'_'+ddmmyy+'.txt';
+  const blob=new Blob([lines.join('\n')], {type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  toast('Экспортировано: '+lines.length);
+}
 // Метка «Фильтр: N слов» в режимах Учить/Письмо/Экзамен — видна при активном фильтре
 // или при включённых кнопках «★ Избранное»/«выучено» (они тоже сужают колоду режимов).
 function refreshModeFilterBadges(){
@@ -893,7 +1170,6 @@ function refreshModeFilterBadges(){
     if(label){ el.textContent=label; el.classList.remove('hidden'); }
     else { el.textContent=''; el.classList.add('hidden'); }
   });
-}
 }
 function updateFilterBadge(){
   const el=document.getElementById('fltBadge'); if(!el) return;
@@ -946,7 +1222,7 @@ function renderDict(){
   updateChips();
   updateDictFilterChips();
   if(!arr.length){
-    list.innerHTML='<div class="empty"><span class="big-ic">📭</span>Пока пусто.<br>Нажмите «＋ Слово», чтобы добавить первую карточку.</div>';
+    list.innerHTML='<div class="dict-total">Всего слов 0</div><div class="empty"><span class="big-ic">📭</span>Пока пусто.<br>Нажмите «＋ Слово», чтобы добавить первую карточку.</div>';
     return;
   }
   list.innerHTML=arr.map(it=>{
@@ -979,6 +1255,8 @@ function renderDict(){
   // даты addedOn/addedAt (старые бэкапы) заголовка нет.
   const MONTHS_RU=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
   const nowYear=new Date().getFullYear();
+  // «Всего слов x»: число карточек, которые реально видно сейчас (колонка + фильтр + поиск).
+  list.insertAdjacentHTML('afterbegin', `<div class="dict-total">Всего слов ${arr.length}</div>`);
   let prevKey='';
   list.querySelectorAll('.item-line').forEach(row=>{
     const id=row.dataset.id;
@@ -1011,22 +1289,71 @@ function renderDict(){
   });
   bindDictUpFab();
 }
+// --- Удаление карточки словаря ---
+let delPendingId=null;
+// Спросить подтверждение: аккуратная модалка в стиле приложения (Да/Нет).
+function askDeleteCard(id){
+  const it=items.find(x=>x.id===id); if(!it) return;
+  delPendingId=id;
+  closeAllModals();
+  const m=document.getElementById('modalDelete');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Удалить слово</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalDelete')">✕</button></div>
+    <div style="margin-top:8px;font-size:15px;font-weight:600;color:var(--ink)">Вы точно хотите удалить это слово?</div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px">
+      <div class="dc zh" style="font-size:22px">${escapeHtml(it.hanzi)}</div>
+      ${it.pinyin?`<div class="dc py">${escapeHtml(it.pinyin)}</div>`:''}
+      <div class="dc tr" style="text-align:left">${escapeHtml(trJoined(it)||'')}</div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn sec" style="flex:1" onclick="closeModal('modalDelete')">Нет</button>
+      <button class="btn warn" style="flex:1" id="btnDelConfirm">Да</button>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('#btnDelConfirm').onclick=()=>confirmDeleteCard(id);
+}
+// Фактическое удаление: локальная база + аудио (blob-кэш + IndexedDB + файлы в Storage),
+// затем облачная строка Supabase — чтобы слово не вернулось при следующей синхронизации.
+async function confirmDeleteCard(id){
+  closeModal('modalDelete');
+  const idx=items.findIndex(x=>x.id===id); if(idx<0) return;
+  const it=items[idx];
+  revokeAll(it);
+  for(const r of (it.recordings||[])){
+    if(!r || !r.speed) continue;
+    try{ await DB.del('aud:'+it.id+':'+r.speed); }catch(e){}
+    try{ await removeAudioRemote(it, r.speed); }catch(e){}
+  }
+  items.splice(idx,1);
+  await persist();
+  try{
+    const c=sbClient();
+    if(c && _syncUser) await c.from('cards').delete().eq('user_id',_syncUser.id).eq('id',id);
+  }catch(e){ /* офлайн/нет входа — удалим из облака при следующем входе */ }
+  renderDict(); updateChips(); refreshModeFilterBadges();
+  toastShort('Слово удалено');
+}
 // Плавающая кнопка «Наверх» (П.4): появляется, когда 15-я карточка ушла за верх экрана.
 // Стрелка прижата к правому краю содержимого словаря на уровне полосы прокрутки.
 const DICT_UP_AFTER=15;
 let _dictUpBound=false;
 function bindDictUpFab(){
   const scr=document.getElementById('scr-dict'); if(!scr) return;
-  if(_dictUpBound) return;
-  _dictUpBound=true;
-  scr.addEventListener('scroll', updateDictUpFab, {passive:true});
-  const fab=document.getElementById('dictUpFab');
-  if(fab) fab.onclick=()=>{ scr.scrollTo({top:0, behavior:'smooth'}); };
+  if(!_dictUpBound){
+    _dictUpBound=true;
+    scr.addEventListener('scroll', updateDictUpFab, {passive:true});
+  }
   updateDictUpFab();
 }
 function updateDictUpFab(){
   const scr=document.getElementById('scr-dict'); if(!scr) return;
   const fab=document.getElementById('dictUpFab'); if(!fab) return;
+  // Кнопка пересоздаётся при каждом renderDict, поэтому клик вешаем на каждый новый узел.
+  if(!fab._bound){
+    fab._bound=true;
+    fab.onclick=()=>{ scr.scrollTo({top:0, behavior:'smooth'}); };
+  }
   const rows=scr.querySelectorAll('#dictList .item-line');
   if(rows.length<=DICT_UP_AFTER){ fab.classList.add('hidden'); return; }
   const ref=rows[DICT_UP_AFTER-1]; // 15-я карточка (счёт сверху вниз)
@@ -1045,7 +1372,7 @@ function openItemModal(id){
   editingItem = id ? items.find(x=>x.id===id) : null;
   if(!editingItem){
     isNewItem=true;
-    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
+    editingItem={id:uid(),kind:'word',hanzi:'',pinyin:'',translation:'',note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,boxStreak:0,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
   }else{
     hydrateRecordings(editingItem);
   }
@@ -1066,11 +1393,13 @@ function openItemModal(id){
     </div>
     <div id="trFields"></div>
     <label class="lbl">Метка / группа (необязательно)</label>
-    <input type="text" id="fTag" value="${escapeHtml(it.tag||'')}" placeholder="HSK1, еда…">
+    <input type="text" id="fTag" list="tagList" value="${escapeHtml(it.tag||'')}" placeholder="HSK1, еда…">
+    <datalist id="tagList">${allTags().map(t=>`<option value="${escapeHtml(t)}">`).join('')}</datalist>
     <label class="lbl">
       <span style="color:var(--amber)">★</span> Важное слово (звезда)
       <input type="checkbox" id="fStarred" ${it.starred?'checked':''} style="margin-left:6px; transform:scale(1.3)">
     </label>
+    ${isNewItem?'':`<button class="btn ghost" id="btnDelModal" style="width:auto; color:var(--red); margin:6px 0 2px">🗑 Удалить слово</button>`}
     <label class="lbl">Аудио (MP3 с tts.wangwangit.com)</label>
     <div id="audioSlots"></div>
     <div class="btn-row" style="margin-top:16px">
@@ -1079,6 +1408,8 @@ function openItemModal(id){
   </div>`;
   m.classList.remove('hidden');
   m.querySelector('#btnSaveModal').onclick=saveItem;
+  const delBtn=m.querySelector('#btnDelModal');
+  if(delBtn) delBtn.onclick=()=>{ const id=editingItem.id; closeModal('modalItem'); askDeleteCard(id); };
   renderTrFields();
   renderSlots();
   // автопиньинь: при вводе китайского сразу подставляем пиньинь (можно поправить вручную)
@@ -1394,7 +1725,7 @@ function saveBatch(){
     tr=tparts[0]||'';
     trs=tparts.slice(1,5); // максимум 4 дополнительных перевода
     if(!hanzi) return;
-    const it={id:uid(),kind,hanzi,pinyin,translation:tr,trs,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,trs,note:'',tag:'',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,boxStreak:0,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
     assignStableId(it);
     items.push(it);
     n++;
@@ -1462,13 +1793,24 @@ let studyQueue=[], studyIdx=0;
 // Показ строк карточки в «Учить»: аудио, пиньинь, перевод, иероглиф.
 // Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
 let studyAudioOn=true, studyPyOn=true, studyTrOn=true, studyHanziOn=true;
+let studySeqOn=false;   // «Подряд»: слова в порядке создания (старые → новые), без SRS-чередования
 // Порядок полей в модалке «Настройки режима Изучение»: Аудио, Иероглиф, Пиньинь, Перевод.
+// Для арабского и турецкого: «Иероглиф» → «Иностр. текст», строка «Пиньинь» скрыта (нет пиньиня).
 const STUDY_KEYS=[
   ['studyAudio','Аудио','🔊 озвучка + автоповтор', null],
   ['studyHanzi','Иероглиф','размер шрифта','mulH'],
-  ['studyPy','Пиньин','размер шрифта','mulP'],
+  ['studyPy','Пиньинь','размер шрифта','mulP'],
   ['studyTr','Перевод','размер шрифта','mulT'],
+  ['studySeq','Подряд','слова в порядке создания: старые → новые (игнорирует SRS)', null],
 ];
+function studyKeysForLang(){
+  const keys=STUDY_KEYS.map(k=>k.slice());
+  if(activeLang==='ar'||activeLang==='tr'){
+    if(keys[1]) keys[1][1]='Иностр. текст'; // подпись строки «Иероглиф» меняется только для ar/tr
+    keys.splice(2,1);                        // убрать «Пиньинь» целиком (в ar/tr нет пиньиня)
+  }
+  return keys;
+}
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
   if(gear) gear.classList.toggle('dim', !(studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn));
@@ -1479,14 +1821,16 @@ function applyStudyToggles(){
   applyStudySizes();
   renderStudySettings();
 }
-function studyFlag(k){ return k==='studyAudio'?studyAudioOn:(k==='studyPy'?studyPyOn:(k==='studyTr'?studyTrOn:studyHanziOn)); }
+function studyFlag(k){ return k==='studyAudio'?studyAudioOn:(k==='studyPy'?studyPyOn:(k==='studyTr'?studyTrOn:(k==='studySeq'?studySeqOn:studyHanziOn))); }
 function setStudyFlag(k,v){
   if(k==='studyAudio'){ studyAudioOn=v; settings.studyAudio=v; }
   else if(k==='studyPy'){ studyPyOn=v; settings.studyPy=v; }
   else if(k==='studyTr'){ studyTrOn=v; settings.studyTr=v; }
+  else if(k==='studySeq'){ studySeqOn=v; settings.studySeq=v; }
   else { studyHanziOn=v; settings.studyHanzi=v; }
   persist(); applyStudyToggles();
   if(k==='studyAudio'){ if(!v){ Player.stop(); speechSynthesis.cancel(); studyTouch(); } else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); } }
+  if(k==='studySeq'){ const scr=document.getElementById('scr-study'); if(scr && scr.classList.contains('active')) resetStudyQueue(); }
 }
 function openStudySettings(){
   closeAllModals();
@@ -1504,7 +1848,7 @@ function renderStudySettings(){
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Настройки режима Изучение</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalStudySettings')">✕</button></div>
     <div style="margin-top:6px">
-    ${STUDY_KEYS.map(([key,label,hint,skey])=>{
+    ${studyKeysForLang().map(([key,label,hint,skey])=>{
       const v=studyFlag(key);
       return `<div class="sn-block">
         <div class="sn-row">
@@ -1531,10 +1875,19 @@ function renderStudySettings(){
     };
   });
 }
-// Выбор голоса «Учить»: Google (сетевой, по умолчанию) или локальный голос устройства.
+// Выбор голоса «Учить»: Google (сетевой, по умолчанию) + его региональные варианты
+// + локальные голоса устройства (speechSynthesis).
 function studyVoiceSelectHTML(){
   const cur=settings.studyVoice||'google';
   const opts=['<option value="google"'+(cur==='google'?' selected':'')+'>Google (сетевой)</option>'];
+  // региональные Google-варианты активного языка (сетевой mp3, разные акценты)
+  const gv=(GOOGLE_VOICES[activeLang]||[]);
+  if(gv.length>1){
+    gv.forEach(g=>{
+      const val='g:'+g.tag;
+      opts.push('<option value="'+val+'"'+(cur===val?' selected':'')+'>Google · '+escapeHtml(g.label)+'</option>');
+    });
+  }
   VOICES.forEach(v=>{
     opts.push('<option value="'+escapeHtml(v.voiceURI)+'"'+(cur===v.voiceURI?' selected':'')+'>'+escapeHtml(v.name+' ('+v.lang+')')+'</option>');
   });
@@ -1575,6 +1928,16 @@ function queueStudy(){
   return out;
 }
 function buildStudyQueue(){
+  // «Подряд»: показываем ВСЕ отфильтрованные слова/предложения строго в порядке создания
+  // (старые → новые) — игнорируем SRS-сроки (due), звёзды и чередование «2 новых : 1 старое».
+  // Активные фильтры (★ избранное, «выучено», фильтр словаря) сужают этот список.
+  if(studySeqOn){
+    const q=filteredLangItems().filter(it=>it.translation).sort((a,b)=>{
+      const d=addedOrderTs(a)-addedOrderTs(b);
+      return d!==0 ? d : (a.id<b.id?-1:(a.id>b.id?1:0));
+    });
+    return q.length?q:[];
+  }
   const q=queueStudy(); return q.length?q:[];
 }
 function startStudy(){
@@ -1614,6 +1977,7 @@ function showStudyCard(){
   document.getElementById('studyTr').textContent=trJoined(it)||'';
   if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
   else studyPlayLoop(it);
+  prefetchNextTTS(studyQueue, studyIdx);
 }
 // Точные размеры «Учить» при 100% (золотой стандарт, пользователь утвердил 05.10.26):
 // телефон — иероглиф 100px / пиньинь 38px / перевод 27px;
@@ -1654,7 +2018,7 @@ function applyStudySizes(){
   const sz=document.getElementById('studySize');
   if(sz){
     const wpc=(f.hz/innerWidth*100).toFixed(1);
-    sz.textContent='иер '+Math.round(f.hz)+'px ('+wpc+'% экрана) · пин '+Math.round(f.py)+'px · пер '+Math.round(f.tr)+'px';
+    sz.textContent=Math.round(f.hz)+'px ('+wpc+'% экр) / '+Math.round(f.py)+'px / '+Math.round(f.tr)+'px';
   }
 }
 // Единый размер текста вопроса в «Экзамене» — тот же, что в «Учить» (иер/пин/пер).
@@ -1677,11 +2041,11 @@ function updateStudySize(){
 // пересчитывать размеры при повороте/изменении ширины и после смены слайдеров
 window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
 // --- Автоповтор озвучки в «Учить»: слово звучит при показе, затем повторяется
-// всё время, пока пользователь активен на этой карточке (без лимита повторов).
-// Останавливается только: действием пользователя (studyTouch), уходом с карточки,
-// сменой режима (studyGen) или уходом в фон (visibilitychange → stopAllAudio).
+// ограниченное число раз (STUDY_REPEAT_MAX), пока пользователь активен на этой карточке.
+// Останавливается: достижением лимита повторов, действием пользователя (studyTouch),
+// уходом с карточки, сменой режима (studyGen) или уходом в фон (visibilitychange → stopAllAudio).
 // Отсчёт идёт от Player.onDone, поэтому повтор не стартует поверх ещё звучащей речи.
-const STUDY_REPEAT_MAX=Infinity;           // повторять без ограничения (правки 07.10.26 23.33)
+const STUDY_REPEAT_MAX=10;                 // максимум повторов озвучки после первого озвучивания (правки 12.10.26)
 let studyRepeats=0, studyRepeatTmo=null, studyGen=0;
 function studyRepeatDelay(text){
   // пауза: 2с + 350мс за символ, в границах 2.5с..7с
@@ -1704,6 +2068,7 @@ function studyPlayLoop(it){
       const cur=studyQueue[studyIdx];
       if(!cur || cur.id!==it.id) return;                 // карточка сменилась
       if(!studyAudioOn) return;                          // выключили аудио — больше не повторяем
+      if(studyRepeats>=STUDY_REPEAT_MAX) return;         // лимит повторов достигнут — затихаем
       studyRepeats++;
       studyRepeatTmo=setTimeout(()=>{
         if(studyGen!==my) return;
@@ -1739,27 +2104,59 @@ function studyBack(){
   studyIdx--;
   showStudyCard();
 }
+// Кнопка «громкоговоритель» в строке статуса «Учить»: проиграть текущее слово/предложение заново.
+function studySpeak(){
+  studyTouch();
+  const it=studyQueue[studyIdx]; if(!it) return;
+  Player.stop();
+  if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='🔊';
+  playItem(it,{mode:'study'});   // одно проговаривание обычной скорости, без автоповтора
+}
 // --- результат ответа (общий для «Письма» и всех подрежимов «Экзамена») ---
-// Верный ответ/написание → в следующую коробку. Ошибка → −2 коробки + повтор в текущей сессии.
+// Новая стратегия (1.9.5): переходы 6/6/6/7 верных ПОДРЯД (boxStreak); выучено = коробка 5
+// (25 верных без ошибки); ошибка = остаться на уровне + сброс серии; ошибка в коробке 5 → коробка 4.
+// Старая схема (newGood/demoteBox/nsGood) сохранена под флагом srsMode==='legacy' для отката.
 function srsGood(it){
   it.correct=(it.correct||0)+1;
   it.wrongStreak=0;
-  if(!it.newDone){ it.box=1; it.dueSess=(SESS||0)+BOX_INT[1]; } // новое: коробка 1, повтор через BOX_INT[1] сессий (не каждую)
-  else {
-    const b=normBox(it);
-    if(b>=5){ it.dueSess=(SESS||0)+BOX_INT[5]; }         // коробка 5 — навсегда, раз в 8 сессий
-    else if(it.dueSess && (SESS||0)<(+it.dueSess)){ /* ещё не пришло время — откладываем */ }
+  if(!srsNew()){
+    // === старая схема ===
+    if(!it.newDone){ it.box=1; it.dueSess=(SESS||0)+BOX_INT[1]; } // новое: коробка 1, повтор через BOX_INT[1] сессий (не каждую)
     else {
-      it.box=Math.min(5, b+1);
-      it.dueSess=(SESS||0)+BOX_INT[normBox(it)];
+      const b=normBox(it);
+      if(b>=5){ it.dueSess=(SESS||0)+BOX_INT[5]; }         // коробка 5 — навсегда, раз в 8 сессий
+      else if(it.dueSess && (SESS||0)<(+it.dueSess)){ /* ещё не пришло время — откладываем */ }
+      else {
+        it.box=Math.min(5, b+1);
+        it.dueSess=(SESS||0)+BOX_INT[normBox(it)];
+      }
     }
+    return;
+  }
+  // === новая схема: серия верных подряд (boxStreak) ===
+  const b=normBox(it);
+  if(b>=5){
+    it.boxStreak=0;                                       // выучено — остаётся навсегда
+    it.dueSess=(SESS||0)+BOX_INT[5];
+    return;
+  }
+  it.boxStreak=(it.boxStreak||0)+1;
+  if(it.boxStreak>=srsNeedFrom(b)){                       // набрано нужное число верных подряд — переход
+    it.box=b+1;
+    it.boxStreak=0;
+    it.dueSess=(SESS||0)+BOX_INT[it.box];
+    if(it.box===2 && !it.newDone){ it.newDone=1; }        // покинул коробку 1 — «не новое»
+    if(it.box>=5 && !it.learnedOn){ it.learnedOn=dayStr(); toast('✨ «'+it.hanzi+'» выучено'); }
+  } else {
+    it.dueSess=(SESS||0)+BOX_INT[b];                      // ещё не набрал — откладываем до следующего показа
   }
 }
-// общий счётчик «нового»: SRS_NEW_NEED верных ответов СУММАРНО — не обязательно подряд
-// и не в рамках одной сессии. Ошибка счётчик не обнуляет, а просто не засчитывает показ.
-// «Между показами было другое слово» гарантируется очередью (слово повторяется в тесте
-// только после других показов); повторный зачёт того же показа срезаем по lastShowN.
+// общий счётчик «нового» (только старая схема): SRS_NEW_NEED верных ответов СУММАРНО — не обязательно
+// подряд и не в рамках одной сессии. Ошибка счётчик не обнуляет, а просто не засчитывает показ.
+// «Между показами было другое слово» гарантируется очередью; повторный зачёт того же показа
+// срезаем по lastShowN. В новой схеме «новое» уходит из коробки 1 через boxStreak — тут не нужно.
 function newGood(it){
+  if(srsNew()) return;
   if(it.newDone) return;
   const myShow=it.lastShowN||0;
   if(it.nsLastGoodShow!=null && (myShow - it.nsLastGoodShow) <= 1) return; // тот же показ — между не было другого слова
@@ -1774,8 +2171,16 @@ function newGood(it){
     toast('✨ «'+it.hanzi+'» больше не новое');
   }
 }
-// Ошибка → слово откатывается на 2 коробки (или в 3 из 5) и показывается в текущей сессии.
+// Ошибка: новая схема — остаться на уровне + сброс серии (из коробки 5 → коробка 4);
+// старая схема — откат на 2 коробки (или в 3 из 5) и показ в текущей сессии.
 function demoteBox(it){
+  if(srsNew()){
+    const b=normBox(it);
+    it.boxStreak=0;
+    if(b>=5){ it.box=4; it.dueSess=0; }                 // выучено теряется: 5 → 4
+    else { it.dueSess=0; }                               // остаёмся на том же уровне
+    return;
+  }
   const b=normBox(it);
   if(b>=5){ it.box=3; it.dueSess=0; }                  // из коробки 5 — в коробку 3
   else if(b===4 || b===3){ it.box=b-2; it.dueSess=0; }  // 4→2, 3→1 (гарантирует повтор ниже)
@@ -1785,8 +2190,12 @@ function demoteBox(it){
 function srsBad(it){
   it.wrong=(it.wrong||0)+1;
   it.wrongStreak=(it.wrongStreak||0)+1;
-  if(!it.newDone){
-    // счётчик верных НЕ сбрасывается: ошибка просто не засчитывает текущий показ.
+  // «Часто ошибаюсь» (за 30 дней): если прошлая ошибка осталась в окне — продолжаем счётчик,
+  // иначе (свежая после давней/без ошибок) начинаем месяц заново с 1.
+  it.wrongMonth=(hasWrongRecent(it)&&(it.wrongMonth||0)>0) ? (it.wrongMonth||0)+1 : 1;
+  it.wrongDay=dayStr();
+  if(!srsNew() && !it.newDone){
+    // (старая схема) счётчик верных НЕ сбрасывается: ошибка просто не засчитывает текущий показ.
     if(it.nsDoneSess!=null){ it.nsDoneSess=null; }      // зачистка остатков старой схемы 3+3
   }
   demoteBox(it);
@@ -1798,6 +2207,7 @@ function srsBadSoft(it){
 }
 // Верный ответ → следующую коробку + счётчик «нового» (как «Выбор ответов»).
 function srsGoodSoft(it){
+  if(srsNew()){ srsGood(it); return; }
   it.correct=(it.correct||0)+1;
   it.wrongStreak=0;
   if(!it.newDone){ it.dueSess=(SESS||0)+BOX_INT[1]; return; } // новое: коробка 1, повтор через BOX_INT[1] сессий
@@ -1873,6 +2283,7 @@ function startWrite(focusIt){
 }
 function setWriteItem(it, keepIdx){
   if(!it) return;
+  clearWritePlay();
   writeCurItem=it;
   markShown(it);
   writeChars=Array.from(it.hanzi).filter(c=>/[一-鿿]/.test(c));
@@ -1886,12 +2297,18 @@ function renderWriteWord(){
   const el=document.getElementById('writeWord');
   if(!writeChars.length || !writeHintOn()){ el.innerHTML=''; el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
-  el.innerHTML=writeChars.map((c,i)=>`<span class="wch ${i===writeCharIdx?'cur':''}">${c}</span>`).join('');
+  // Подсказка-иероглифы кликабельны: клик переключает письмо на этот символ (цикл контура — на нём же).
+  el.innerHTML=writeChars.map((c,i)=>`<button type="button" class="wch ${i===writeCharIdx?'cur':''}" data-wi="${i}">${c}</button>`).join('');
+  el.querySelectorAll('.wch').forEach(b=>{
+    const i=Number(b.dataset.wi);
+    b.onclick=()=>{ if(i===writeCharIdx) return; writeGoto(i); };
+  });
 }
 // ===== ПИСЬМО: КЛАВИАТУРНЫЙ ВВОД (en/tr/ar — языки без кисти) =====
 function writeTypeSeq(){ return writeSeq.length?writeSeq:writeWordList(); }
 function setWriteItemTyping(it, speakNow){
   if(!it) return;
+  clearWritePlay();
   writeCurItem=it;
   writeChars=Array.from(it.hanzi);
   markShown(it);
@@ -2018,31 +2435,47 @@ function writeNavTyping(dir){ // прокрутка слов в режиме п�
 }
 
 function stopWriteAnim(){ writeToken++; } // прерывает отложенную перестройку
-// --- озвучка при возобновлении рисования после паузы ---
-// слово целиком произносится сразу при появлении иероглифа; если пользователь бросил
-// рисовать на 3 секунды и снова повёл пальцем/стилусом — слово повторяется.
-let writeLastMove=0;
-function writeSpeakWord(){
+// --- озвучка «Письма»: как в «Учить» ---
+// Бесконечный повтор слова целиком на обычной скорости через Player (mp3 или TTS),
+// с той же паузой, что и «Учить» (studyRepeatDelay). Останавливается:
+// сменой слова/переходом к другому иероглифу (writePlayGen), уходом с экрана,
+// выключением «🔊 Аудио». Рисование повтор НЕ прерывает — слово крутится на фоне.
+let writePlayGen=0, writePlayTmo=null;
+function clearWritePlay(){ writePlayGen++; if(writePlayTmo){ clearTimeout(writePlayTmo); writePlayTmo=null; } }
+function writePlayLoop(it){
+  writePlayGen++; Player.stop();
+  if(!it || !it.hanzi) return;
   if(!writeAudioOn) return;
-  const full=(writeCurItem&&writeCurItem.hanzi)||writeChars.join('');
-  if(full) speak(full,1);
-}
-function initWriteResume(){
-  const area=document.getElementById('writeArea');
-  if(!area || area._resumeBound) return;
-  area._resumeBound=true;
-  area.addEventListener('pointerdown',()=>{ writeLastMove=Date.now(); });
-  area.addEventListener('pointermove',()=>{
-    const t=Date.now();
-    if(writeLastMove && (t-writeLastMove)>=3000) writeSpeakWord();
-    writeLastMove=t;
-  });
+  const my=writePlayGen;
+  const step=()=>{
+    if(writePlayGen!==my) return;
+    const scr=document.getElementById('scr-write');
+    if(!scr || !scr.classList.contains('active')) return;
+    if(!writeCurItem || writeCurItem.id!==it.id) return;
+    if(!writeAudioOn) return;
+    playItem(it, {onDone:()=>{
+      if(writePlayGen!==my) return;
+      const scr2=document.getElementById('scr-write');
+      if(!scr2 || !scr2.classList.contains('active')) return;
+      if(!writeCurItem || writeCurItem.id!==it.id) return;
+      if(!writeAudioOn) return;
+      writePlayTmo=setTimeout(()=>{
+        if(writePlayGen!==my) return;
+        const scr3=document.getElementById('scr-write');
+        if(!scr3 || !scr3.classList.contains('active')) return;
+        if(!writeCurItem || writeCurItem.id!==it.id) return;
+        if(!writeAudioOn) return;
+        Player.stop();
+        step();
+      }, studyRepeatDelay(it.hanzi));
+    }});
+  };
+  step();
 }
 function startWriteChar(quiet){
   const token=++writeToken;
   writeAnimRunning=false;
   if(!writeChars.length) return;
-  writeLastMove=0; initWriteResume();
   renderWriteWord(); renderWriteLabels(); renderWriteList();
   const area=document.getElementById('writeArea');
   area.classList.remove('type');
@@ -2070,7 +2503,7 @@ function startWriteChar(quiet){
       skip.onclick=()=>{ if(writeAnimRunning) return; blinkWriteArea(()=>writeGoto(writeCharIdx+1)); };
       area.appendChild(skip);
       freeDraw(cv);
-      if(!quiet){ writeSpeakWord(); toast('Подключитесь к интернету, иероглиф недоступен'); }
+      if(!quiet){ toast('Подключитесь к интернету, иероглиф недоступен'); }
       return;
     }
     // библиотека могла ещё не загрузиться (CDN подгружается асинхронно) — подождём её
@@ -2092,7 +2525,7 @@ function startWriteChar(quiet){
       skip.onclick=()=>{ if(writeAnimRunning) return; blinkWriteArea(()=>writeGoto(writeCharIdx+1)); };
       area.appendChild(skip);
       freeDraw(cv);
-      if(!quiet){ writeSpeakWord(); toast('Подключитесь к интернету, иероглиф недоступен'); }
+      if(!quiet){ toast('Подключитесь к интернету, иероглиф недоступен'); }
       return;
     }
     attachGuide(area, size);
@@ -2103,10 +2536,23 @@ function startWriteChar(quiet){
       showOutline:writeOutlineOn,
       charDataLoader:(c,ok,err)=>ok(data)
     });
-    startWriteQuiz();
-    if(writeAnimOn) playWriteAnim();
-    if(!quiet) writeSpeakWord();
+    // «Контур» (без «Анимации») — бесконечный цикл показа, пока не выключен.
+    // В этом режиме quiz не запускаем: loopCharacterAnimation сам отменяет quiz, а «обводить»
+    // по крутящемуся контуру нельзя — обводка доступна при выключенном «Контуре».
+    if(writeAnimOn){ startWriteQuiz(); playWriteAnim(); }
+    else if(writeOutlineOn){ writeLoopOutline(writer); }
+    else { startWriteQuiz(); }
+    if(!quiet) writePlayLoop(writeCurItem);
   });
+}
+// Цикл контура: показываем иероглиф бегущим контуром по кругу, без остановки,
+// пока «Контур» не выключен. Статичный контур-подложку прячем, чтобы не двоился;
+// сетка-направляющая (attachGuide) остаётся фоном. Режим «Анимация» — не смешиваем.
+function writeLoopOutline(w){
+  if(!w || !writeOutlineOn || writeAnimOn) return;
+  try{ w.cancelQuiz(); }catch(e){}
+  try{ w.hideOutline(); }catch(e){}
+  w.loopCharacterAnimation();
 }
 function startWriteQuiz(){
   if(!writer) return;
@@ -2118,9 +2564,9 @@ function startWriteQuiz(){
   });
 }
 function onCharComplete(){
-  if(writeAnimRunning) return;
-  // слово засчитываем, когда дописан последний иероглиф целиком;
-  // тогда верное написание идёт в общий счётчик «нового» и двигает коробку.
+  // Написание символа завершено (даже если шёл одноразовый показ анимации) — переходим
+  // к следующему иероглифу. Раньше здесь стоял return по writeAnimRunning, из-за чего
+  // второй иероглиф «не включался» после первого.
   const isLast=writeCharIdx>=writeChars.length-1;
   if(isLast && writeCurItem){ good(writeCurItem); newGood(writeCurItem); persist(); updateChips(); }
   blinkWriteArea(()=>{ writeGoto(writeCharIdx+1); });
@@ -2135,8 +2581,8 @@ function toggleWriteAudio(){
   writeAudioOn=!writeAudioOn;
   settings.writeAudio=writeAudioOn; persist();
   applyWriteToggles();
-  if(!writeAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-  else { const full=(writeCurItem&&writeCurItem.hanzi)||writeChars.join(''); if(full) speak(full,1); }
+  if(!writeAudioOn){ clearWritePlay(); Player.stop(); if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  else if(writeCurItem){ writePlayLoop(writeCurItem); }
 }
 function toggleWriteOutline(){
   writeOutlineOn=!writeOutlineOn;
@@ -2247,10 +2693,17 @@ function renderWriteSettings(){
 // examSeq — упорядоченный поток заданий (слова с повтором по числу иероглифов в Письменно);
 // каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
 let examSeq=[], examIdx=0, examRight=0, examWrong=[];
-let examSettings={tf:true, choice:true, choiceN:8, match:false};
+let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false};
 let examAudioOn=true; // 🔊 Аудио в Экзамене (по умолчанию, как и в Письме)
 let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
 let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
+let examAudioDelay=0; // 🔇 Задержка озвучки нового слова в экзамене, в секундах (0–6, шаг 0,5)
+let examDelayTimer=null; // таймер отложенной озвучки (снимается при смене вопроса/уходе/выкл. аудио)
+let examGradual=true;    // «Постепенно» (Верно-неверно): иероглиф → пиньинь → перевод с паузой
+let examGradualDelay=0;  // пауза между шагами «Постепенно», 0–6 с, шаг 1 с
+let examGradualTmo1=null, examGradualTmo2=null; // таймеры раскрытия пиньиня/перевода
+// тон-тест: разбор текущего слова на группы иероглифов (≤3) с тонами
+let toneGroups=[], toneGI=0, toneCI=0, toneRight=true, toneError=false;
 
 // Случайный перевод слова для задания: либо главный, либо одна из альтернатив (если «Все переводы»).
 function examPickTr(it){
@@ -2260,7 +2713,7 @@ function examPickTr(it){
   return all[Math.floor(Math.random()*all.length)];
 }
 function examChoiceN(){ return examSettings.choiceN||8; }
-function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice}; }
+function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone}; }
 const EXAM_MIN_GAP=5; // слово нельзя повторить, пока не прошло 5 других заданий
 
 // Поточное формирование заданий экзамена. Для каждого слова из очереди — по одному
@@ -2277,6 +2730,8 @@ function examBuildSeq(){
   const modeOrder=[];
   if(sep.choice) modeOrder.push('choice');
   if(sep.tf) modeOrder.push('tf');
+  // тон-тест: только для языков с иероглифами (китайский) и только слова/фразы с тонами
+  if(sep.tone && hasStrokes()) modeOrder.push('tone');
   if(!modeOrder.length || !pool.length) return [];
   const total=pool.length*modeOrder.length;
   const seq=[];
@@ -2313,8 +2768,19 @@ function startExam(){
   nextExamQ();
 }
 function updateExamScore(){
-  document.getElementById('examProgress').textContent=(examIdx)+' / '+examSeq.length;
-  document.getElementById('examScore').textContent='✓ '+examRight;
+  document.getElementById('examProgress').textContent=(examIdx)+'/'+examSeq.length;
+}
+// Статусная строка экзамена: «1/84 · ⚙» внизу над кнопкой «Верно» (только Верно-неверно).
+// Счётчик «✓ N» убран со страницы — итог виден в конце экзамена (showExamResult).
+function updateExamStatusLine(q){
+  const el=document.getElementById('examStatusLine');
+  if(!el) return;
+  if(q && q.mode==='tf'){
+    el.classList.remove('hidden');
+    el.textContent=(examIdx+1)+'/'+examSeq.length+' · ⚙';
+  } else {
+    el.classList.add('hidden');
+  }
 }
 function updateExamToggleUI(){
   syncExamChoiceSeg();
@@ -2340,49 +2806,83 @@ function nextExamQ(){
   clearExamIdle(); examLastMove=0;
   if(q.mode==='tf') renderExamTF(q);
   else if(q.mode==='choice') renderExamChoice(q);
+  else if(q.mode==='tone') renderExamTone(q);
   else if(q.mode==='match'){ matchStart(); }
   else renderExamTF(q);
+  updateExamStatusLine(q);
   // в «Подборе» на экране 5 слов сразу и озвучка по клику — фиксированный повтор не нужен
   if(q.mode!=='match') startExamRepeat(q.it);
+  // предзагружаем озвучку следующих вопросов (синтез) — переходы без паузы
+  const ahead=examSeq.slice(examIdx+1, examIdx+3).map(q=>q.it);
+  prefetchNextTTS(ahead, -1);
 }
 function clearExamIdle(){
-  if(examIdleTimer){ clearInterval(examIdleTimer); examIdleTimer=null; }
+  examRepeatGen++;                                      // отмена идущего цикла повторов (токен)
+  if(examRepeatTmo){ clearTimeout(examRepeatTmo); examRepeatTmo=null; }
+  if(examDelayTimer){ clearTimeout(examDelayTimer); examDelayTimer=null; }
+  if(examGradualTmo1){ clearTimeout(examGradualTmo1); examGradualTmo1=null; }
+  if(examGradualTmo2){ clearTimeout(examGradualTmo2); examGradualTmo2=null; }
 }
-// Повтор озвучки в экзамене: слово звучало при показе, затем повторяется фиксированно
-// каждые 7 секунд, пока вопрос на экране. Прекращается ответом, уходом с режима,
-// сменой карточки (токен) или выключением «🔊 Аудио».
-const EXAM_REPEAT_MS=7000;
-let examRepeatGen=0;
+// Повтор озвучки в экзамене: как в «Учить» — переменный интервал, отсчитывается от КОНЦА
+// предыдущего озвучивания (2,5–7 с по длине текста), а не фиксированные 7 с от показа.
+// Прекращается ответом, уходом с режима, сменой карточки (токен) или выключением «🔊 Аудио».
+function examRepeatDelay(text){
+  const n=String(text||'').trim().length;
+  return Math.max(2500, Math.min(7000, 2000+n*350));
+}
+let examRepeatGen=0, examRepeatTmo=null;
 function startExamRepeat(it){
   const my=++examRepeatGen;
-  clearExamIdle();
+  if(examRepeatTmo){ clearTimeout(examRepeatTmo); examRepeatTmo=null; }
   if(!examAudioOn) return;
   if(!it || !it.hanzi) return;
-  examIdleTimer=setInterval(()=>{
-    if(my!==examRepeatGen) return;                  // ответ/уход/смена вопроса
-    const scr=document.getElementById('scr-exam');
-    if(!scr || !scr.classList.contains('active')) return;
-    if(!examAudioOn) return;
-    if(examCurrentIt && examCurrentIt.id!==it.id) return;
-    examSpeakWord(it);
-  }, EXAM_REPEAT_MS);
+  (async()=>{
+    while(true){
+      if(my!==examRepeatGen) return;                  // ответ/уход/смена вопроса
+      const scr=document.getElementById('scr-exam');
+      if(!scr || !scr.classList.contains('active')) return;
+      if(!examAudioOn) return;
+      if(examCurrentIt && examCurrentIt.id!==it.id) return;
+      await examSpeakWord(it);                        // ждём КОНЦА озвучивания
+      if(my!==examRepeatGen) return;
+      await new Promise(r=>{ examRepeatTmo=setTimeout(r, examRepeatDelay(it.hanzi)); });
+      examRepeatTmo=null;
+    }
+  })();
+}
+// Озвучка нового слова в вопросе: с задержкой «Задержка аудио» (0–6 с), затем переменные повторы.
+// При 0 — сразу. Задержка касается только ПЕРВОГО озвучивания.
+function examSpeakDelayed(it){
+  if(!examAudioOn) return;
+  if(!it || !it.hanzi) return;
+  const delay=(examAudioDelay||0)*1000;
+  if(!delay){ startExamRepeat(it); return; }
+  clearTimeout(examDelayTimer);
+  examDelayTimer=setTimeout(()=>{ examDelayTimer=null; if(examAudioOn) startExamRepeat(it); }, delay);
 }
 // повтор слова целиком (обычный темп). Если у слова есть сохранённое mp3 (в том числе
 // пришедшее из облака — подтягиваем его по path), играем файл; иначе синтез речи.
+// Возвращает промис, который завершается, когда озвучивание ЗАКОНЧИЛОСЬ (для повтора от конца).
 async function examSpeakWord(it){
   if(!examAudioOn) return;
   if(!it||!it.hanzi) return;
   await ensureCardAudio(it, ['norm']);
   const r=liveRec(it, 'norm');
-  if(r && r.url){ Player.stop(); Player.play([{kind:'file',url:r.url,reps:1,label:'обычно'}], {gap:0}); }
-  else speak(it.hanzi,1);
+  if(r && r.url){
+    await new Promise(res=>{
+      Player.stop();
+      Player.play([{kind:'file',url:r.url,reps:1,label:'обычно'}], {gap:0, onDone:res});
+    });
+  } else {
+    await speak(it.hanzi,1);
+  }
 }
 function toggleExamAudio(){
   examAudioOn=!examAudioOn;
   settings.examAudio=examAudioOn; persist();
   clearExamIdle();
   if(!examAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-  else { const it=examCurrentIt; if(it&&it.hanzi){ examSpeakWord(it); startExamRepeat(it); } }
+  else { const it=examCurrentIt; if(it&&it.hanzi){ startExamRepeat(it); } }
 }
 function toggleExamAllTr(){
   examAllTr=!examAllTr;
@@ -2391,9 +2891,22 @@ function toggleExamAllTr(){
 function toggleExamMode(k){
   examSettings[k]=!examSettings[k];
   // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
-  if(!examSettings.tf && !examSettings.choice){ examSettings[k]=true; }
-  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice;
+  if(!examSettings.tf && !examSettings.choice && !examSettings.tone){ examSettings[k]=true; }
+  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone;
   persist();
+  // П.2: переключение режима перестраивает очередь, чтобы выключенный режим перестал давать задания
+  if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
+}
+// Пересобрать экзамен в ответ на смену режимов/таймингов, сохранив позицию и счёт.
+function restartExamSeq(){
+  const total=examSeq.length;
+  if(!total){ return; }
+  const newSeq=examBuildSeq();
+  examSeq=newSeq;
+  if(examIdx>=examSeq.length){ examIdx=examSeq.length; showExamResult(); return; }
+  updateExamScore();
+  const q=examSeq[examIdx];
+  if(q) nextExamQ();
 }
 // ---------- Шестерёнка «Экзамен»: Верно-Неверно / Выбор ответов / 4-6-8-10 / Все переводы / Подбор / Аудио ----------
 function openExamSettings(){
@@ -2404,9 +2917,13 @@ function openExamSettings(){
 function renderExamSettings(){
   const m=document.getElementById('modalExamSettings');
   if(!m || m.classList.contains('hidden')) return;
+  const showTone=hasStrokes();
+  // П.4: настройки сгруппированы в три секции — Режимы / Параметры / Тайминги.
+  // Текущее состояние фиксируется при открытии окна и восстанавливается «Сбросить изменения».
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Настройки экзамена</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalExamSettings')">✕</button></div>
     <div style="margin-top:6px">
+      <div class="sn-sec-h">Режимы</div>
       <div class="menu-item">
         <div class="mi-label">Верно-неверно<span class="mi-hint">Показывать задания «Верно / Не верно»</span></div>
         <button class="sn-switch ${examSettings.tf?'on':''}" data-exam-key="tf"></button>
@@ -2415,6 +2932,11 @@ function renderExamSettings(){
         <div class="mi-label">Выбор ответов<span class="mi-hint">Показывать задания с вариантами ответов</span></div>
         <button class="sn-switch ${examSettings.choice?'on':''}" data-exam-key="choice"></button>
       </div>
+      ${showTone?`<div class="menu-item">
+        <div class="mi-label">Тон-тест<span class="mi-hint">Указать тон каждого иероглифа (только китайский)</span></div>
+        <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="tone"></button>
+      </div>`:''}
+      <div class="sn-sec-h">Параметры</div>
       <div class="menu-item">
         <div class="mi-label">Число вариантов<span class="mi-hint">Сколько карточек в «Выборе ответов»</span></div>
         <span class="seg sm" id="examChoiceSeg" style="flex:0 0 auto; margin-left:10px">
@@ -2427,22 +2949,52 @@ function renderExamSettings(){
         <button class="sn-switch ${examAllTr?'on':''}" data-exam-key="allTr"></button>
       </div>
       <div class="menu-item">
-        <div class="mi-label">Подбор<span class="mi-hint">Игра: соединить иероглиф и перевод</span></div>
-        <button class="btn sec sm" data-exam-key="match" style="width:auto">Играть</button>
-      </div>
-      <div class="menu-item">
         <div class="mi-label">Аудио<span class="mi-hint">Озвучка слов в заданиях</span></div>
         <button class="sn-switch ${examAudioOn?'on':''}" data-exam-key="audio"></button>
       </div>
+      <div class="menu-item">
+        <div class="mi-label">Подбор<span class="mi-hint">Игра: соединить иероглиф и перевод</span></div>
+        <button class="btn sec sm" data-exam-key="match" style="width:auto">Играть</button>
+      </div>
+      <div class="sn-sec-h">Тайминги</div>
+      <div class="menu-item">
+        <div class="mi-label">Постепенно<span class="mi-hint">Верно-неверно: раскрывать пиньинь и перевод по очереди</span></div>
+        <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
+      </div>
+      <div class="menu-item" style="display:block">
+        <div class="mi-label">Пауза «Постепенно»<span class="mi-hint">Между иероглифом → пиньинь → перевод (0 с — всё сразу)</span></div>
+        <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="1" value="${examGradualDelay}" data-exam-grad><span class="sn-slider-val" data-exam-grad-val>${examGradualDelay} с</span></div>
+      </div>
+      <div class="menu-item" style="display:block">
+        <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
+        <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn ghost" id="examSettingsReset" style="width:auto">↺ Сбросить изменения</button>
+      </div>
     </div>
   </div>`;
+  // снимок состояния на момент открытия окна — для «Сбросить изменения»
+  const snap={tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, choiceN:examSettings.choiceN, allTr:examAllTr, audio:examAudioOn, gradual:examGradual, gradualDelay:examGradualDelay, audioDelay:examAudioDelay};
+  m.querySelector('#examSettingsReset').onclick=()=>{
+    examSettings.tf=snap.tf; examSettings.choice=snap.choice; examSettings.tone=snap.tone; examSettings.choiceN=snap.choiceN;
+    examAllTr=snap.allTr; examAudioOn=snap.audio;
+    examGradual=snap.gradual; examGradualDelay=snap.gradualDelay; examAudioDelay=snap.audioDelay;
+    settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone; settings.examChoiceN=examSettings.choiceN;
+    settings.examAllTr=examAllTr; settings.examAudio=examAudioOn;
+    settings.examGradual=examGradual; settings.examGradualDelay=examGradualDelay; settings.examAudioDelay=examAudioDelay;
+    persist();
+    renderExamSettings();
+  };
   m.querySelectorAll('[data-exam-key]').forEach(el=>{
     el.onclick=()=>{
       const k=el.dataset.examKey;
       if(k==='tf'){ toggleExamMode('tf'); renderExamSettings(); }
       else if(k==='choice'){ toggleExamMode('choice'); renderExamSettings(); }
+      else if(k==='tone'){ toggleExamMode('tone'); renderExamSettings(); }
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
       else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
+      else if(k==='gradual'){ toggleExamGradual(); renderExamSettings(); }
       else if(k==='match'){ closeModal('modalExamSettings'); matchStart(); }
     };
   });
@@ -2454,6 +3006,26 @@ function renderExamSettings(){
       renderExamSettings();
     };
   });
+  m.querySelectorAll('input[type=range][data-exam-delay]').forEach(r=>{
+    r.oninput=()=>{
+      const v=Math.round(Number(r.value)*2)/2;   // шаг 0,5 с
+      examAudioDelay=v;
+      settings.examAudioDelay=v; persist();
+      const val=m.querySelector('[data-exam-delay-val]'); if(val) val.textContent=v+' с';
+    };
+  });
+  m.querySelectorAll('input[type=range][data-exam-grad]').forEach(r=>{
+    r.oninput=()=>{
+      const v=Math.round(Number(r.value));       // шаг 1 с
+      examGradualDelay=v;
+      settings.examGradualDelay=v; persist();
+      const val=m.querySelector('[data-exam-grad-val]'); if(val) val.textContent=v+' с';
+    };
+  });
+}
+function toggleExamGradual(){
+  examGradual=!examGradual;
+  settings.examGradual=examGradual; persist();
 }
 // сбрасывает отсчёт бездействия на новое взаимодействие (касание/ответ/рисование)
 function examTouch(){
@@ -2530,6 +3102,7 @@ function requeueExam(it){
   const modes=[];
   if(examSettings.choice) modes.push('choice');
   if(examSettings.tf) modes.push('tf');
+  if(examSettings.tone && hasStrokes()) modes.push('tone');
   if(!modes.length) return;
   const mode=modes[Math.floor(Math.random()*modes.length)];
   examSeq.push({it, mode});
@@ -2560,14 +3133,17 @@ function renderExamTF(q){
     const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
     if(others.length) tr=others[Math.floor(Math.random()*others.length)];
   }
+  const py=it.pinyin||pinyinOf(it)||'';
   const body=document.getElementById('examBody');
+  // «Постепенно» (только Верно-неверно, вкл по умолчанию): сначала иероглиф, затем пиньинь,
+  // затем перевод — с паузой (0–6 с, шаг 1 с). При 0 с показываем всё сразу (как раньше).
   body.innerHTML=`
-    <div class="exam-q">
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center">
       <div class="eq-word" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
-      <div class="exam-py" style="${eqSizesStyle(it.hanzi,{py:true})}">${escapeHtml(it.pinyin||pinyinOf(it)||'')}</div>
-      <div class="eq-tr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${escapeHtml(tr)}</div>
+      <div class="exam-py" id="tfPy" style="${eqSizesStyle(it.hanzi,{py:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(py)}</div>
+      <div class="eq-tr" id="tfTr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(tr)}</div>
     </div>
-    <div class="exam-spacer"></div>
+    <div class="exam-status-line" id="examStatusLine"></div>
     <div class="btn-col">
       <button class="btn ok" data-v="1">Верно</button>
       <button class="btn warn" data-v="0">Не верно</button>
@@ -2578,7 +3154,19 @@ function renderExamTF(q){
     if(taskOk){ examCorrect(it); examFinish(1); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
-  examSpeakWord(it);
+  updateExamStatusLine(q);
+  // «Постепенно»: раскрываем пиньинь, затем перевод с заданной паузой.
+  if(examGradual && examGradualDelay>0){
+    examGradualTmo1=setTimeout(()=>{
+      examGradualTmo1=null;
+      const p=document.getElementById('tfPy'); if(p) p.textContent=py;
+      examGradualTmo2=setTimeout(()=>{
+        examGradualTmo2=null;
+        const t=document.getElementById('tfTr'); if(t) t.textContent=tr;
+      }, examGradualDelay*1000);
+    }, examGradualDelay*1000);
+  }
+  examSpeakDelayed(it);
 }
 
 // ---------- Выбор ответов ----------
@@ -2623,8 +3211,83 @@ function renderExamChoice(q){
     });
   }
   drawOpts(examChoiceN());
-  examSpeakWord(it);
+  examSpeakDelayed(it);
 }
+// ---------- Тон-тест (третий режим экзамена) ----------
+// Слово/фраза разбивается на группы максимум по 3 иероглифа (предложение — по словам).
+// Показываем группу, текущий иероглиф подсвечен, пиньинь БЕЗ тонов. Кнопки тонов:
+// 1 ¯ / 2 ´ / 3 ˇ / 4 ` / 0 轻声. Тон берём из pinyin-pro (toneType:'num').
+// Полная верная цепочка тонов всего слова = +1 балл; любая ошибка = −1 (слово повторяется).
+const TONE_ORDER=[0,1,2,3,4];
+function toneNumOf(pyNum){
+  const m=/([0-4])$/.exec(String(pyNum||''));
+  return m ? +m[1] : 0;
+}
+function buildToneGroups(hanzi){
+  const words=String(hanzi||'').trim().split(/\s+/).filter(Boolean);
+  const raw=[];
+  for(const w of words){
+    const chars=Array.from(w);
+    for(let i=0;i<chars.length;i+=3) raw.push(chars.slice(i,i+3));
+  }
+  const out=[];
+  for(const g of raw){
+    let pys=[];
+    if(window.pinyinPro){ try{ pys=window.pinyinPro.pinyin(g.join(''), {toneType:'num', type:'array'}); }catch(e){ pys=[]; } }
+    out.push(g.map((ch,i)=>({
+      ch,
+      py:String(pys[i]||'').replace(/[0-4]$/,''),
+      num:toneNumOf(pys[i])
+    })));
+  }
+  return out;
+}
+function renderExamTone(q){
+  const it=q.it;
+  toneGroups=buildToneGroups(it.hanzi);
+  toneGI=0; toneCI=0;
+  if(!toneGroups.length || !toneGroups.some(g=>g.length)){ examMistakeSoft(it); examFinish(1); return; }
+  drawTone();
+  examSpeakDelayed(it);
+}
+function drawTone(){
+  const seg=toneGroups[toneGI];
+  const body=document.getElementById('examBody');
+  if(!seg) return;
+  const pyNoTone=seg.map(s=>s.py).join(' ');
+  body.innerHTML=`
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center">
+      <div class="tone-hanzi">${seg.map((s,i)=>`<span class="tc ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>`).join('')}</div>
+      <div class="tone-py">${escapeHtml(pyNoTone)}</div>
+      <div class="tone-btns">
+        <button data-tone="1"><span class="tm">¯</span><span class="tl">1</span></button>
+        <button data-tone="2"><span class="tm">´</span><span class="tl">2</span></button>
+        <button data-tone="3"><span class="tm">ˇ</span><span class="tl">3</span></button>
+        <button data-tone="4"><span class="tm">\`</span><span class="tl">4</span></button>
+        <button data-tone="0"><span class="tm">·</span><span class="tl">轻声</span></button>
+      </div>
+    </div>`;
+  body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
+}
+function tonePick(n, btn){
+  examTouch();
+  const seg=toneGroups[toneGI]; if(!seg) return;
+  const cur=seg[toneCI];
+  if(cur && cur.num===n){
+    toneCI++;
+    if(toneCI>=seg.length){
+      toneCI=0; toneGI++;
+      if(toneGI>=toneGroups.length){           // вся цепочка тонов верна → +1
+        examCorrect(examCurrentIt); examFinish(1); return;
+      }
+    }
+    drawTone();
+  }else{
+    examMistakeSoft(examCurrentIt);            // любая ошибка → −1, слово повторяется
+    flashBad(btn, ()=>examFinish(1));
+  }
+}
+
 // ---------- Письменно: УБРАНО из экзамена (используется только отдельный режим «Письмо») ----------
 function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
 
@@ -2773,7 +3436,7 @@ function showExamResult(){
         <div class="row" style="margin-top:3px"><span class="py">${escapeHtml(it.pinyin||'')}</span><span class="spacer"></span><span class="tr">${escapeHtml(it.translation||'')}</span></div>
       </div>`).join('')}
     </div>`;
-  document.getElementById('examProgress').textContent=total+' / '+total;
+  document.getElementById('examProgress').textContent=total+'/'+total;
   document.getElementById('examRetake').onclick=startExam;
   document.getElementById('examReview').onclick=()=>go('scr-study');
 }
@@ -2787,6 +3450,14 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.5','16.10.26','Новая стратегия SRS: переходы по числу верных ответов ПОДРЯД — 6/6/6/7 (выучено = коробка 5, всего 25 верных без ошибки); ошибка оставляет на уровне и сбрасывает серию, ошибка в коробке 5 → коробка 4 (старая схема сохранена под флагом srsMode для отката). Экзамен: новый режим «Тон-тест» (указать тон каждого иероглифа, слово разбивается по ≤3 иероглифа, пиньинь без тонов, кнопки 1 ¯ / 2 ´ / 3 ˇ / 4 ` / 0 轻声; верная цепочка тонов = +1, ошибка = −1); «Постепенно» в Верно-неверно (иероглиф → пиньинь → перевод с паузой 0–6 с); настройки экзамена сгруппированы в Режимы/Параметры/Тайминги с кнопкой «Сбросить изменения»; переключение режима мгновенно перестраивает очередь (выключенный режим больше не даёт заданий); статусная строка «1/84 · ⚙» внизу над «Верно», счётчик «✓ N» убран; вопрос центрируется по вертикали. Аудио: повтор в экзамене — переменный интервал от КОНЦА озвучки (2,5–7 с по длине текста, как в «Учить»), а не жёсткие 7 с; Google-mp3 регистрируется в проигрывателе (остановка гасит и его); таймаут загрузки mp3 1,5→4 с + повтор; второй сетевой источник Youdao dictvoice (китайский/английский) — тишины не бывает. Словарь: кнопка «Удалить» внутри карточки (под звездой, над аудио), из списка убрана; поле «Метка» с подсказками и отдельное окно «Метки» (переименование/удаление у всех карточек). «Учить»: строка размеров «68px (4,7% экр) / 38px / 25px», статус-строка с равными отступами. «Письмо»: окно компактнее на планшетах+ (620→496px)'],
+  ['1.9.4','14.10.26','Аудио: озвучка из Google больше не накладывается (при быстром переключении отменённый звук гасится до старта нового — раньше могли звучать до 10 одновременно); загрузка ускорена — mp3 кэшируется в отдельном постоянном кэше `hanzi-trainer-tts` (переживает обновления) и предзагружается для следующих 2 слов в «Учить»/«Экзамен»; новые региональные голоса Google в «Голос озвучки» — китайский (материковый/тайваньский), английский (US/UK/AU/IN), турецкий, арабский; Настройки → Данные: строка «Кэш озвучки (синтез)» с размером и кнопкой «Очистить кэш озвучки» (слова и свои mp3 не трогает)'],
+  ['1.9.3','12.10.26','Экзамен: в настройках экзамена новый ползунок «Задержка аудио» (0–6 с, шаг 0,5 с) — пауза перед озвучкой нового слова в задании (при 0 с задержки нет); повтор каждые 7 с не затрагивается; словарь: кнопка «Наверх» снова работает после смены фильтра/избранного (клик привязывается к каждой перерисованной кнопке, а не только к первой)'],
+  ['1.9.2','12.10.26','Слово «Пиньин» исправлено на «Пиньинь» везде (подпись в настройках, галочка экспорта, комментарии и история версий); «Учить»: новый переключатель «Подряд» в настройках режима Изучение (для всех языков) — слова/предложения показываются строго в порядке создания, от старых к новым, без чередования SRS «2 новых : 1 старое» и без приоритета звёзд (активные фильтры «★ Избранное»/«выучено»/фильтр словаря сужают список); автоповтор озвучки карточки ограничен 10 повторами (было бесконечно); словарь: внизу каждой карточки кнопка «Удалить» — после вопроса «Вы точно хотите удалить это слово?» (Да/Нет) слово удаляется вместе с аудио и из облака, чтобы не вернулось при следующей синхронизации'],
+  ['1.9.1','12.10.26','«Учить»: кнопки Назад/Писать это/Вперёд вернулись к обычной высоте (было 1,5× — стало 1×: 48 → 32px); Настройки режима Изучение — для арабского и турецкого подпись «Иероглиф» заменена на «Иностр. текст», строка «Пиньинь» с ползунком полностью убрана (в ar/tr нет пиньиня); на телефоне уменьшены отступы между строкой статуса и нижним меню — иностранный текст с переводом свободно влезает в экран; строка «Уровень N · Повторов M» уехала к левому краю, шестерёнка осталась справа, между ними по центру — круглая кнопка-громкоговоритель (проигрывает слово/предложение ещё раз)'],
+  ['1.9.0','11.10.26','Словарь: в окне «Фильтр» живой счётчик «Выбрано слов: N» (0 при пустом выборе, при выборе чипов показывает и суммирует число слов по ним; «Сбросить фильтр» сбрасывает всё и закрывает окно); над списком — «Всего слов N» (сколько слов видно сейчас: колонка «Все слова»/«★ Избранное»/«выучено» + фильтры + поиск); новые фильтры в «Фильтре» — «Добавлено недавно» (как в статистике, последняя партия за 7 дней), «★ Избранное», «Выучено», «Часто ошибаюсь» (слова с ошибками за последние 30 дней — их удобно отдельно отрабатывать); кнопка «Экспорт слов» с тремя галочками «пиньин»/«перевод»/«без предложений» (по умолчанию только «без предложений») — сохраняет txt со словами в строгом порядке добавления (новые сверху), имена exported_words[_pinyin][_russian]_ddmmyy.txt; стрелка «Наверх» больше не «проглатывается» на тач-экране; «＋ Слово» стала белой, как остальные; «Письмо»: строка Назад/Вперёд и шестерёнка поднята сразу под пиньинь и перевод, список иероглифов — под ней'],
+  ['1.8.26','10.10.26','«Письмо»: контур теперь крутится циклически, пока не выключен (кнопка «Дальше ▶» и клик по иероглифам-подсказкам переключают символы слова, после первого иероглифа корректно включается второй); аудио «Письма» — как в «Учить»: бесконечный повтор слова с паузой по длине текста (mp3 или синтез), повтор не прерывается рисованием, старый механизм с паузой в 3 секунды убран; строка Назад/Вперёд и шестерёнка перенесены вниз над меню (вверху остались только кликабельные подсказки), шестерёнки «Письма»/«Экзамена» — лёгкие, как в «Учить»'],
+  ['1.8.25','10.10.26','Словарь: кнопки «★ Избранное» и «выучено» теперь сужают и режимы «Учить»/«Письмо»/«Экзамен» — пока включены, обучение идёт только по этим словам (в режимах метка «★ Избранное: N сл.» / «Выучено: N сл.»), возврат к «Все слова» возвращает полную колоду; вход в аккаунт: добавлена строка диагностики после «Отправить ссылку» (ответ Supabase, куда ведёт ссылка) для поиска причины недоставки письма'],
   ['1.8.24','09.10.26','Словарь: карточки сгруппированы по месяцам (заголовок «Октябрь» слева над самой свежей карточкой месяца, у старых лет добавляется год); включённый фильтр словаря теперь ограничивает и режимы «Учить»/«Письмо»/«Экзамен» (добавлен фильтр «Этот месяц»/«Прошлый месяц», в режимах — метка «Фильтр: N сл.», сброс возвращает полную колоду); вход в аккаунт: после «Отправить ссылку» поля заменяются подсказкой «Проверьте почту» и кнопкой «Готово»'],
   ['1.8.23','09.10.26','Пакетный ввод: умный разбор строки — поля определяются по типу символов (иероглиф → слово, латиница → пиньинь, кириллица → перевод), разделители «—»/«:»/«;» распознаются в любом порядке; переводы после «;» раскладываются по отдельным полям «Другие переводы»'],
   ['1.8.22','08.10.26','Значки: шестерёнка «Учить» и луна темы — материальные SVG; аудио грузится быстрее (таймаут 1,5 с) и работает офлайн — mp3 кэшируется в service worker; повтор звука без лимита с обрывом при действии; вернулась строка размеров; короткие слова крупнее; «Писать это» ставит ★; смена режима мгновенно гасит звук; выбор голоса в «Учить» (Google-сетевой / локальный голос); Мятная тема заменена на Синюю'],
@@ -2804,7 +3475,7 @@ const VERSIONS=[
   ['1.8.10','05.10.26','«Учить» — ползунки размера теперь отсчитываются от золотого стандарта: на десктопе 100% = иероглиф 57px / пиньинь 29px / перевод 19px (телефон 100/38/27), а у тех, кто раньше держал 60/60/70, ползунки один раз сами встали на 100% — крутить вручную не нужно'],
   ['1.8.9','04.10.26','Размеры «Учить» подобраны под ноутбук 14″: главный иероглиф 95px / пиньинь 49px / перевод 27px на десктопе (телефон 100/38/27), предложения — тот же размер, что стандарт (убрано уменьшение до ~72%)'],
   ['1.8.8','04.10.26','Правки от 04.10.26 22:26: в «Учить» — главный иероглиф 100/134px, пиньинь 38/52px, перевод 28px (предложения ~72%), модалка «Настройки режима Изучение» с порядком Аудио→Иероглиф→Пиньинь→Перевод и подписями; в «Словаре» — «Уровень N / Повторов M» в 2 строки на телефоне, плавающая стрелка «Наверх» для длинных списков, перевод чёрный жирный; в «Письме» — переключатели Контур/Аудио/Анимация/Рандом (Анимация выкл по умолчанию), «Настройки режима Письмо», Назад/Вперед по краям с ползунком размера, шестерёнка справа от «Вперед», компактная подсказка с переключателем и ползунком, убрана строка с иероглифом и переводом между кнопками, список слов строго по порядку добавления (свежие первыми); в «Экзамене» — шестерёнка справа, переключатели перерисовываются сразу, в «Подборе» нет 7-сек повтора озвучки экзамена и карточки одной высоты; на «Ещё → Синхронизация» журнал обновляется сразу после синка, а «Новое имя этого устройства» задаёт имя для будущих записей журнала'],
-  ['1.8.7','04.10.26','В «Учить» под карточкой — размеры иероглифа / пиньиня / перевода в пикселях и процентах; модалка шестерёнки переименована в «Настройки режима» и получила ползунки размера (50–200%, шаг 10) под «Пиньин», «Перевод» и новое поле «Иероглиф» с переключателем; шестерёнка — заливной классический значок; дубли сегментов размера из общих «Настроек» убраны'],
+  ['1.8.7','04.10.26','В «Учить» под карточкой — размеры иероглифа / пиньиня / перевода в пикселях и процентах; модалка шестерёнки переименована в «Настройки режима» и получила ползунки размера (50–200%, шаг 10) под «Пиньинь», «Перевод» и новое поле «Иероглиф» с переключателем; шестерёнка — заливной классический значок; дубли сегментов размера из общих «Настроек» убраны'],
   ['1.8.6','04.10.26','Большие правки удобства: главный иероглиф/слово в «Учить» — 100px на телефоне и 140px на десктопе (предложения остаются компактными); шестерёнка настроек — у «Учить» янтарная, у «Экзамена» и «Письма» своя справа сверху (меню: Верно-неверно, Выбор ответов, 4-6-8-10, Все переводы, Подбор, Аудио / Контур, Рандом, Анимация, Аудио); убран дубль кнопок 4-6-8-10; в «Письме» под переводом — список всех слов в порядке добавления; в «Словаре» новая кнопка ✍️ «писать это слово», кнопка «Наверх» в конце списка и карточка в 3 колонки с рядом ★ 🔊 ✍️ ↑ ↓ и статусом справа («Уровень N. Повторов M» / «Уровень 5. Выучено»); скролл нигде не заезжает под нижнее меню; у конфликтов синхронизации показываются только 2 самые свежие карточки, а при явно свежих данных на одной стороне загрузка происходит автоматически; исправлена ошибка запуска после удаления старого тулбара экзамена'],
   ['1.8.5','04.10.26','Длинные слова и предложения больше не выталкивают кнопки за экран и не прячутся под ними ни в одном режиме: размер текста подбирается по длине (1 символ крупно, 2–4 средне, предложение компактно) — в «Экзамене», «Учить», письме-печати и «Подборе»; зона вопроса/подбора прокручивается, когда контент выше экрана'],
   ['1.8.4','03.10.26','Синхронизация прогресса больше не застревает в конфликтах: SRS (уровни, ответы) сливается автоматически по свежести таймстампа (новее всегда побеждает), экран «Конфликты» показывается только для контента (слова/переводы/аудио)'],
@@ -2813,8 +3484,8 @@ const VERSIONS=[
   ['1.8.1','03.10.26','Словарь — стрелки ↑↓ жирнее и контрастнее; Экзамен «Верно-неверно» — кнопки Верно/Не верно прижаты к низу экрана (как в «Учить»); экран конфликтов синхронизации переделан: выбор стороны теперь глобальный по частям «Контент» и «Прогресс» (не на каждое слово), внизу — список-справка с датами изменения обеих версий и подсветкой более свежей'],
   ['1.8.0','03.10.26','Фаза 8 — защита от затирания свежих данных: карточка разделена на контент и прогресс с отдельными таймстампами (updated_at / prog_at), каждый двигается только при реальном действии; серверная БД не принимает более старую запись; при расхождении обеих версий — экран конфликтов «Локально / Облако»'],
   ['1.7.0','03.10.26','SRS — переработка стратегии уровней: интервалы коробок 2/3/5/8/12 сессий (было 1/2/4/6/8); новое слово покидает уровень 1 после 4 верных ответов суммарно (было 3+3 подряд в соседних сессиях), ошибки счётчик не сбрасывают; новое слово повторяется через сессию, а не в каждой; в очереди не больше 10 новых слов за сессию'],
-  ['1.6.0','03.10.26','Настройки → Данные: размер базы слов и базы аудио (штуки и КБ/МБ, активный язык); Экзамен — слово повторяется каждые 7 секунд, пока вопрос на экране; «Выбор ответов» — выше кнопки ответов (×1.5); «Учить» — тулбар заменён кнопкой ⚙ справа сверху: настройки Аудио/Пиньин/Перевод переехали в отдельное окно'],
-  ['1.5.1','03.10.26','«Все переводы» честно работает во всех режимах (выкл — только главный перевод, вкл — все через «/»); «Учить» — тулбар настроек сверху (Аудио/Пиньин/Перевод); ошибка в Экзамене подсвечивается 1 сек без зелёной подсветки правильного; «Верно-неверно» — кнопки столбиком (Верно сверху); словарь — 4 одинаковых чипа-фильтра; крупнее поля карточки, кнопки действий всегда 2×2; окно фильтра — «Сбросить фильтр»/«Применить фильтр», фильтр применяется только по кнопке'],
+  ['1.6.0','03.10.26','Настройки → Данные: размер базы слов и базы аудио (штуки и КБ/МБ, активный язык); Экзамен — слово повторяется каждые 7 секунд, пока вопрос на экране; «Выбор ответов» — выше кнопки ответов (×1.5); «Учить» — тулбар заменён кнопкой ⚙ справа сверху: настройки Аудио/Пиньинь/Перевод переехали в отдельное окно'],
+  ['1.5.1','03.10.26','«Все переводы» честно работает во всех режимах (выкл — только главный перевод, вкл — все через «/»); «Учить» — тулбар настроек сверху (Аудио/Пиньинь/Перевод); ошибка в Экзамене подсвечивается 1 сек без зелёной подсветки правильного; «Верно-неверно» — кнопки столбиком (Верно сверху); словарь — 4 одинаковых чипа-фильтра; крупнее поля карточки, кнопки действий всегда 2×2; окно фильтра — «Сбросить фильтр»/«Применить фильтр», фильтр применяется только по кнопке'],
   ['1.1.3','01.10.26','Фаза 4 — облачная синхронизация: кнопка «Синхронизировать» в Словаре (поиск слева, кнопка справа, строка статуса); LWW-merge карточек/настроек/статистики по updated_at; календарь и «дни» склеиваются по датам; сбой сети не трогает локальные данные'],
   ['1.1.2','30.09.26','Все модальные окна (вход, карточка, пакетный ввод, история версий) открываются по центру экрана, а не снизу; подтверждение входа — toast «Проверьте почту…» поверх окна'],
   ['1.1.1','30.09.26','Фаза 3 (синхронизация): вход по email в Supabase — блок «Аккаунт» в Настройках, вход по magic-link без пароля, автоподхват сессии из ссылки письма, кнопка «Выйти»; офлайн-сборка — без Supabase (честная заглушка)'],
@@ -2978,7 +3649,7 @@ function utf8Bytes(s){
 // слова — карточки без аудио-файлов: размер сериализованных полей (текст/пиньинь/переводы и т.п.);
 // аудио — прикреплённые mp3: сумма буферов в IndexedDB.
 async function renderDataStats(){
-  const wEl=document.getElementById('dsWords'), aEl=document.getElementById('dsAudio'), nEl=document.getElementById('dsNote');
+  const wEl=document.getElementById('dsWords'), aEl=document.getElementById('dsAudio'), nEl=document.getElementById('dsNote'), tEl=document.getElementById('dsTts');
   if(!wEl) return;
   const list=langItems();
   const auList=list.filter(it=>it.recordings && it.recordings.length);
@@ -2995,6 +3666,9 @@ async function renderDataStats(){
     if(rec && rec.buf) ab += rec.buf.byteLength||rec.buf.length||0;
   }
   aEl.textContent=slots.length+' шт · '+fmtBytes(ab);
+  // кэш озвучки (синтез) — отдельное хранилище Cache Storage
+  if(tEl) tEl.textContent='…';
+  ttsCacheSize().then(({count,bytes})=>{ if(tEl) tEl.textContent=count+' шт · '+fmtBytes(bytes); });
   nEl.textContent='Для активного языка · без учёта облака';
 }
 
@@ -3838,7 +4512,7 @@ async function doExport(){
       const rec=await DB.get('aud:'+it.id+':'+r.speed);
       recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
     }
-    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,addedAt:it.addedAt||0,lang:langOf(it),updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,boxStreak:it.boxStreak,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,addedAt:it.addedAt||0,lang:langOf(it),updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
   }));
   const blob=new Blob([JSON.stringify({items:out,settings,statsByLang},null,1)],{type:'application/json'});
   downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
@@ -3855,7 +4529,7 @@ async function doImportFile(file){
     for(const each of items) revokeAll(each);
     items=[];
     for(const d of (j.items||[])){
-      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',addedAt:+d.addedAt||0,lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,boxStreak:d.boxStreak||0,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',addedAt:+d.addedAt||0,lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
       if(String(d.hanzi||'').trim()) assignStableId(it);   // одинаковый материал = одинаковый id при импорте
       migrateItem(it);
       ensureAddedAt(it);   // старые бэкапы без addedAt — по дню добавления
@@ -3945,7 +4619,7 @@ function sampleData(skipConfirm){
   if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
   const S=SAMPLES[activeLang]||SAMPLES.zh;
   for(const [kind,hanzi,pinyin,tr] of S){
-    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
+    const it={id:uid(),kind,hanzi,pinyin,translation:tr,note:'',tag:'пример',starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,boxStreak:0,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang:activeLang,updated_at:now(),prog_at:now()};
     assignStableId(it);
     items.push(it);
   }
@@ -4002,15 +4676,23 @@ document.getElementById('studyAgain').onclick=()=>{
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
+document.getElementById('studySpeakBtn').onclick=studySpeak;
 document.getElementById('writePrev').onclick=writePrev;
 document.getElementById('writeNext').onclick=writeNext;
 document.getElementById('writeSettingsBtn').onclick=openWriteSettings;
 document.getElementById('examSettingsBtn').onclick=openExamSettings;
+document.getElementById('btnTagsManage').onclick=openTagsModal;
 document.getElementById('btnExport').onclick=doExport;
 document.getElementById('btnImport').onclick=()=>document.getElementById('fileImport').click();
 document.getElementById('fileImport').onchange=e=>{ if(e.target.files[0]) doImportFile(e.target.files[0]); e.target.value=''; };
 document.getElementById('btnSample').onclick=sampleData;
 document.getElementById('btnWipe').onclick=wipeAll;
+document.getElementById('btnClearTts').onclick=async ()=>{
+  if(!confirm('Очистить кэш озвучки (синтезированный звук)? Офлайн-озвучка перекачается заново при следующем проигрывании. Слова и ваши mp3 не пострадают.')) return;
+  await clearTtsCache();
+  renderDataStats();
+  toast('Кэш озвучки очищен');
+};
 document.getElementById('voiceSel').onchange=e=>{ settings.voiceURI=e.target.value; persist(); };
 // Вкладки «Ещё»: Статистика / Синхронизация / Настройки
 document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>{
@@ -4042,12 +4724,16 @@ function bindAudioLifecycle(){
   // цепочка автоповторов «Учить» при этом обрывается (иначе отложенный таймер включит звук в фоне),
   // а при возврате на карточку — возобновляется.
   document.addEventListener('visibilitychange', ()=>{
-    if(document.hidden){ stopAllAudio(); studyTouch(); }
+    if(document.hidden){ stopAllAudio(); studyTouch(); clearWritePlay(); }
     else{
       const scr=document.getElementById('scr-study');
       if(scr && scr.classList.contains('active') && studyAudioOn){
         const it=studyQueue[studyIdx];
         if(it) studyPlayLoop(it);
+      }
+      const wscr=document.getElementById('scr-write');
+      if(wscr && wscr.classList.contains('active') && writeAudioOn && writeCurItem){
+        writePlayLoop(writeCurItem);
       }
     }
   });
@@ -4155,7 +4841,7 @@ function cardFromCloud(data, u, pu){
     dueSess:+src.dueSess||0, correct:+src.correct||0, wrong:+src.wrong||0,
     correctStreak:+src.correctStreak||0, correctStreakDays:+src.correctStreakDays||0,
     nsStreak:+src.nsStreak||0, nsSess:+src.nsSess||0,
-    nsGood:+src.nsGood||0,
+    nsGood:+src.nsGood||0, boxStreak:+src.boxStreak||0,
     nsDoneSess:src.nsDoneSess==null?null:src.nsDoneSess,
     nsLastGoodShow:src.nsLastGoodShow==null?null:src.nsLastGoodShow,
     lastShowN:+src.lastShowN||0, lastSeen:+src.lastSeen||0, nextDue:+src.nextDue||0,
@@ -4973,7 +5659,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
@@ -4986,6 +5672,7 @@ async function boot(){
   studyPyOn=settings.studyPy!==false;
   studyTrOn=settings.studyTr!==false;
   studyHanziOn=settings.studyHanzi!==false;
+  studySeqOn=!!settings.studySeq;
   applyStudyToggles();
   activeLang=LANG_MAP[settings.activeLang]?settings.activeLang:'zh';
   // Статистика по языкам (Фаза 5): если ещё нет карты — мигрируем старую статистику в язык activeLang.
@@ -4995,9 +5682,12 @@ async function boot(){
   if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
   if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
   stats=statsByLang[activeLang];
-  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, match:false};
+  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:false};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
+  examAudioDelay=Number(settings.examAudioDelay)||0;
+  examGradual=settings.examGradual!==false;
+  examGradualDelay=Number(settings.examGradualDelay)||0;
   SESS=settings.sessN||0;
   for(const it of items) migrateItem(it);
   for(const it of items) await migrateNormAudio(it);
@@ -5034,3 +5724,4 @@ boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.mess
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
   navigator.serviceWorker.register('sw.js?v='+encodeURIComponent(APP_VERSION), {updateViaCache:'none'}).catch(()=>{});
 }
+
