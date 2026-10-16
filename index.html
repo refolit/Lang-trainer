@@ -612,6 +612,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .sn-block{padding:0; border-bottom:1px solid var(--line)}
 /* Заголовок секции в окне настроек экзамена (Режимы / Параметры / Тайминги) */
 .sn-sec-h{font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--mut); padding:10px 0 2px; margin-top:4px}
+/* Подрежимы: вложенные настройки под главным переключателем (Постепенно / Число вариантов) */
+.exam-sub{padding-left:14px; border-left:2px solid var(--line); margin:0 0 6px}
+.exam-sub .menu-item{padding:9px 0; border-bottom:0}
 /* Окно «Метки»: строка с полем + кнопки ✓ / 🗑 */
 .tag-row{display:flex; align-items:center; gap:6px; margin-bottom:8px}
 .tag-inp{flex:1 1 auto; min-width:0}
@@ -659,17 +662,17 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .tone-py{font-size:16px; color:var(--mut); text-align:center; min-height:1.4em; letter-spacing:.03em}
 .tone-btns{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:10px}
 .tone-btns button{
-  min-width:0; padding:14px 12px; border-radius:14px; border:1.5px solid var(--line);
+  min-width:0; padding:16px 12px; border-radius:14px; border:1.5px solid var(--line);
   background:var(--card); color:var(--ink); font-size:17px; font-weight:800; cursor:pointer;
-  display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; line-height:1.1;
-  min-height:70px;
+  display:inline-flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; line-height:1;
+  min-height:84px;
   box-shadow:0 3px 0 var(--sec-d);
 }
 .tone-btns button:active{transform:translateY(2px); box-shadow:0 1px 0 var(--sec-d)}
-.tone-btns button .tm{font-size:26px; color:var(--red)}
-.tone-btns button .tl{font-size:14px; color:var(--mut); font-weight:600}
-/* Кнопка нулевого тона (0 · 轻声 → 0): отдельной строкой по центру под двумя рядами тонов */
-.tone-btns button.zero{grid-column:1 / -1; justify-self:center; min-height:auto; min-width:60px; padding:10px 22px}
+.tone-btns button .tm{font-size:40px; color:var(--red); line-height:1}
+.tone-btns button .tl{font-size:20px; color:var(--mut); font-weight:700}
+/* Кнопка нулевого тона (0): отдельной широкой строкой НАД тонами 1–4, по центру */
+.tone-btns button.zero{grid-column:1 / -1; justify-self:stretch; width:100%; min-height:64px; padding:12px 22px}
 
 /* Экзамен: блок ответов «Верно-неверно» прижат к низу экрана (как кнопки в «Учить») */
 #scr-exam.active{display:flex; flex-direction:column}
@@ -1083,7 +1086,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.6';
+const APP_VERSION='1.9.7';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3712,7 +3715,7 @@ function examPickTr(it){
   return all[Math.floor(Math.random()*all.length)];
 }
 function examChoiceN(){ return examSettings.choiceN||8; }
-function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone}; }
+function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, match:!!examSettings.match}; }
 const EXAM_MIN_GAP=5; // слово нельзя повторить, пока не прошло 5 других заданий
 
 // Поточное формирование заданий экзамена. Для каждого слова из очереди — по одному
@@ -3731,6 +3734,8 @@ function examBuildSeq(){
   if(sep.tf) modeOrder.push('tf');
   // тон-тест: только для языков с иероглифами (китайский) и только слова/фразы с тонами
   if(sep.tone && hasStrokes()) modeOrder.push('tone');
+  // подбор: один раунд из 5 пар на «задание» — участвует в общей ротации
+  if(sep.match) modeOrder.push('match');
   if(!modeOrder.length || !pool.length) return [];
   const total=pool.length*modeOrder.length;
   const seq=[];
@@ -3893,8 +3898,8 @@ function toggleExamAllTr(){
 function toggleExamMode(k){
   examSettings[k]=!examSettings[k];
   // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
-  if(!examSettings.tf && !examSettings.choice && !examSettings.tone){ examSettings[k]=true; }
-  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone;
+  if(!examSettings.tf && !examSettings.choice && !examSettings.tone && !examSettings.match){ examSettings[k]=true; }
+  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone; settings.examMatch=!!examSettings.match;
   persist();
   // П.2: переключение режима перестраивает очередь, чтобы выключенный режим перестал давать задания
   if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
@@ -3916,88 +3921,91 @@ function openExamSettings(){
   document.getElementById('modalExamSettings').classList.remove('hidden');
   renderExamSettings();
 }
+let examSettingsTab='general';
+function switchExamSettingsTab(tab){
+  examSettingsTab=tab;
+  const m=document.getElementById('modalExamSettings');
+  if(!m || m.classList.contains('hidden')) return;
+  m.querySelector('#examSettingsGeneral').classList.toggle('hidden', tab!=='general');
+  m.querySelector('#examSettingsModes').classList.toggle('hidden', tab!=='modes');
+  m.querySelector('#examSettingsTabSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
+}
 function renderExamSettings(){
   const m=document.getElementById('modalExamSettings');
   if(!m || m.classList.contains('hidden')) return;
   const showTone=hasStrokes();
-  // П.4: настройки сгруппированы в три секции — Режимы / Параметры / Тайминги.
-  // Текущее состояние фиксируется при открытии окна и восстанавливается «Сбросить изменения».
+  const tab=examSettingsTab;
   m.innerHTML=`<div class="sheet solid">
     <div class="row"><h2>Настройки экзамена</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalExamSettings')">✕</button></div>
-    <div style="margin-top:6px">
-      <div class="sn-sec-h">Режимы</div>
-      <div class="menu-item">
-        <div class="mi-label">Верно-неверно<span class="mi-hint">Показывать задания «Верно / Не верно»</span></div>
-        <button class="sn-switch ${examSettings.tf?'on':''}" data-exam-key="tf"></button>
-      </div>
-      <div class="menu-item">
-        <div class="mi-label">Выбор ответов<span class="mi-hint">Показывать задания с вариантами ответов</span></div>
-        <button class="sn-switch ${examSettings.choice?'on':''}" data-exam-key="choice"></button>
-      </div>
-      ${showTone?`<div class="menu-item">
-        <div class="mi-label">Тон-тест<span class="mi-hint">Указать тон каждого иероглифа (только китайский)</span></div>
-        <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="tone"></button>
-      </div>`:''}
-      <div class="sn-sec-h">Параметры</div>
-      <div class="menu-item">
-        <div class="mi-label">Число вариантов<span class="mi-hint">Сколько карточек в «Выборе ответов»</span></div>
-        <span class="seg sm" id="examChoiceSeg" style="flex:0 0 auto; margin-left:10px">
-          <button data-v="4">4</button><button data-v="6">6</button>
-          <button data-v="8" class="active">8</button><button data-v="10">10</button>
-        </span>
-      </div>
-      <div class="menu-item">
-        <div class="mi-label">Все переводы<span class="mi-hint">Использовать альтернативные переводы в заданиях</span></div>
-        <button class="sn-switch ${examAllTr?'on':''}" data-exam-key="allTr"></button>
-      </div>
+    <div class="seg" id="examSettingsTabSeg" style="margin-top:10px">
+      <button data-tab="general" class="${tab==='general'?'active':''}">Общие</button>
+      <button data-tab="modes" class="${tab==='modes'?'active':''}">Подрежимы</button>
+    </div>
+    <div id="examSettingsGeneral" class="${tab==='general'?'':'hidden'}">
       <div class="menu-item">
         <div class="mi-label">Аудио<span class="mi-hint">Озвучка слов в заданиях</span></div>
         <button class="sn-switch ${examAudioOn?'on':''}" data-exam-key="audio"></button>
-      </div>
-      <div class="menu-item">
-        <div class="mi-label">Подбор<span class="mi-hint">Игра: соединить иероглиф и перевод</span></div>
-        <button class="btn sec sm" data-exam-key="match" style="width:auto">Играть</button>
-      </div>
-      <div class="sn-sec-h">Тайминги</div>
-      <div class="menu-item">
-        <div class="mi-label">Постепенно<span class="mi-hint">Верно-неверно: раскрывать пиньинь и перевод по очереди</span></div>
-        <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
-      </div>
-      <div class="menu-item" style="display:block">
-        <div class="mi-label">Постепенно через<span class="mi-hint">Пауза: иероглиф → пиньинь → перевод → аудио (0 с — всё сразу)</span></div>
-        <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="1" value="${examGradualDelay}" data-exam-grad><span class="sn-slider-val" data-exam-grad-val>${examGradualDelay} с</span></div>
       </div>
       <div class="menu-item" style="display:block">
         <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
         <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
       </div>
-      <div class="btn-row" style="margin-top:14px">
-        <button class="btn ghost" id="examSettingsReset" style="width:auto">↺ Сбросить изменения</button>
+      <div class="menu-item">
+        <div class="mi-label">Все переводы<span class="mi-hint">Использовать альтернативные переводы в заданиях</span></div>
+        <button class="sn-switch ${examAllTr?'on':''}" data-exam-key="allTr"></button>
+      </div>
+    </div>
+    <div id="examSettingsModes" class="${tab==='modes'?'':'hidden'}">
+      <div class="menu-item">
+        <div class="mi-label">Верно-неверно<span class="mi-hint">Задания «Верно / Не верно»</span></div>
+        <button class="sn-switch ${examSettings.tf?'on':''}" data-exam-key="tf"></button>
+      </div>
+      <div class="exam-sub">
+        <div class="menu-item">
+          <div class="mi-label">Постепенно<span class="mi-hint">Раскрывать пиньинь и перевод по очереди</span></div>
+          <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
+        </div>
+        <div class="menu-item" style="display:block">
+          <div class="mi-label">Постепенно через<span class="mi-hint">Пауза: иероглиф → пиньинь → перевод → аудио (0 с — всё сразу)</span></div>
+          <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="1" value="${examGradualDelay}" data-exam-grad><span class="sn-slider-val" data-exam-grad-val>${examGradualDelay} с</span></div>
+        </div>
+      </div>
+      <div class="menu-item">
+        <div class="mi-label">Выбор ответов<span class="mi-hint">Задания с вариантами ответов</span></div>
+        <button class="sn-switch ${examSettings.choice?'on':''}" data-exam-key="choice"></button>
+      </div>
+      <div class="exam-sub">
+        <div class="menu-item">
+          <div class="mi-label">Число вариантов<span class="mi-hint">Сколько карточек в «Выборе ответов»</span></div>
+          <span class="seg sm" id="examChoiceSeg" style="flex:0 0 auto; margin-left:10px">
+            <button data-v="4">4</button><button data-v="6">6</button>
+            <button data-v="8" class="active">8</button><button data-v="10">10</button>
+          </span>
+        </div>
+      </div>
+      ${showTone?`<div class="menu-item">
+        <div class="mi-label">Тоны<span class="mi-hint">Указать тон каждого иероглифа (только китайский)</span></div>
+        <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="tone"></button>
+      </div>`:''}
+      <div class="menu-item">
+        <div class="mi-label">Подбор<span class="mi-hint">Соединить иероглиф и перевод</span></div>
+        <button class="sn-switch ${examSettings.match?'on':''}" data-exam-key="match"></button>
       </div>
     </div>
   </div>`;
-  // снимок состояния на момент открытия окна — для «Сбросить изменения»
-  const snap={tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, choiceN:examSettings.choiceN, allTr:examAllTr, audio:examAudioOn, gradual:examGradual, gradualDelay:examGradualDelay, audioDelay:examAudioDelay};
-  m.querySelector('#examSettingsReset').onclick=()=>{
-    examSettings.tf=snap.tf; examSettings.choice=snap.choice; examSettings.tone=snap.tone; examSettings.choiceN=snap.choiceN;
-    examAllTr=snap.allTr; examAudioOn=snap.audio;
-    examGradual=snap.gradual; examGradualDelay=snap.gradualDelay; examAudioDelay=snap.audioDelay;
-    settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone; settings.examChoiceN=examSettings.choiceN;
-    settings.examAllTr=examAllTr; settings.examAudio=examAudioOn;
-    settings.examGradual=examGradual; settings.examGradualDelay=examGradualDelay; settings.examAudioDelay=examAudioDelay;
-    persist();
-    renderExamSettings();
-  };
+  m.querySelector('#examSettingsTabSeg').querySelectorAll('button').forEach(b=>{
+    b.onclick=()=>switchExamSettingsTab(b.dataset.tab);
+  });
   m.querySelectorAll('[data-exam-key]').forEach(el=>{
     el.onclick=()=>{
       const k=el.dataset.examKey;
       if(k==='tf'){ toggleExamMode('tf'); renderExamSettings(); }
       else if(k==='choice'){ toggleExamMode('choice'); renderExamSettings(); }
       else if(k==='tone'){ toggleExamMode('tone'); renderExamSettings(); }
+      else if(k==='match'){ toggleExamMode('match'); renderExamSettings(); }
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
       else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
       else if(k==='gradual'){ toggleExamGradual(); renderExamSettings(); }
-      else if(k==='match'){ closeModal('modalExamSettings'); matchStart(); }
     };
   });
   m.querySelectorAll('#examChoiceSeg button').forEach(b=>{
@@ -4105,6 +4113,7 @@ function requeueExam(it){
   if(examSettings.choice) modes.push('choice');
   if(examSettings.tf) modes.push('tf');
   if(examSettings.tone && hasStrokes()) modes.push('tone');
+  if(examSettings.match) modes.push('match');
   if(!modes.length) return;
   const mode=modes[Math.floor(Math.random()*modes.length)];
   examSeq.push({it, mode});
@@ -4264,15 +4273,15 @@ function drawTone(){
   if(!seg) return;
   const pyNoTone=seg.map(s=>s.py).join(' ');
   body.innerHTML=`
-    <div class="exam-q" style="flex:1 1 auto; justify-content:center">
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
       <div class="tone-hanzi">${seg.map((s,i)=>`<span class="tc ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>`).join('')}</div>
       <div class="tone-py">${escapeHtml(pyNoTone)}</div>
       <div class="tone-btns">
+        <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
         <button data-tone="1"><span class="tm">¯</span><span class="tl">1</span></button>
         <button data-tone="2"><span class="tm">´</span><span class="tl">2</span></button>
         <button data-tone="3"><span class="tm">ˇ</span><span class="tl">3</span></button>
         <button data-tone="4"><span class="tm">\`</span><span class="tl">4</span></button>
-        <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
       </div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
@@ -4306,6 +4315,7 @@ function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
 
 // ---------- Подбор ----------
 let matchRound=[], matchSelLeft=null, matchSelRight=null, matchSelRightEl=null;
+let matchError=false, matchErrItems=[];   // ошибки текущего раунда (для повтора и списка результата)
 function matchDeck(){
   // звёздные в первую очередь, всё в полном рандоме
   const star=filteredLangItems().filter(it=>it.translation&&it.starred);
@@ -4329,6 +4339,7 @@ function matchStart(){
   clearExamIdle();
   if('speechSynthesis' in window) speechSynthesis.cancel();
   matchRound=[]; matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
+  matchError=false; matchErrItems=[];
   matchNextRound();
   if(examAudioOn && matchRound.length && matchRound[0]) examSpeakWord(matchRound[0]);
 }
@@ -4336,10 +4347,22 @@ function matchNextRound(){
   const deck=matchDeck();
   const need=5;
   if(deck.length<2){
-    document.getElementById('examBody').innerHTML='<div class="empty">Для подбора нужно хотя бы 2 слова.</div>';
+    // слишком мало слов — подбор невозможен, идём к следующему заданию
+    examFinish(1);
     return;
   }
-  matchRound=matchDraw(deck, Math.min(need, deck.length));
+  // раунд всегда включает текущее слово задачи (examCurrentIt) — иначе балл и повтор
+  // относились бы к слову, которого пользователь не видел; остальные — случайные без повторов
+  const cur=examCurrentIt;
+  let round=[];
+  if(cur && cur.translation){
+    round.push(cur);
+    const others=shuffle(deck.filter(x=>x.id!==cur.id));
+    round=round.concat(matchDraw(others, Math.min(need-1, others.length)));
+  } else {
+    round=matchDraw(deck, Math.min(need, deck.length));
+  }
+  matchRound=round;
   matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   matchRound.forEach(it=>markShown(it)); // каждое слово раунда — отдельный «показ» (для счётчика «нового»)
   renderMatch();
@@ -4352,15 +4375,13 @@ function renderMatch(){
     <div class="match-cols">
       <div class="match-col" id="matchLeft">${left.map(it=>`<button class="btn sec match-pair ${eqWordClass(it.hanzi)}" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`).join('')}</div>
       <div class="match-col" id="matchRight">${right.map(it=>{const t=examPickTr(it);return `<button class="btn sec match-pair match-txt ${eqWordClass(t)}" data-id="${it.id}">${escapeHtml(t)}</button>`;}).join('')}</div>
-    </div>
-    <button class="btn" id="matchDone" style="width:100%; margin-top:12px">Завершить подбор</button>`;
+    </div>`;
   document.querySelectorAll('#matchLeft button').forEach(b=>{
     b.onclick=()=>matchPickLeft(b.dataset.id, b);
   });
   document.querySelectorAll('#matchRight button').forEach(b=>{
     b.onclick=()=>matchPickRight(b.dataset.id, b);
   });
-  document.getElementById('matchDone').onclick=examReturnToExam;
 }
 function matchPair(id, side){
   const el=document.querySelector(`#match${side} button[data-id="${id}"]`);
@@ -4389,12 +4410,20 @@ function matchPickRight(id, btn){
     if(matchSelLeft===id){
       matchDone(leftBtn, btn, id);
     }else{
-      // ошибка — красная вспышка + тряска (коробка −2)
+      // ошибка — красная вспышка + тряска (коробка −2); раунд продолжается.
+      // Штраф идёт по СЛОВУ, которое пользователь сопоставлял (левый иероглиф matchSelLeft),
+      // а не по случайно нажатой правой карточке.
       flashBad(btn);
       flashBad(leftBtn);
+      const leftId=matchSelLeft;
       matchSelLeft=null;
-      const it=matchRound.find(x=>x.id===id);
-      if(it){ srsBadSoft(it); }
+      matchError=true;
+      const it=matchRound.find(x=>x.id===leftId);
+      if(it){
+        if(!matchErrItems.includes(it)) matchErrItems.push(it);
+        if(!examWrong.includes(it)) examWrong.push(it);
+        srsBadSoft(it);
+      }
       persist();
     }
     return;
@@ -4412,17 +4441,20 @@ function matchDone(leftBtn, rightBtn, id){
   rightBtn.classList.add('done'); rightBtn.disabled=true;
   matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   const it=matchRound.find(x=>x.id===id);
-  if(it){ examRight++; touchStreak(); logActivity(); updateExamScore(); srsGoodSoft(it); newGood(it); }
+  if(it){ touchStreak(); logActivity(); srsGoodSoft(it); newGood(it); }
   persist();
   if(document.querySelectorAll('#matchLeft button:not(.done)').length===0){
-    // раунд угадан — новая пятёрка
-    setTimeout(matchNextRound, 450);
+    // Раунд угадан. Каждая верная пара уже получила SRS-зачёт в matchDone (выше),
+    // поэтому здесь только балл задания: без ошибок = +1, с ошибками — повтор слов и без балла.
+    if(matchError){
+      matchErrItems.forEach(w=>requeueExam(w));
+      examFinish(1);
+    } else {
+      examRight++;
+      touchStreak(); logActivity(); persist();
+      examFinish(1);
+    }
   }
-}
-function examReturnToExam(){
-  Player.stop();
-  // «Завершить» возвращает из подбора в обычный экзамен (следующее задание)
-  examAdv();
 }
 
 // ---------- Результат ----------
@@ -4463,6 +4495,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7','17.10.26','Настройки экзамена — две вкладки «Общие»/«Подрежимы» (как в «Ещё»): Общие — Аудио/Задержка аудио/Все переводы; Подрежимы — Верно-неверно (вложенные «Постепенно» и «Постепенно через»), Выбор ответов (вложенное «Число вариантов» 4/6/8/10), Тоны (переименовано из «Тон-тест»), Подбор; кнопка «Сбросить изменения» убрана. «Подбор» стал настоящим подрежимом: включается переключателем, участвует в общей ротации всех включённых режимов, один раунд из 5 пар (текущее слово + случайные), как только все пары угаданы — раунд заканчивается и экзамен идёт к следующему случайному режиму; без ошибок = +1 балл, с ошибкой — повтор слов и без балла. Тоны: кнопка нулевого тона перенесена наверх над тонами 1–2, кнопки тонов 1–4 — 2 в ряд на всю ширину, надписи (черта тона/цифра) заметно крупнее'],
   ['1.9.6','16.10.26','Экзамен: исправлено «заикание» аудио — озвучка запускалась дважды на вопрос (второй цикл повтора гасил первый на полуслоге); при включённом «Постепенно» аудио теперь играет после раскрытия перевода (иероглиф → пиньинь → перевод → аудио), ползунок переименован в «Постепенно через»; строка «1/84 · ⚙» отодвинута от кнопки «Верно» и показывает ту же SVG-шестерёнку, что в шапке; окно «Настройки экзамена» полностью непрозрачное. Тон-тест: 4 кнопки тонов сеткой 2×2 одинакового размера, кнопка нулевого тона «0» (без «轻声») по центру внизу; цифры +3px, черточка тона +5px; неверный тон — красная вспышка, но тест не прерывается, продолжается до отметки всех иероглифов (ошибка = −1 в конце, без ошибок = +1)'],
   ['1.9.5','16.10.26','Новая стратегия SRS: переходы по числу верных ответов ПОДРЯД — 6/6/6/7 (выучено = коробка 5, всего 25 верных без ошибки); ошибка оставляет на уровне и сбрасывает серию, ошибка в коробке 5 → коробка 4 (старая схема сохранена под флагом srsMode для отката). Экзамен: новый режим «Тон-тест» (указать тон каждого иероглифа, слово разбивается по ≤3 иероглифа, пиньинь без тонов, кнопки 1 ¯ / 2 ´ / 3 ˇ / 4 ` / 0 轻声; верная цепочка тонов = +1, ошибка = −1); «Постепенно» в Верно-неверно (иероглиф → пиньинь → перевод с паузой 0–6 с); настройки экзамена сгруппированы в Режимы/Параметры/Тайминги с кнопкой «Сбросить изменения»; переключение режима мгновенно перестраивает очередь (выключенный режим больше не даёт заданий); статусная строка «1/84 · ⚙» внизу над «Верно», счётчик «✓ N» убран; вопрос центрируется по вертикали. Аудио: повтор в экзамене — переменный интервал от КОНЦА озвучки (2,5–7 с по длине текста, как в «Учить»), а не жёсткие 7 с; Google-mp3 регистрируется в проигрывателе (остановка гасит и его); таймаут загрузки mp3 1,5→4 с + повтор; второй сетевой источник Youdao dictvoice (китайский/английский) — тишины не бывает. Словарь: кнопка «Удалить» внутри карточки (под звездой, над аудио), из списка убрана; поле «Метка» с подсказками и отдельное окно «Метки» (переименование/удаление у всех карточек). «Учить»: строка размеров «68px (4,7% экр) / 38px / 25px», статус-строка с равными отступами. «Письмо»: окно компактнее на планшетах+ (620→496px)'],
   ['1.9.4','14.10.26','Аудио: озвучка из Google больше не накладывается (при быстром переключении отменённый звук гасится до старта нового — раньше могли звучать до 10 одновременно); загрузка ускорена — mp3 кэшируется в отдельном постоянном кэше `hanzi-trainer-tts` (переживает обновления) и предзагружается для следующих 2 слов в «Учить»/«Экзамен»; новые региональные голоса Google в «Голос озвучки» — китайский (материковый/тайваньский), английский (US/UK/AU/IN), турецкий, арабский; Настройки → Данные: строка «Кэш озвучки (синтез)» с размером и кнопкой «Очистить кэш озвучки» (слова и свои mp3 не трогает)'],
@@ -6676,7 +6709,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
@@ -6699,7 +6732,7 @@ async function boot(){
   if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
   if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
   stats=statsByLang[activeLang];
-  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:false};
+  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
   examAudioDelay=Number(settings.examAudioDelay)||0;
