@@ -396,11 +396,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Modal */
 .modal{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:12px}
 .modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px 20px; max-height:calc(100dvh - 24px); overflow-y:auto}
-/* Полупрозрачный лист модалок (НЗ/Письмо/Экзамен): цвет темы с прозрачностью + лёгкое размытие.
-   Если color-mix не поддерживается — остаётся непрозрачный var(--bg) из строки выше. */
-.modal .sheet{background:color-mix(in srgb, var(--bg) 78%, transparent); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px)}
-/* Полностью залитая (непрозрачная) модалка — напр. «Настройки экзамена» */
-.modal .sheet.solid{background:var(--bg); backdrop-filter:none; -webkit-backdrop-filter:none}
+/* Все модалки непрозрачные (сплошной var(--bg)); .solid оставлен для совместимости — без эффекта. */
 .modal h2{font-size:18px; margin-bottom:4px}
 
 /* Stats */
@@ -1087,7 +1083,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.4';
+const APP_VERSION='1.9.7.6';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4271,6 +4267,9 @@ function renderExamChoice(q){
 // SVG-знак первого тона (высокий ровный): горизонтальная черта как в Material «remove»,
 // инлайн + fill="currentColor" — подхватывает цвет .tm (var(--red)) и все темы.
 const TONE_1_ICON='<svg viewBox="0 -960 960 960" width="40" height="40" aria-hidden="true" fill="currentColor"><path d="M200-440v-80h560v80H200Z"/></svg>';
+const TONE_2_ICON='<svg viewBox="0 -960 960 960" width="40" height="40" aria-hidden="true" fill="currentColor"><path d="m216-160-56-56 464-464H360v-80h400v400h-80v-264L216-160Z"/></svg>';
+const TONE_3_ICON='<svg viewBox="0 -960 960 960" width="40" height="40" aria-hidden="true" fill="currentColor"><path d="M480-263 120-623l56-57 304 304 224-224H520v-80h320v320h-80v-183L480-263Z"/></svg>';
+const TONE_4_ICON='<svg viewBox="0 -960 960 960" width="40" height="40" aria-hidden="true" fill="currentColor"><path d="M360-200v-80h264L160-744l56-56 464 464v-264h80v400H360Z"/></svg>';
 const TONE_ORDER=[0,1,2,3,4];
 function toneNumOf(pyNum){
   const m=/([0-4])$/.exec(String(pyNum||''));
@@ -4316,9 +4315,9 @@ function drawTone(){
       <div class="tone-btns">
         <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
         <button data-tone="1"><span class="tm">${TONE_1_ICON}</span><span class="tl">1</span></button>
-        <button data-tone="2"><span class="tm">´</span><span class="tl">2</span></button>
-        <button data-tone="3"><span class="tm">ˇ</span><span class="tl">3</span></button>
-        <button data-tone="4"><span class="tm">\`</span><span class="tl">4</span></button>
+        <button data-tone="2"><span class="tm">${TONE_2_ICON}</span><span class="tl">2</span></button>
+        <button data-tone="3"><span class="tm">${TONE_3_ICON}</span><span class="tl">3</span></button>
+        <button data-tone="4"><span class="tm">${TONE_4_ICON}</span><span class="tl">4</span></button>
       </div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
@@ -4532,6 +4531,8 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7.6','17.10.26','Все модальные окна теперь непрозрачные (сплошной цвет темы) — убрано полупрозрачное правило color-mix(78%) + blur, применявшееся ко всем модалкам; ранее залитая «Настройки экзамена» стала единообразной с остальными'],
+  ['1.9.7.5','17.10.26','Тоны: знаки тонов 2/3/4 тоже заменены на инлайн-SVG-стрелки (Material: north_east ↗ / call_missed_outgoing / south_east ↘, fill currentColor) — вся пятёрка кнопок тонов теперь единый SVG-стиль'],
   ['1.9.7.4','17.10.26','Тоны: переключатель «Пиньинь» теперь применяется сразу (без смены режима) — если текущее задание «Тонов», строка пиньиня скрывается/показывается мгновенно; знак первого тона «¯» заменён на инлайн-SVG-черту (Material «remove», fill currentColor — подхватывает цвет и все темы)'],
   ['1.9.7.3','17.10.26','Настройки экзамена → Подрежимы → Тоны: новый переключатель «Пиньинь» (по умолчанию включён) — включает/выключает показ пиньиня без тонов под иероглифом в заданиях «Тонов»'],
   ['1.9.7.2','17.10.26','Тоны: знаки препинания в предложениях (запятые, точки и т.п.) больше не требуют выбора тона — не-иероглифы отфильтровываются из цепочки тонов, а целиком состоящая из знаков группа пропускается'],
