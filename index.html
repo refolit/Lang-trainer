@@ -1086,7 +1086,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.9';
+const APP_VERSION='1.9.8.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4546,6 +4546,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.8.0','17.10.26','Профиль: имя пользователя сохраняется в Supabase (profiles.name) при сохранении в приложении и подтягивается обратно при входе с нового устройства — в панели автора видна связка «имя + email»'],
   ['1.9.7.9','17.10.26','Вход по email: исправлен вход по ссылке с другого устройства — publishable-ключ заменён на legacy anon (JWT) и включён implicit-флоу, чтобы токен был в самой ссылке и не требовал верифаера, который оставался на исходном устройстве'],
   ['1.9.7.8','17.10.26','Тоны: пиньинь больше не показывается сразу для всего слова — при каждом верном клике открывается пиньинь (со знаком тона) только этого иероглифа, постепенно заполняя строку под иероглифами'],
   ['1.9.7.7','17.10.26','Тоны: после верного набора тонов под кнопками на 1 секунду показывается перевод слова, затем автоматически переход к следующему слову'],
@@ -6617,6 +6618,13 @@ async function renderAuth(){
   const u=await localSessionUser();
   _syncUser=u;
   if(u){
+    // Имя живёт в облаке (profiles.name): подтягиваем его, если на этом устройстве его ещё
+    // нет (первый вход с нового браузера) — чтобы связка «имя + email» не терялась.
+    try{
+      const c=sbClient();
+      const {data:p}=await c.from('profiles').select('name').eq('id',u.id).maybeSingle();
+      if(p && p.name && !settings.userName){ settings.userName=p.name; await persist(); }
+    }catch(e){}
     const shown=settings.userName || u.email || '';
     box.innerHTML=`<div class="auth-line"><span class="mail">${escapeHtml(shown)}</span><span class="spacer"></span>
       <button class="btn sec" style="width:auto; padding:9px 14px" id="btnSignOut">Выйти</button></div>
@@ -6728,6 +6736,10 @@ function maybeAskName(){
   m.querySelector('#authNameSave').onclick=async ()=>{
     settings.userName=(inp.value||'').trim()||null;
     await persist();
+    // Имя уходит в облако (profiles.name), чтобы автор видел связку «имя + email» в панели.
+    if(!SB_OFFLINE && _syncUser){
+      try{ await sbClient().from('profiles').upsert({id:_syncUser.id, name:settings.userName}, {onConflict:'id'}); }catch(e){}
+    }
     closeModal('modalAuth');
     renderAuth();
     toast('Имя сохранено');
