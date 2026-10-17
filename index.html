@@ -655,7 +655,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .tone-hanzi{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; font-family:var(--font-cjk)}
 .tone-hanzi .tc{font-size:min(20vmin,72px); font-weight:600; padding:2px 8px; border-radius:12px; color:var(--mut); background:var(--soft); line-height:1.2}
 .tone-hanzi .tc.cur{color:#fff; background:var(--red); box-shadow:0 1px 6px rgba(198,40,40,.4)}
-.tone-py{font-size:16px; color:var(--mut); text-align:center; min-height:1.4em; letter-spacing:.03em}
+.tone-py{font-size:16px; color:var(--mut); text-align:center; min-height:1.4em; letter-spacing:.03em; display:flex; flex-wrap:wrap; justify-content:center; gap:8px}
+.tone-py .tp{color:var(--ink); font-weight:600}
+.tone-py .tp.off{visibility:hidden}
 .tone-tr{font-size:18px; color:var(--ink); text-align:center; min-height:1.4em; margin-top:10px; font-weight:600}
 .tone-btns{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:10px}
 .tone-btns button{
@@ -1084,7 +1086,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.7';
+const APP_VERSION='1.9.7.8';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4285,12 +4287,17 @@ function buildToneGroups(hanzi){
   }
   const out=[];
   for(const g of raw){
-    let pys=[];
-    if(window.pinyinPro){ try{ pys=window.pinyinPro.pinyin(g.join(''), {toneType:'num', type:'array'}); }catch(e){ pys=[]; } }
+    let pys=[], syms=[];
+    if(window.pinyinPro){
+      try{ pys=window.pinyinPro.pinyin(g.join(''), {toneType:'num', type:'array'}); }catch(e){ pys=[]; }
+      try{ syms=window.pinyinPro.pinyin(g.join(''), {toneType:'symbol', type:'array'}); }catch(e){ syms=[]; }
+    }
     out.push(g.map((ch,i)=>({
       ch,
       py:String(pys[i]||'').replace(/[0-4]$/,''),
-      num:toneNumOf(pys[i])
+      num:toneNumOf(pys[i]),
+      pyMark:String(syms[i]||''),      // пиньинь со знаком тона (в контексте группы)
+      revealed:false                   // открыт после верного клика
     })).filter(s=>/[a-z]/i.test(s.py)));   // знаки препинания (и не-иероглифы) не получают тон — пропускаем
   }
   // после фильтрации пунктуации группа могла стать пустой (одни знаки) — убираем её
@@ -4308,11 +4315,13 @@ function drawTone(){
   const seg=toneGroups[toneGI];
   const body=document.getElementById('examBody');
   if(!seg) return;
-  const pyNoTone=seg.map(s=>s.py).join(' ');
+  const pyLine=examSettings.tonePy
+    ? seg.map((s,i)=>`<span class="tp ${s.revealed?'':'off'}">${s.revealed?escapeHtml(s.pyMark):''}</span>`).join('')
+    : '';
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
       <div class="tone-hanzi">${seg.map((s,i)=>`<span class="tc ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>`).join('')}</div>
-      ${examSettings.tonePy?`<div class="tone-py">${escapeHtml(pyNoTone)}</div>`:''}
+      ${examSettings.tonePy?`<div class="tone-py">${pyLine}</div>`:''}
       <div class="tone-btns">
         <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
         <button data-tone="1"><span class="tm">${TONE_1_ICON}</span><span class="tl">1</span></button>
@@ -4329,6 +4338,7 @@ function tonePick(n, btn){
   const seg=toneGroups[toneGI]; if(!seg) return;
   const cur=seg[toneCI];
   if(cur && cur.num===n){
+    cur.revealed=true;   // верный тон → открываем пиньинь этого иероглифа (с знаком тона)
     toneCI++;
     if(toneCI>=seg.length){
       toneCI=0; toneGI++;
@@ -4536,6 +4546,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7.8','17.10.26','Тоны: пиньинь больше не показывается сразу для всего слова — при каждом верном клике открывается пиньинь (со знаком тона) только этого иероглифа, постепенно заполняя строку под иероглифами'],
   ['1.9.7.7','17.10.26','Тоны: после верного набора тонов под кнопками на 1 секунду показывается перевод слова, затем автоматически переход к следующему слову'],
   ['1.9.7.6','17.10.26','Все модальные окна теперь непрозрачные (сплошной цвет темы) — убрано полупрозрачное правило color-mix(78%) + blur, применявшееся ко всем модалкам; ранее залитая «Настройки экзамена» стала единообразной с остальными'],
   ['1.9.7.5','17.10.26','Тоны: знаки тонов 2/3/4 тоже заменены на инлайн-SVG-стрелки (Material: north_east ↗ / call_missed_outgoing / south_east ↘, fill currentColor) — вся пятёрка кнопок тонов теперь единый SVG-стиль'],
