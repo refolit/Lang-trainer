@@ -656,6 +656,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .tone-hanzi .tc{font-size:min(20vmin,72px); font-weight:600; padding:2px 8px; border-radius:12px; color:var(--mut); background:var(--soft); line-height:1.2}
 .tone-hanzi .tc.cur{color:#fff; background:var(--red); box-shadow:0 1px 6px rgba(198,40,40,.4)}
 .tone-py{font-size:16px; color:var(--mut); text-align:center; min-height:1.4em; letter-spacing:.03em}
+.tone-tr{font-size:18px; color:var(--ink); text-align:center; min-height:1.4em; margin-top:10px; font-weight:600}
 .tone-btns{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:10px}
 .tone-btns button{
   min-width:0; padding:16px 12px; border-radius:14px; border:1.5px solid var(--line);
@@ -1083,7 +1084,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.6';
+const APP_VERSION='1.9.7.7';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4319,6 +4320,7 @@ function drawTone(){
         <button data-tone="3"><span class="tm">${TONE_3_ICON}</span><span class="tl">3</span></button>
         <button data-tone="4"><span class="tm">${TONE_4_ICON}</span><span class="tl">4</span></button>
       </div>
+      <div class="tone-tr" id="toneTr" hidden></div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
 }
@@ -4333,7 +4335,10 @@ function tonePick(n, btn){
       if(toneGI>=toneGroups.length){           // все иероглифы отмечены
         if(toneError){ examMistakeSoft(examCurrentIt); }  // была ошибка → −1
         else { examCorrect(examCurrentIt); }              // без ошибок → +1
-        examFinish(1);
+        // показываем перевод на 1 секунду, затем переходим к следующему слову
+        const tr=document.getElementById('toneTr');
+        if(tr){ tr.textContent=trJoined(examCurrentIt); tr.hidden=false; }
+        setTimeout(examFinish, 1000, 1);
         return;
       }
     }
@@ -4531,6 +4536,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7.7','17.10.26','Тоны: после верного набора тонов под кнопками на 1 секунду показывается перевод слова, затем автоматически переход к следующему слову'],
   ['1.9.7.6','17.10.26','Все модальные окна теперь непрозрачные (сплошной цвет темы) — убрано полупрозрачное правило color-mix(78%) + blur, применявшееся ко всем модалкам; ранее залитая «Настройки экзамена» стала единообразной с остальными'],
   ['1.9.7.5','17.10.26','Тоны: знаки тонов 2/3/4 тоже заменены на инлайн-SVG-стрелки (Material: north_east ↗ / call_missed_outgoing / south_east ↘, fill currentColor) — вся пятёрка кнопок тонов теперь единый SVG-стиль'],
   ['1.9.7.4','17.10.26','Тоны: переключатель «Пиньинь» теперь применяется сразу (без смены режима) — если текущее задание «Тонов», строка пиньиня скрывается/показывается мгновенно; знак первого тона «¯» заменён на инлайн-SVG-черту (Material «remove», fill currentColor — подхватывает цвет и все темы)'],
