@@ -1086,12 +1086,12 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.8';
+const APP_VERSION='1.9.7.9';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
 const SB_URL='https://njlxtfonhzqhxuklrfxs.supabase.co';
-const SB_ANON='sb_publishable_FiGJ9WPvbmBDPqaJj5NZnA_HPhIyYAs';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qbHh0Zm9uaHpxaHh1a2xyZnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3NzMxNjQsImV4cCI6MjEwNjM0OTE2NH0.QquoM9Rf8Ku4GKUlk27iXhzMkE0E_Zi2Jt7UupLwxOY';
 let SB=null;                                   // клиент Supabase (создаётся лениво, после загрузки SDK)
 const SB_OFFLINE=window.__NO_SUPABASE__===true; // в офлайн-сборке SDK заменён заглушкой
 
@@ -4546,6 +4546,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7.9','17.10.26','Вход по email: исправлен вход по ссылке с другого устройства — publishable-ключ заменён на legacy anon (JWT) и включён implicit-флоу, чтобы токен был в самой ссылке и не требовал верифаера, который оставался на исходном устройстве'],
   ['1.9.7.8','17.10.26','Тоны: пиньинь больше не показывается сразу для всего слова — при каждом верном клике открывается пиньинь (со знаком тона) только этого иероглифа, постепенно заполняя строку под иероглифами'],
   ['1.9.7.7','17.10.26','Тоны: после верного набора тонов под кнопками на 1 секунду показывается перевод слова, затем автоматически переход к следующему слову'],
   ['1.9.7.6','17.10.26','Все модальные окна теперь непрозрачные (сплошной цвет темы) — убрано полупрозрачное правило color-mix(78%) + blur, применявшееся ко всем модалкам; ранее залитая «Настройки экзамена» стала единообразной с остальными'],
@@ -6591,7 +6592,7 @@ function cleanStatsOf(lang){
 }
 function sbReady(){ return !SB_OFFLINE && !!window.supabase && typeof window.supabase.createClient==='function'; }
 function sbClient(){
-  if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON); }
+  if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON, { auth:{ flowType:'implicit' } }); }
   return SB;
 }
 async function localSessionUser(){
