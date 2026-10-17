@@ -670,6 +670,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 }
 .tone-btns button:active{transform:translateY(2px); box-shadow:0 1px 0 var(--sec-d)}
 .tone-btns button .tm{font-size:40px; color:var(--red); line-height:1}
+.tone-btns button .tm svg{display:inline-block; vertical-align:middle}
 .tone-btns button .tl{font-size:20px; color:var(--mut); font-weight:700}
 /* Кнопка нулевого тона (0): отдельной широкой строкой НАД тонами 1–4, по центру */
 .tone-btns button.zero{grid-column:1 / -1; justify-self:stretch; width:100%; min-height:64px; padding:12px 22px}
@@ -1086,7 +1087,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.3';
+const APP_VERSION='1.9.7.4';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4065,6 +4066,9 @@ function toggleExamGradual(){
 function toggleExamTonePy(){
   examSettings.tonePy=!examSettings.tonePy;
   settings.examTonePy=examSettings.tonePy; persist();
+  // применить сразу: если сейчас показывается задание «Тонов», перерисовать его без смены режима
+  const q=examSeq[examIdx];
+  if(q && q.mode==='tone') drawTone();
 }
 // сбрасывает отсчёт бездействия на новое взаимодействие (касание/ответ/рисование)
 function examTouch(){
@@ -4264,6 +4268,9 @@ function renderExamChoice(q){
 // Показываем группу, текущий иероглиф подсвечен, пиньинь БЕЗ тонов. Кнопки тонов:
 // 1 ¯ / 2 ´ / 3 ˇ / 4 ` / 0 轻声. Тон берём из pinyin-pro (toneType:'num').
 // Полная верная цепочка тонов всего слова = +1 балл; любая ошибка = −1 (слово повторяется).
+// SVG-знак первого тона (высокий ровный): горизонтальная черта как в Material «remove»,
+// инлайн + fill="currentColor" — подхватывает цвет .tm (var(--red)) и все темы.
+const TONE_1_ICON='<svg viewBox="0 -960 960 960" width="40" height="40" aria-hidden="true" fill="currentColor"><path d="M200-440v-80h560v80H200Z"/></svg>';
 const TONE_ORDER=[0,1,2,3,4];
 function toneNumOf(pyNum){
   const m=/([0-4])$/.exec(String(pyNum||''));
@@ -4308,7 +4315,7 @@ function drawTone(){
       ${examSettings.tonePy?`<div class="tone-py">${escapeHtml(pyNoTone)}</div>`:''}
       <div class="tone-btns">
         <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
-        <button data-tone="1"><span class="tm">¯</span><span class="tl">1</span></button>
+        <button data-tone="1"><span class="tm">${TONE_1_ICON}</span><span class="tl">1</span></button>
         <button data-tone="2"><span class="tm">´</span><span class="tl">2</span></button>
         <button data-tone="3"><span class="tm">ˇ</span><span class="tl">3</span></button>
         <button data-tone="4"><span class="tm">\`</span><span class="tl">4</span></button>
@@ -4525,6 +4532,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7.4','17.10.26','Тоны: переключатель «Пиньинь» теперь применяется сразу (без смены режима) — если текущее задание «Тонов», строка пиньиня скрывается/показывается мгновенно; знак первого тона «¯» заменён на инлайн-SVG-черту (Material «remove», fill currentColor — подхватывает цвет и все темы)'],
   ['1.9.7.3','17.10.26','Настройки экзамена → Подрежимы → Тоны: новый переключатель «Пиньинь» (по умолчанию включён) — включает/выключает показ пиньиня без тонов под иероглифом в заданиях «Тонов»'],
   ['1.9.7.2','17.10.26','Тоны: знаки препинания в предложениях (запятые, точки и т.п.) больше не требуют выбора тона — не-иероглифы отфильтровываются из цепочки тонов, а целиком состоящая из знаков группа пропускается'],
   ['1.9.7.1','17.10.26','Аудио: исправлено наложение озвучки при переходе к следующему слову — при смене вопроса/карточки звук гасится сразу (Player.stop()), а сетевой Google-mp3, грузившийся асинхронно, проверяет токен и не доигрывает поверх нового. «Учить»: устранена нестабильность озвучки (Chrome молча проглатывал speak() сразу после cancel() — аудио «то играло, то нет», особенно на втором круге очереди); теперь перед повторным озвучиванием ждём, пока двигатель речи сбросит признаки speaking/pending, а устаревший запуск не озвучивается вовсе'],
