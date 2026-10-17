@@ -1086,7 +1086,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.7.1';
+const APP_VERSION='1.9.7.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3708,7 +3708,7 @@ function renderWriteSettings(){
 // examSeq — упорядоченный поток заданий (слова с повтором по числу иероглифов в Письменно);
 // каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
 let examSeq=[], examIdx=0, examRight=0, examWrong=[];
-let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false};
+let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false, tonePy:true};
 let examAudioOn=true; // 🔊 Аудио в Экзамене (по умолчанию, как и в Письме)
 let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
 let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
@@ -4004,6 +4004,12 @@ function renderExamSettings(){
       ${showTone?`<div class="menu-item">
         <div class="mi-label">Тоны<span class="mi-hint">Указать тон каждого иероглифа (только китайский)</span></div>
         <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="tone"></button>
+      </div>
+      <div class="exam-sub">
+        <div class="menu-item">
+          <div class="mi-label">Пиньинь<span class="mi-hint">Показывать пиньинь без тонов под иероглифом</span></div>
+          <button class="sn-switch ${examSettings.tonePy?'on':''}" data-exam-key="tonePy"></button>
+        </div>
       </div>`:''}
       <div class="menu-item">
         <div class="mi-label">Подбор<span class="mi-hint">Соединить иероглиф и перевод</span></div>
@@ -4024,6 +4030,7 @@ function renderExamSettings(){
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
       else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
       else if(k==='gradual'){ toggleExamGradual(); renderExamSettings(); }
+      else if(k==='tonePy'){ toggleExamTonePy(); renderExamSettings(); }
     };
   });
   m.querySelectorAll('#examChoiceSeg button').forEach(b=>{
@@ -4054,6 +4061,10 @@ function renderExamSettings(){
 function toggleExamGradual(){
   examGradual=!examGradual;
   settings.examGradual=examGradual; persist();
+}
+function toggleExamTonePy(){
+  examSettings.tonePy=!examSettings.tonePy;
+  settings.examTonePy=examSettings.tonePy; persist();
 }
 // сбрасывает отсчёт бездействия на новое взаимодействие (касание/ответ/рисование)
 function examTouch(){
@@ -4273,9 +4284,10 @@ function buildToneGroups(hanzi){
       ch,
       py:String(pys[i]||'').replace(/[0-4]$/,''),
       num:toneNumOf(pys[i])
-    })));
+    })).filter(s=>/[a-z]/i.test(s.py)));   // знаки препинания (и не-иероглифы) не получают тон — пропускаем
   }
-  return out;
+  // после фильтрации пунктуации группа могла стать пустой (одни знаки) — убираем её
+  return out.filter(g=>g.length);
 }
 function renderExamTone(q){
   const it=q.it;
@@ -4293,7 +4305,7 @@ function drawTone(){
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
       <div class="tone-hanzi">${seg.map((s,i)=>`<span class="tc ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>`).join('')}</div>
-      <div class="tone-py">${escapeHtml(pyNoTone)}</div>
+      ${examSettings.tonePy?`<div class="tone-py">${escapeHtml(pyNoTone)}</div>`:''}
       <div class="tone-btns">
         <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
         <button data-tone="1"><span class="tm">¯</span><span class="tl">1</span></button>
@@ -4513,6 +4525,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.7.2','17.10.26','Тоны: знаки препинания в предложениях (запятые, точки и т.п.) больше не требуют выбора тона — не-иероглифы отфильтровываются из цепочки тонов, а целиком состоящая из знаков группа пропускается'],
   ['1.9.7.1','17.10.26','Аудио: исправлено наложение озвучки при переходе к следующему слову — при смене вопроса/карточки звук гасится сразу (Player.stop()), а сетевой Google-mp3, грузившийся асинхронно, проверяет токен и не доигрывает поверх нового. «Учить»: устранена нестабильность озвучки (Chrome молча проглатывал speak() сразу после cancel() — аудио «то играло, то нет», особенно на втором круге очереди); теперь перед повторным озвучиванием ждём, пока двигатель речи сбросит признаки speaking/pending, а устаревший запуск не озвучивается вовсе'],
   ['1.9.7','17.10.26','Настройки экзамена — две вкладки «Общие»/«Подрежимы» (как в «Ещё»): Общие — Аудио/Задержка аудио/Все переводы; Подрежимы — Верно-неверно (вложенные «Постепенно» и «Постепенно через»), Выбор ответов (вложенное «Число вариантов» 4/6/8/10), Тоны (переименовано из «Тон-тест»), Подбор; кнопка «Сбросить изменения» убрана. «Подбор» стал настоящим подрежимом: включается переключателем, участвует в общей ротации всех включённых режимов, один раунд из 5 пар (текущее слово + случайные), как только все пары угаданы — раунд заканчивается и экзамен идёт к следующему случайному режиму; без ошибок = +1 балл, с ошибкой — повтор слов и без балла. Тоны: кнопка нулевого тона перенесена наверх над тонами 1–2, кнопки тонов 1–4 — 2 в ряд на всю ширину, надписи (черта тона/цифра) заметно крупнее'],
   ['1.9.6','16.10.26','Экзамен: исправлено «заикание» аудио — озвучка запускалась дважды на вопрос (второй цикл повтора гасил первый на полуслоге); при включённом «Постепенно» аудио теперь играет после раскрытия перевода (иероглиф → пиньинь → перевод → аудио), ползунок переименован в «Постепенно через»; строка «1/84 · ⚙» отодвинута от кнопки «Верно» и показывает ту же SVG-шестерёнку, что в шапке; окно «Настройки экзамена» полностью непрозрачное. Тон-тест: 4 кнопки тонов сеткой 2×2 одинакового размера, кнопка нулевого тона «0» (без «轻声») по центру внизу; цифры +3px, черточка тона +5px; неверный тон — красная вспышка, но тест не прерывается, продолжается до отметки всех иероглифов (ошибка = −1 в конце, без ошибок = +1)'],
@@ -6751,7 +6764,7 @@ async function boot(){
   if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
   if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
   stats=statsByLang[activeLang];
-  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch};
+  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch, tonePy:settings.examTonePy!==false};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
   examAudioDelay=Number(settings.examAudioDelay)||0;
