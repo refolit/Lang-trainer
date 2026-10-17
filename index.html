@@ -642,14 +642,14 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Экзамен: пиньинь-подсказка (маленькая) */
 .exam-py{font-size:14px; color:var(--amber); text-align:center; min-height:1.2em}
 
-/* Статусная строка экзамена «1/84 · ⚙» — внизу над кнопкой «Верно» (только Верно-неверно) */
-.exam-status-line{
-  margin-top:10px; margin-bottom:14px; text-align:center; font-size:12px; color:var(--mut); font-weight:700;
-  letter-spacing:.03em; min-height:1.4em;
-  display:flex; align-items:center; justify-content:center; gap:6px;
+/* Нижняя статусная строка экзамена: бейдж фильтра + счётчик «N/M» + шестерёнка.
+   Закреплена внизу экрана над нижним меню, но НЕ прилипает к нему — с воздухом сверху и снизу. */
+.exam-status-bar{
+  flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  width:100%; max-width:600px; margin:14px auto 18px;
+  min-height:34px;
 }
-.exam-status-line svg{width:16px; height:16px; flex:0 0 auto}
-.exam-status-line svg path{fill:currentColor; stroke:none}
 
 /* Тон-тест: подсветка текущего иероглифа и кнопки тонов */
 .tone-hanzi{display:flex; flex-wrap:wrap; justify-content:center; gap:6px; font-family:var(--font-cjk)}
@@ -805,12 +805,14 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
   <!-- ЭКЗАМЕН -->
   <section class="screen" id="scr-exam">
-    <div class="mode-top exam-top">
-      <span class="chip" id="examProgress"></span>
+    <div id="examBody" style="display:flex; flex-direction:column; align-items:center; width:100%; max-width:600px; margin:0 auto"></div>
+    <!-- Нижняя статусная строка (единая для всех подрежимов): бейдж фильтра + счётчик «N/M» + шестерёнка настроек.
+         Закреплена внизу экрана, над нижним меню (nav.tabs). -->
+    <div class="exam-status-bar">
       <span class="flt-mode-badge hidden" id="examFltBadge"></span>
+      <span class="chip" id="examProgress"></span>
       <button class="study-gear light" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
     </div>
-    <div id="examBody" style="display:flex; flex-direction:column; align-items:center; width:100%; max-width:600px; margin:0 auto"></div>
     <div class="empty hidden" id="examEmpty">
       <span class="big-ic">📭</span>
       <div>Для экзамена нужно хотя бы 4 слова.</div>
@@ -1086,7 +1088,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.8.0';
+const APP_VERSION='1.9.8.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3785,20 +3787,10 @@ function startExam(){
   nextExamQ();
 }
 function updateExamScore(){
-  document.getElementById('examProgress').textContent=(examIdx)+'/'+examSeq.length;
-}
-// Статусная строка экзамена: «1/84 · ⚙» внизу над кнопкой «Верно» (только Верно-неверно).
-// Счётчик «✓ N» убран со страницы — итог виден в конце экзамена (showExamResult).
-function updateExamStatusLine(q){
-  const el=document.getElementById('examStatusLine');
-  if(!el) return;
-  if(q && q.mode==='tf'){
-    el.classList.remove('hidden');
-    // та же материальная SVG-шестерёнка, что в шапке экзамена (а не эмодзи «⚙»)
-    el.innerHTML='<span>'+(examIdx+1)+'/'+examSeq.length+'</span>'+GEAR_ICON;
-  } else {
-    el.classList.add('hidden');
-  }
+  const total=examSeq.length;
+  // Счётчик «с единицы»: «1/384» в начале, «384/384» в конце. Пустая сессия → «0/0».
+  const n=total ? Math.min(examIdx+1, total) : 0;
+  document.getElementById('examProgress').textContent=n+'/'+total;
 }
 function updateExamToggleUI(){
   syncExamChoiceSeg();
@@ -3827,7 +3819,6 @@ function nextExamQ(){
   else if(q.mode==='tone') renderExamTone(q);
   else if(q.mode==='match'){ matchStart(); }
   else renderExamTF(q);
-  updateExamStatusLine(q);
   // Озвучку запускает сам рендер вопроса (renderExamTF/Choice/Tone → examSpeakDelayed),
   // повторный вызов здесь создавал второй конкурирующий цикл повтора, который Player.stop()
   // гасил на полуслоге → «заикание» и обрыв озвучки. «Подбор» озвучивает по клику сам.
@@ -4186,7 +4177,6 @@ function renderExamTF(q){
       <div class="exam-py" id="tfPy" style="${eqSizesStyle(it.hanzi,{py:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(py)}</div>
       <div class="eq-tr" id="tfTr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(tr)}</div>
     </div>
-    <div class="exam-status-line" id="examStatusLine"></div>
     <div class="btn-col">
       <button class="btn ok" data-v="1">Верно</button>
       <button class="btn warn" data-v="0">Не верно</button>
@@ -4197,7 +4187,6 @@ function renderExamTF(q){
     if(taskOk){ examCorrect(it); examFinish(1); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
-  updateExamStatusLine(q);
   // «Постепенно» (Верно-неверно): иероглиф → (x) → пиньинь → (x) → перевод → (x) → аудио.
   // Аудио при включённом «Постепенно» звучит только ПОСЛЕ раскрытия перевода (не сразу).
   if(examGradual && examGradualDelay>0){
@@ -4340,19 +4329,22 @@ function tonePick(n, btn){
   if(cur && cur.num===n){
     cur.revealed=true;   // верный тон → открываем пиньинь этого иероглифа (с знаком тона)
     toneCI++;
+    drawTone();          // сразу показать открывшийся пиньинь (в т.ч. последнего иероглифа группы)
     if(toneCI>=seg.length){
       toneCI=0; toneGI++;
       if(toneGI>=toneGroups.length){           // все иероглифы отмечены
         if(toneError){ examMistakeSoft(examCurrentIt); }  // была ошибка → −1
         else { examCorrect(examCurrentIt); }              // без ошибок → +1
-        // показываем перевод на 1 секунду, затем переходим к следующему слову
+        // пиньинь последнего иероглифа уже открыт (drawTone выше); показываем перевод
+        // на 1 секунду, затем переходим к следующему слову
         const tr=document.getElementById('toneTr');
         if(tr){ tr.textContent=trJoined(examCurrentIt); tr.hidden=false; }
         setTimeout(examFinish, 1000, 1);
         return;
       }
+      // следующая группа — через короткую паузу, чтобы успеть увидеть открывшийся пиньинь
+      setTimeout(drawTone, 700);
     }
-    drawTone();
   }else{
     // неверный тон: красная вспышка на кнопке, тест НЕ заканчивается —
     // просто фиксируем ошибку и продолжаем, пока не отмечены все иероглифы.
@@ -4546,6 +4538,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.8.1','18.10.26','Экзамен: статусная строка (счётчик + бейдж фильтра + шестерёнка настроек) перенесена из шапки вниз, под кнопки ответов, во всех подрежимах; счётчик теперь «с единицы». Тоны: исправлено — при верном выборе 2-го/3-го иероглифа его пиньинь (со знаком тона) теперь открывается'],
   ['1.9.8.0','17.10.26','Профиль: имя пользователя сохраняется в Supabase (profiles.name) при сохранении в приложении и подтягивается обратно при входе с нового устройства — в панели автора видна связка «имя + email»'],
   ['1.9.7.9','17.10.26','Вход по email: исправлен вход по ссылке с другого устройства — publishable-ключ заменён на legacy anon (JWT) и включён implicit-флоу, чтобы токен был в самой ссылке и не требовал верифаера, который оставался на исходном устройстве'],
   ['1.9.7.8','17.10.26','Тоны: пиньинь больше не показывается сразу для всего слова — при каждом верном клике открывается пиньинь (со знаком тона) только этого иероглифа, постепенно заполняя строку под иероглифами'],
