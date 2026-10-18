@@ -54,7 +54,7 @@ html[data-theme="blue"]{
 html,body{margin:0;padding:0;height:100%}
 body{
   background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,var(--font-cjk),sans-serif;
-  overflow:hidden; height:100vh; height:100dvh; display:flex; flex-direction:column;
+  overflow:hidden; height:100dvh; display:flex; flex-direction:column;
 }
 h1,h2,h3{margin:0}
 button{font-family:inherit;cursor:pointer}
@@ -460,16 +460,16 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .wrap::-webkit-scrollbar{display:none}
 .wrap.grabbing{cursor:grabbing}
 .months{position:relative; height:18px}
-.months span{position:absolute; top:0; font-size:13px; color:var(--mut); white-space:nowrap}
+.months span{position:absolute; top:0; font-size:12px; color:var(--mut); white-space:nowrap}
 .grid{display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,16px); grid-auto-columns:16px; gap:2px}
 .cell{position:relative; width:16px; height:16px; border-radius:4px; background:var(--soft2); color:var(--mut);
-  font-size:13px; line-height:16px; text-align:center; font-weight:500}
+  font-size:12px; line-height:16px; text-align:center; font-weight:500}
 .cell.on{background:var(--red); color:#fff; font-weight:700}
 .cell.future{background:transparent; color:transparent}
 .cell .dot{position:absolute; right:0; top:0; width:5px; height:5px; border-radius:50%; background:#777; transform:translate(50%,-50%)}
 .cell.on .dot{background:#eee}
 .days{flex:0 0 auto; display:flex; flex-direction:column; gap:2px; padding-top:18px}
-.days span{height:16px; line-height:16px; font-size:13px; color:var(--mut)}
+.days span{height:16px; line-height:16px; font-size:12px; color:var(--mut)}
 
 /* Выпадающий выбор периода (▾) */
 .dd{position:relative; flex:0 0 auto}
@@ -1118,7 +1118,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.12';
+const APP_VERSION='1.9.13';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1624,6 +1624,17 @@ function youdaoTtsURL(text, tag){
   if(lang.startsWith('en')) return YOUDAO_TTS.replace('TXT', encodeURIComponent(String(text).slice(0,100)));
   return null;
 }
+// Baidu gettts (третий сетевой источник): zh/en. Нужен как ещё одна альтернатива, когда
+// Google translate_tts блокируется (напр. DuckDuckGo режет Google-домены как трекеры).
+const BAIDU_TTS='https://fanyi.baidu.com/gettts?lan=TXT&text=Q&spd=3&source=web';
+function baiduTtsURL(text, tag){
+  const lang=(tag||'').toLowerCase();
+  let lan=null;
+  if(lang.startsWith('zh')) lan='zh';
+  else if(lang.startsWith('en')) lan='en';
+  if(!lan) return null;
+  return BAIDU_TTS.replace('TXT', lan).replace('Q', encodeURIComponent(String(text).slice(0,100)));
+}
 // Пробует загрузить mp3 по url: canplay в пределах timeout; error/таймаут → null.
 function tryRemoteAudio(url, timeout){
   return new Promise(res=>{
@@ -1646,6 +1657,7 @@ async function fetchRemoteTTS(text, langTag){
   const tag=(langTag||ttsLang()||'zh-CN').toLowerCase();
   const gUrl=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tag))+encodeURIComponent(t.slice(0,MAX));
   const yUrl=youdaoTtsURL(t, tag);
+  const bUrl=baiduTtsURL(t, tag);
   // 1) Google translate_tts: до 2 попыток, таймаут 4 с (раньше 1,5 — сервер иногда не успевал отдать canplay).
   for(let i=0;i<2;i++){
     const a=await tryRemoteAudio(gUrl, 4000);
@@ -1654,6 +1666,11 @@ async function fetchRemoteTTS(text, langTag){
   // 2) Youdao dictvoice (zh/en) — чтобы не было тишины, если Google недоступен.
   if(yUrl){
     const a=await tryRemoteAudio(yUrl, 4000);
+    if(a) return a;
+  }
+  // 3) Baidu gettts (zh/en) — ещё одна альтернатива (DuckDuckGo и т.п. не блокируют Baidu).
+  if(bUrl){
+    const a=await tryRemoteAudio(bUrl, 4000);
     if(a) return a;
   }
   return null;
@@ -4786,6 +4803,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.13','18.10.26','Кнопки «Учить» больше не «прилипают» к нижнему меню (убрана лишняя страховка height:100vh, которая на старых Chrome/DuckDuckGo растягивала экран выше видимой области — статусная строка и шестерёнка снова видны). Озвучка: добавлен третий сетевой источник Baidu (zh/en) на случай блокировки Google-TTS. Синхронизация: перед сохранением склеиваются дубликаты карточек, а при ошибке показывается её текст. Календарь статистики: шрифт −1px (13→12) для влезания цифр в ячейку на узких экранах'],
   ['1.9.12','18.10.26','Аудио: прогрев при первом касании теперь разблокирует и HTML-audio (Google-TTS mp3), а не только speechSynthesis — на старых Chrome (Android) озвучка не блокировалась бы политикой автовоспроизведения (звук пропадал на всех языках, хотя mp3 скачивался). Окно конфликтов синхронизации: добавлена страховка высоты через 100vh — на старых браузерах, не знающих dvh, лист снова прокручивается до кнопки «Применить»'],
   ['1.9.11','18.10.26','Озвучка на английском (и других языках): исправлен подбор локального голоса — префикс языка ломался лишним удалением дефиса (en-US→enus), из-за чего ни один голос устройства не находился и всё зависело от сети; теперь голос находится правильно, а если сетевой mp3 не загрузился — вместо тишины проигрывается локальный голос устройства'],
   ['1.9.10','18.10.26','Экзамен: новый подрежим «Письмо» (в настройках экзамена) — из случайного подрежима переносит на ОДНО слово на написание и возвращает обратно; пишутся только отдельные слова (предложения не участвуют), верное написание = +1 балл, ошибка штриха/слова = ошибка экзамена (серия сбрасывается, слово в конец очереди, уровень не растёт). Аудио: прогрев Google-озвучки стал надёжнее — mp3 гарантированно оседает в постоянном кэше (переживает обновления), реже «не грузятся»'],
@@ -6811,6 +6829,9 @@ async function doSync(){
     // --- сохранение локально (подписи подгоняем, чтобы persist не сдвинул таймстампы) ---
     _sigSet=settingsSig(settings);
     for(const lg of Object.keys(statsByLang)) _sigStatsMap[lg]=statsSig(statsByLang[lg]);
+    // Страховка от дублей: какой бы исход мержа ни был, перед записью локально склеиваем
+    // одинаковые карточки (язык+слово) — дубли не осядут в IndexedDB.
+    makeLocalUnique();
     await persist(); await refreshAll();
     lastSyncAt=now();
     await saveMeta();
@@ -6832,9 +6853,10 @@ async function doSync(){
     // откат к снапшоту — локальные данные не тронуты
     items=snap.items; settings=snap.settings; statsByLang=snap.statsByLang; stats=statsByLang[activeLang]; _sigSet=snap.sigSet; _sigStatsMap=snap.sigStats;
     const msg=String(e&&e.message||e);
+    console.error('Синхронизация: ошибка:', e);
     if(/fetch|network|Failed to fetch/i.test(msg)) syncStatus('Нет соединения — не синхронизировано','off');
     else if(/войдите|Сначала/i.test(msg)) syncStatus('Войдите, чтобы синхронизировать','');
-    else syncStatus('Ошибка синхронизации','off');
+    else syncStatus('Ошибка синхронизации: '+(msg.slice(0,80)||'неизвестно'),'off');
   }finally{
     syncBusy=false; setSyncEnabled(!!_syncUser && !syncNetDown());
   }
