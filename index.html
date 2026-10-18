@@ -54,7 +54,7 @@ html[data-theme="blue"]{
 html,body{margin:0;padding:0;height:100%}
 body{
   background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,var(--font-cjk),sans-serif;
-  overflow:hidden; height:100dvh; display:flex; flex-direction:column;
+  overflow:hidden; height:100vh; height:100dvh; display:flex; flex-direction:column;
 }
 h1,h2,h3{margin:0}
 button{font-family:inherit;cursor:pointer}
@@ -401,7 +401,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Modal */
 .modal{position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:100; display:flex; align-items:center; justify-content:center; padding:12px}
-.modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px 20px; max-height:calc(100dvh - 24px); overflow-y:auto}
+.modal .sheet{background:var(--bg); width:100%; max-width:560px; border-radius:22px; padding:16px 16px 20px; max-height:calc(100vh - 24px); max-height:calc(100dvh - 24px); overflow-y:auto}
 /* Все модалки непрозрачные (сплошной var(--bg)); .solid оставлен для совместимости — без эффекта. */
 .modal h2{font-size:18px; margin-bottom:4px}
 
@@ -1118,7 +1118,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.11';
+const APP_VERSION='1.9.12';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4786,6 +4786,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.12','18.10.26','Аудио: прогрев при первом касании теперь разблокирует и HTML-audio (Google-TTS mp3), а не только speechSynthesis — на старых Chrome (Android) озвучка не блокировалась бы политикой автовоспроизведения (звук пропадал на всех языках, хотя mp3 скачивался). Окно конфликтов синхронизации: добавлена страховка высоты через 100vh — на старых браузерах, не знающих dvh, лист снова прокручивается до кнопки «Применить»'],
   ['1.9.11','18.10.26','Озвучка на английском (и других языках): исправлен подбор локального голоса — префикс языка ломался лишним удалением дефиса (en-US→enus), из-за чего ни один голос устройства не находился и всё зависело от сети; теперь голос находится правильно, а если сетевой mp3 не загрузился — вместо тишины проигрывается локальный голос устройства'],
   ['1.9.10','18.10.26','Экзамен: новый подрежим «Письмо» (в настройках экзамена) — из случайного подрежима переносит на ОДНО слово на написание и возвращает обратно; пишутся только отдельные слова (предложения не участвуют), верное написание = +1 балл, ошибка штриха/слова = ошибка экзамена (серия сбрасывается, слово в конец очереди, уровень не растёт). Аудио: прогрев Google-озвучки стал надёжнее — mp3 гарантированно оседает в постоянном кэше (переживает обновления), реже «не грузятся»'],
   ['1.9.9.0','18.10.26','Синхронизация: исправлен ложный конфликт после экзамена (поле trs «Перевод 2–5» терялось при записи в облако и давало дрейф контент-сигнатуры) — прогресс теперь уходит в облако автоматически. Конфликты: переключатель «Локально/Облако» стал ярко-красным, детали сравнения показывают актуальные даты. Тоны: пиньинь открывается под своим иероглифом, последний верный тон мигает зелёным. Подбор: карточки ниже и крупнее, аудио при клике звучит мгновенно. Ноутбук: крупнее шрифт в «Учить»/«Экзамен», убран горизонтальный сдвиг сайта, компактнее нижняя строка экзамена'],
@@ -6062,16 +6063,26 @@ bindModalDismiss();
 // без какого-либо звука (говорим пустую строку, которую сразу отменяем).
 function unlockAudio(){
   if(audioUnlocked) return;
-  if(!('speechSynthesis' in window)){ audioUnlocked=true; return; }
+  audioUnlocked=true;
+  // Прогреваем и HTML-audio (путь Google-TTS mp3), а не только speechSynthesis:
+  // на старых Chrome (Android) a.play() для сетевого mp3, сыгранного ВНЕ жеста пользователя,
+  // блокируется политикой автовоспроизведения. Беззвучный (muted) пустой Audio внутри
+  // первого касания снимает блокировку; на устройствах, где звук и так работает, — ничего не меняет.
+  try{
+    const a=new Audio(); a.muted=true; a.setAttribute('playsinline','');
+    const p=a.play();
+    if(p && p.then){ p.then(()=>{ a.pause(); }).catch(()=>{}); }
+  }catch(e){}
+  if(!('speechSynthesis' in window)) return;
   try{
     const u=new SpeechSynthesisUtterance(' ');
     u.volume=0; u.rate=1;
-    u.onend=u.onerror=()=>{ audioUnlocked=true; };
+    u.onend=u.onerror=()=>{};
     speechSynthesis.cancel();
     speechSynthesis.speak(u);
     // на случай, если событие не пришло — всё равно считаем разблокированным
-    setTimeout(()=>{ try{ speechSynthesis.cancel(); }catch(e){} audioUnlocked=true; }, 800);
-  }catch(e){ audioUnlocked=true; }
+    setTimeout(()=>{ try{ speechSynthesis.cancel(); }catch(e){} }, 800);
+  }catch(e){}
 }
 function bindAudioLifecycle(){
   ['pointerdown','touchend','keydown'].forEach(ev=>document.addEventListener(ev, unlockAudio, {passive:true, once:true}));
