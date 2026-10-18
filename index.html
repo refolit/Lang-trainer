@@ -416,7 +416,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .mini-select{width:auto; font-size:12px; padding:6px 8px; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink)}
 /* Память: горизонтальные бары */
 .hmbar{display:flex; align-items:center; gap:9px; margin:8px 0}
-.hmbar .lb{flex:0 0 124px; font-size:11px; color:var(--mut); text-align:right; line-height:1.25}
+.hmbar .lb{flex:0 0 124px; font-size:11px; color:var(--mut); text-align:left; line-height:1.25}
 .hmbar .track{flex:1; height:15px; background:var(--soft); border-radius:8px; overflow:hidden}
 .hmbar .fill{height:100%; background:var(--red); border-radius:8px 0 0 8px}
 .hmbar .num{flex:0 0 22px; font-size:12.5px; font-weight:800; color:var(--ink)}
@@ -1118,7 +1118,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.13';
+const APP_VERSION='1.9.13.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4803,6 +4803,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.13.1','19.10.26','Синхронизация: исправлена ошибка RLS «new row violates row-level security policy» на DuckDuckGo/Redmi — из-за детерминированных id карточек одинаковое слово у РАЗНЫХ аккаунтов получало один id и upsert лез в чужую строку; теперь конфликт решается по паре user_id+id (нужен новый SQL phase10: составной первичный ключ cards). Статистика: на графиках «Слова» и «История» добавлена нулевая ось y=0 — столбики больше не «висят в воздухе»; подписи «Уровень 1–5» в блоке «Память» выровнены по левому краю.'],
   ['1.9.13','18.10.26','Кнопки «Учить» больше не «прилипают» к нижнему меню (убрана лишняя страховка height:100vh, которая на старых Chrome/DuckDuckGo растягивала экран выше видимой области — статусная строка и шестерёнка снова видны). Озвучка: добавлен третий сетевой источник Baidu (zh/en) на случай блокировки Google-TTS. Синхронизация: перед сохранением склеиваются дубликаты карточек, а при ошибке показывается её текст. Календарь статистики: шрифт −1px (13→12) для влезания цифр в ячейку на узких экранах'],
   ['1.9.12','18.10.26','Аудио: прогрев при первом касании теперь разблокирует и HTML-audio (Google-TTS mp3), а не только speechSynthesis — на старых Chrome (Android) озвучка не блокировалась бы политикой автовоспроизведения (звук пропадал на всех языках, хотя mp3 скачивался). Окно конфликтов синхронизации: добавлена страховка высоты через 100vh — на старых браузерах, не знающих dvh, лист снова прокручивается до кнопки «Применить»'],
   ['1.9.11','18.10.26','Озвучка на английском (и других языках): исправлен подбор локального голоса — префикс языка ломался лишним удалением дефиса (en-US→enus), из-за чего ни один голос устройства не находился и всё зависело от сети; теперь голос находится правильно, а если сетевой mp3 не загрузился — вместо тишины проигрывается локальный голос устройства'],
@@ -5484,8 +5485,14 @@ function renderStWords(){
 
   let yGrid='', yTicks='';
   for(let v=0; v<=max; v+=max/4){
-    if(v<=0) continue;
     const yy=PT+H*(1-v/max);
+    if(v<=0){
+      // Нулевая ось: столбики/линия опираются на неё, а не «висят в воздухе» (раньше линию
+      // на y=0 пропускали — видны были только 2.5/5/7.5/10, а база отсутствовала).
+      yGrid+='<line x1="'+PL+'" y1="'+yy+'" x2="'+(PL+W)+'" y2="'+yy+'" stroke="#ccc" stroke-width="1"/>';
+      yTicks+='<text class="ax" x="'+(PL-5)+'" y="'+(yy+3)+'" text-anchor="end">0</text>';
+      continue;
+    }
     yGrid+='<line x1="'+PL+'" y1="'+yy+'" x2="'+(PL+W)+'" y2="'+yy+'" stroke="#eee" stroke-width="1"/>';
     yTicks+='<text class="ax" x="'+(PL-5)+'" y="'+(yy+3)+'" text-anchor="end">'+Math.round(v*10)/10+'</text>';
   }
@@ -5623,8 +5630,13 @@ function renderStHist(){
 
   let yGrid='', yTicks='';
   for(let v=0; v<=max; v+=max/4){
-    if(v<=0) continue;
     const yy=PT+H*(1-v/max);
+    if(v<=0){
+      // Нулевая ось: столбики опираются на неё (раньше y=0 пропускали — базы не было).
+      yGrid+='<line x1="'+plotL+'" y1="'+yy+'" x2="'+plotR+'" y2="'+yy+'" stroke="#ccc" stroke-width="1"/>';
+      yTicks+='<text class="ax" x="'+(plotL-5)+'" y="'+(yy+3)+'" text-anchor="end">0</text>';
+      continue;
+    }
     yGrid+='<line x1="'+plotL+'" y1="'+yy+'" x2="'+plotR+'" y2="'+yy+'" stroke="#eee" stroke-width="1"/>';
     yTicks+='<text class="ax" x="'+(plotL-5)+'" y="'+(yy+3)+'" text-anchor="end">'+Math.round(v*10)/10+'</text>';
   }
@@ -6435,7 +6447,7 @@ async function pushCard(it, u){
   const r=await sbClient().from('cards').upsert({
     id:it.id, user_id:u.id, lang:langOf(it), data:cloudCard(it),
     updated_at:it.updated_at||0, prog_at:it.prog_at||0
-  },{onConflict:'id'});
+  },{onConflict:'user_id,id'});
   if(r.error) throw r.error;
 }
 // Копируем контент из источника (облако) в цель. Аудио: облачные слоты (speed+name+path),
@@ -6681,7 +6693,7 @@ async function doSync(){
         items.splice(i,1); i--;
         // облачную строку обновим обычным пушем: проставим merged-прогресс выжившему
         cloudById[clRow.id]={u:survIt.updated_at||0, pu:survIt.prog_at||0, data:cloudCard(survIt), lang:survIt.lang};
-        const pu=await sbClient().from('cards').upsert({id:clRow.id, user_id:u.id, lang:survIt.lang, data:cloudCard(survIt), updated_at:survIt.updated_at||0, prog_at:survIt.prog_at||0},{onConflict:'id'});
+        const pu=await sbClient().from('cards').upsert({id:clRow.id, user_id:u.id, lang:survIt.lang, data:cloudCard(survIt), updated_at:survIt.updated_at||0, prog_at:survIt.prog_at||0},{onConflict:'user_id,id'});
         if(pu.error) throw pu.error;
         continue;
       }
