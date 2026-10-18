@@ -233,7 +233,10 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 #writeTr.type-tr{font-size:18px; max-width:100%}
 .type-in{width:88%; max-width:340px; padding:12px 14px; font-size:18px; text-align:center; border-radius:12px; border:1.5px solid var(--line); margin-top:12px; background:var(--card); color:var(--ink)}
 .type-btn{margin-top:12px; width:auto; padding:10px 24px}
-#examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px}
+#examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
+/* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
+#examWriteArea.good{outline:3px solid var(--green); animation:badShake 1s ease}
+#examWriteArea.bad{outline:3px solid var(--red); animation:badShake 1s ease}
 #writeTr{font-size:15px; color:var(--mut); text-align:center; margin-top:2px; line-height:1.4; max-width:92%}
 #writeList{max-width:560px; margin:14px auto 0; display:flex; flex-wrap:wrap; gap:7px; align-items:center; justify-content:flex-start}
 .wl-zh-pill{font-family:var(--font-cjk); font-size:19px; padding:4px 12px; border-radius:12px; background:var(--soft); color:var(--mut); cursor:pointer; line-height:1.4; border:1px solid transparent}
@@ -1115,7 +1118,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.9.0';
+const APP_VERSION='1.9.10';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1781,9 +1784,19 @@ function prefetchGoogleTTS(text, tag){
     if(!t) return;
     const tt=(tag||ttsLang()||'zh-CN').toLowerCase();
     const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tt))+encodeURIComponent(t);
+    // Надёжный прогрев (правки 18.10.26): ждём canplay, а не просто ставим src=.
+    // Раньше src= лишь «просил» браузер начать загрузку, и при нестабильном Google-сервере
+    // mp3 мог не докачаться и не осесть в постоянный кэш — отсюда «периодически не грузятся».
+    // Теперь дожидаемся успеха (canplay) — SW гарантированно кладёт mp3 в hanzi-trainer-tts.
     const a=new Audio(); a.preload='auto';
-    a.src=url;                                   // просто подписка на src запускает загрузку → SW кэширует
-    setTimeout(()=>{ try{ a.src=''; }catch(e){} }, 60000);  // отпускаем объект
+    let done=false;
+    const finish=()=>{ if(done) return; done=true; try{ a.removeEventListener('canplay',onCan); a.removeEventListener('error',onErr); a.src=''; }catch(e){} };
+    const onCan=()=>finish();
+    const onErr=()=>finish();
+    a.addEventListener('canplay', onCan, {once:true});
+    a.addEventListener('error', onErr, {once:true});
+    a.src=url;
+    setTimeout(finish, 15000); // страховка: не держим объект дольше 15 с (сервер мог не ответить)
   }catch(e){}
 }
 // Слова впереди по очереди (Учить/Экзамен), у которых нет своего mp3 — только синтез.
@@ -3743,7 +3756,7 @@ function renderWriteSettings(){
 // examSeq — упорядоченный поток заданий (слова с повтором по числу иероглифов в Письменно);
 // каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
 let examSeq=[], examIdx=0, examRight=0, examWrong=[];
-let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false, tonePy:true};
+let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false, write:false, tonePy:true};
 let examAudioOn=true; // 🔊 Аудио в Экзамене (по умолчанию, как и в Письме)
 let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
 let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
@@ -3763,7 +3776,7 @@ function examPickTr(it){
   return all[Math.floor(Math.random()*all.length)];
 }
 function examChoiceN(){ return examSettings.choiceN||8; }
-function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, match:!!examSettings.match}; }
+function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, match:!!examSettings.match, write:!!examSettings.write}; }
 const EXAM_MIN_GAP=5; // слово нельзя повторить, пока не прошло 5 других заданий
 
 // Поточное формирование заданий экзамена. Для каждого слова из очереди — по одному
@@ -3784,6 +3797,8 @@ function examBuildSeq(){
   if(sep.tone && hasStrokes()) modeOrder.push('tone');
   // подбор: один раунд из 5 пар на «задание» — участвует в общей ротации
   if(sep.match) modeOrder.push('match');
+  // письмо: одно слово на задание; участвует в ротации только если есть что писать
+  if(sep.write && examWritePool().length) modeOrder.push('write');
   if(!modeOrder.length || !pool.length) return [];
   const total=pool.length*modeOrder.length;
   const seq=[];
@@ -3851,6 +3866,7 @@ function nextExamQ(){
   else if(q.mode==='choice') renderExamChoice(q);
   else if(q.mode==='tone') renderExamTone(q);
   else if(q.mode==='match'){ matchStart(); }
+  else if(q.mode==='write') renderExamWrite(q);
   else renderExamTF(q);
   // Озвучку запускает сам рендер вопроса (renderExamTF/Choice/Tone → examSpeakDelayed),
   // повторный вызов здесь создавал второй конкурирующий цикл повтора, который Player.stop()
@@ -3940,8 +3956,8 @@ function toggleExamAllTr(){
 function toggleExamMode(k){
   examSettings[k]=!examSettings[k];
   // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
-  if(!examSettings.tf && !examSettings.choice && !examSettings.tone && !examSettings.match){ examSettings[k]=true; }
-  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone; settings.examMatch=!!examSettings.match;
+  if(!examSettings.tf && !examSettings.choice && !examSettings.tone && !examSettings.match && !examSettings.write){ examSettings[k]=true; }
+  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone; settings.examMatch=!!examSettings.match; settings.examWrite=!!examSettings.write;
   persist();
   // П.2: переключение режима перестраивает очередь, чтобы выключенный режим перестал давать задания
   if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
@@ -4039,6 +4055,10 @@ function renderExamSettings(){
         <div class="mi-label">Подбор<span class="mi-hint">Соединить иероглиф и перевод</span></div>
         <button class="sn-switch ${examSettings.match?'on':''}" data-exam-key="match"></button>
       </div>
+      <div class="menu-item">
+        <div class="mi-label">Письмо<span class="mi-hint">Написать слово (предложения не участвуют)</span></div>
+        <button class="sn-switch ${examSettings.write?'on':''}" data-exam-key="write"></button>
+      </div>
     </div>
   </div>`;
   m.querySelector('#examSettingsTabSeg').querySelectorAll('button').forEach(b=>{
@@ -4051,6 +4071,7 @@ function renderExamSettings(){
       else if(k==='choice'){ toggleExamMode('choice'); renderExamSettings(); }
       else if(k==='tone'){ toggleExamMode('tone'); renderExamSettings(); }
       else if(k==='match'){ toggleExamMode('match'); renderExamSettings(); }
+      else if(k==='write'){ toggleExamMode('write'); renderExamSettings(); }
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
       else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
       else if(k==='gradual'){ toggleExamGradual(); renderExamSettings(); }
@@ -4179,6 +4200,7 @@ function requeueExam(it){
   if(examSettings.tf) modes.push('tf');
   if(examSettings.tone && hasStrokes()) modes.push('tone');
   if(examSettings.match) modes.push('match');
+  if(examSettings.write && examWritePool().length) modes.push('write');
   if(!modes.length) return;
   const mode=modes[Math.floor(Math.random()*modes.length)];
   examSeq.push({it, mode});
@@ -4403,7 +4425,145 @@ function tonePick(n, btn){
   }
 }
 
-// ---------- Письменно: УБРАНО из экзамена (используется только отдельный режим «Письмо») ----------
+// ---------- Письмо в экзамене (стратегия: одно слово на задание) ----------
+// Пишутся только ОТДЕЛЬНЫЕ слова — предложения исключены (по решению: писать их в экзамене не нужно).
+// Китайский: иероглифы по одному через HanziWriter.quiz — onComplete = знак написан верно,
+// onMistake = ошибка штриха (считается ошибкой экзамена, как «Верно-неверно»). en/tr/ar —
+// клавиатурный ввод целого слова с «Проверить». Верно = +1 балл и дальше; ошибка = examMistakeSoft
+// (серия сбрасывается, слово в конец очереди, уровень не растёт — «−2 коробки» больше нет).
+function examWritePool(){
+  const isSent=it=>{ const k=String(it.kind||'word'); return k==='sent'||k==='sentence'; };
+  if(hasStrokes()){
+    // китайский: только отдельные слова (≤4 иероглифа, без латиницы/цифр). Порог 5 знаков —
+    // та же граница «слово ↔ предложение», что в отображении (STUDY_SENT_BREAK=5).
+    return filteredLangItems().filter(it=>
+      !isSent(it) && /[一-鿿]/.test(it.hanzi) && !/[a-zA-Z0-9]/.test(it.hanzi) && Array.from(it.hanzi).length<=4);
+  }
+  // en/tr/ar: одно короткое слово без пробелов (предложения/фразы из нескольких слов не пишем)
+  return filteredLangItems().filter(it=>
+    !isSent(it) && it.translation && trList(it).length && !/\s/.test(it.hanzi) && String(it.hanzi).length<=20);
+}
+let examWriteChars=[], examWriteIdx=0, examWriteWriter=null, examWriteDone=false;
+function renderExamWrite(q){
+  const it=q.it;
+  examCurrentIt=it;
+  Player.stop();
+  clearExamIdle();
+  examWriteDone=false;
+  if(!hasStrokes()){ renderExamWriteTyping(it); return; }
+  examWriteChars=Array.from(it.hanzi).filter(c=>/[一-鿿]/.test(c));
+  if(!examWriteChars.length){ examMistakeSoft(it); examFinish(1); return; }
+  examWriteIdx=0;
+  document.getElementById('examBody').innerHTML=`
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
+      <div id="examWriteWord" class="char-strip" style="justify-content:center; margin-bottom:8px"></div>
+      <div id="examWriteArea"></div>
+      <div class="exam-py" id="examWritePy" style="margin-top:8px; min-height:1.3em"></div>
+      <div class="eq-tr" style="${eqSizesStyle(it.hanzi,{tr:true})}; margin-top:2px">${escapeHtml(trJoined(it))}</div>
+    </div>`;
+  examWriteChar();
+  examSpeakDelayed(it);
+}
+function examWriteRenderHint(){
+  const el=document.getElementById('examWriteWord'); if(!el) return;
+  el.innerHTML=examWriteChars.map((c,i)=>`<span class="c ${i===examWriteIdx?'cur':''}">${escapeHtml(c)}</span>`).join('');
+  const py=document.getElementById('examWritePy');
+  if(py){ const ch=examWriteChars[examWriteIdx]; py.textContent=ch?toPinyin(ch):''; }
+}
+function blinkExamWrite(done){
+  const area=document.getElementById('examWriteArea');
+  const seq=[0.25,1,0.25,1,0.25,1]; let i=0;
+  const step=()=>{ if(!area || i>=seq.length){ if(area) area.style.opacity=''; if(done) done(); return; } area.style.opacity=String(seq[i++]); setTimeout(step,140); };
+  step();
+}
+function examWriteChar(){
+  const area=document.getElementById('examWriteArea'); if(!area) return;
+  const ch=examWriteChars[examWriteIdx]; if(!ch) return;
+  examWriteRenderHint();
+  area.innerHTML=''; area.classList.remove('bad','good'); area.style.opacity='';
+  hwCharData(ch).then(async data=>{
+    if(examWriteDone || !document.getElementById('examWriteArea')) return;
+    const size=Math.min(area.clientWidth||320, area.clientHeight||320);
+    // Данных начертания нет (офлайн/CDN недоступен) — свободное рисование с кнопкой «Готово ▶»:
+    // автоматически проверить рисунок нельзя, поэтому завершение задаёт пользователь.
+    if(!data || !(await ensureHanziWriter(3000))){
+      if(examWriteDone) return;
+      attachGuide(area, size);
+      const fb=document.createElement('div');
+      fb.className='hz-fallback'; fb.style.fontSize=(size*0.9)+'px'; fb.textContent=ch;
+      area.appendChild(fb);
+      const cv=document.createElement('canvas');
+      cv.className='hz-freedraw'; cv.width=size; cv.height=size;
+      area.appendChild(cv);
+      freeDraw(cv);
+      const ok=document.createElement('button');
+      ok.className='btn ok hz-skip'; ok.type='button'; ok.textContent='Готово ▶';
+      ok.onclick=()=>{
+        if(examWriteDone) return;
+        examWriteDone=true;
+        if(examWriteIdx>=examWriteChars.length-1){ examCorrect(examCurrentIt); flashGood(area, ()=>examFinish(1)); }
+        else { examWriteIdx++; blinkExamWrite(()=>examWriteChar()); }
+      };
+      area.appendChild(ok);
+      return;
+    }
+    if(examWriteDone) return;
+    attachGuide(area, size);
+    examWriteWriter=HanziWriter.create(area, ch, {
+      width:size, height:size, padding:4, strokeAnimationSpeed:1.05, delayBetweenStrokes:130,
+      showOutline:true,
+      charDataLoader:(c,okcb,errcb)=>okcb(data)
+    });
+    examWriteWriter.quiz({
+      showHintAfterMisses:settings.hint===0?1:(settings.hint||2),
+      onMistake:()=>{
+        if(examWriteDone) return;
+        examWriteDone=true;
+        try{ examWriteWriter.cancelQuiz(); }catch(e){}
+        examMistakeSoft(examCurrentIt);
+        flashBad(area, ()=>examFinish(1));
+      },
+      onComplete:()=>{
+        if(examWriteDone) return;
+        const isLast=examWriteIdx>=examWriteChars.length-1;
+        if(isLast){
+          examWriteDone=true;
+          examCorrect(examCurrentIt);
+          flashGood(area, ()=>examFinish(1));
+        }else{
+          examWriteIdx++;
+          blinkExamWrite(()=>examWriteChar());
+        }
+      }
+    });
+  });
+}
+function renderExamWriteTyping(it){
+  const body=document.getElementById('examBody');
+  body.innerHTML=`
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
+      <div class="eq-tr" style="${eqSizesStyle(it.hanzi,{tr:true})}; margin-bottom:10px">${escapeHtml(trJoined(it))}</div>
+      <input type="text" id="examTypeInput" class="type-in" dir="${langInfo().rtl?'rtl':'auto'}" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="введите слово">
+      <button class="btn ok" id="examTypeCheck" style="margin-top:12px; width:auto; padding:10px 24px">Проверить</button>
+    </div>`;
+  const inp=body.querySelector('#examTypeInput');
+  const check=()=>{
+    if(examWriteDone) return;
+    examWriteDone=true;
+    const val=typeNormalize(inp.value);
+    if(val===typeNormalize(it.hanzi)){
+      examCorrect(it);
+      examFinish(1);
+    }else{
+      examMistakeSoft(it);
+      flashBad(body.querySelector('#examTypeCheck'), ()=>examFinish(1));
+    }
+  };
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); check(); } };
+  body.querySelector('#examTypeCheck').onclick=check;
+  setTimeout(()=>{ try{ inp.focus(); }catch(e){} },0);
+  examSpeakDelayed(it);
+}
 function pinyinOf(it){ return it.pinyin || toPinyin(it.hanzi); }
 
 // ---------- Подбор ----------
@@ -4598,6 +4758,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.10','18.10.26','Экзамен: новый подрежим «Письмо» (в настройках экзамена) — из случайного подрежима переносит на ОДНО слово на написание и возвращает обратно; пишутся только отдельные слова (предложения не участвуют), верное написание = +1 балл, ошибка штриха/слова = ошибка экзамена (серия сбрасывается, слово в конец очереди, уровень не растёт). Аудио: прогрев Google-озвучки стал надёжнее — mp3 гарантированно оседает в постоянном кэше (переживает обновления), реже «не грузятся»'],
   ['1.9.9.0','18.10.26','Синхронизация: исправлен ложный конфликт после экзамена (поле trs «Перевод 2–5» терялось при записи в облако и давало дрейф контент-сигнатуры) — прогресс теперь уходит в облако автоматически. Конфликты: переключатель «Локально/Облако» стал ярко-красным, детали сравнения показывают актуальные даты. Тоны: пиньинь открывается под своим иероглифом, последний верный тон мигает зелёным. Подбор: карточки ниже и крупнее, аудио при клике звучит мгновенно. Ноутбук: крупнее шрифт в «Учить»/«Экзамен», убран горизонтальный сдвиг сайта, компактнее нижняя строка экзамена'],
   ['1.9.8.1','18.10.26','Экзамен: статусная строка (счётчик + бейдж фильтра + шестерёнка настроек) перенесена из шапки вниз, под кнопки ответов, во всех подрежимах; счётчик теперь «с единицы». Тоны: исправлено — при верном выборе 2-го/3-го иероглифа его пиньинь (со знаком тона) теперь открывается'],
   ['1.9.8.0','17.10.26','Профиль: имя пользователя сохраняется в Supabase (profiles.name) при сохранении в приложении и подтягивается обратно при входе с нового устройства — в панели автора видна связка «имя + email»'],
@@ -6841,7 +7002,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
@@ -6864,7 +7025,7 @@ async function boot(){
   if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
   if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
   stats=statsByLang[activeLang];
-  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch, tonePy:settings.examTonePy!==false};
+  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch, write:!!settings.examWrite, tonePy:settings.examTonePy!==false};
   examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
   examAudioDelay=Number(settings.examAudioDelay)||0;
@@ -6905,6 +7066,12 @@ boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.mess
 // updateViaCache:'none' — браузер всегда берёт свежий sw.js, не кэшированный старый.
 if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
   navigator.serviceWorker.register('sw.js?v='+encodeURIComponent(APP_VERSION), {updateViaCache:'none'}).catch(()=>{});
+}
+// Просьба браузеру НЕ вытеснять наши данные (IndexedDB + Cache Storage) при нехватке места —
+// постоянный кэш озвучки реже «сбрасывается». Это именно просьба (не гарантия): браузер
+// может отказать, но в Chromium по умолчанию для PWA/часто используемых сайтов её выполняют.
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persist().catch(()=>{});
 }
 </script>
 </body>
