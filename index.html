@@ -1118,7 +1118,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.13.1';
+const APP_VERSION='1.9.13.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1495,10 +1495,20 @@ function toPinyin(s){
 
 // ============================== TTS ==============================
 let VOICES=[], audioUnlocked=false;
+// Совпадение языка голоса с префиксом ('zh'/'en'/'tr'/'ar'). Китайский на части устройств
+// называется «cmn-…» (мандарин) или через подчёркивание («zh_CN»), а не «zh-…» — учитываем оба.
+function voiceLangMatch(vlang, prefix){
+  if(!vlang) return false;
+  const norm=String(vlang).toLowerCase().replace(/_/g,'-');
+  const base=norm.split('-')[0];
+  if(base===prefix) return true;
+  if(prefix==='zh') return base==='cmn';
+  return false;
+}
 function loadVoices(){
   // голоса только активного языка (Фаза 5); «Авто (xx-XX)» — без ручного выбора, берём best-fit
   const prefix=(ttsLang()||'zh-CN').split('-')[0].toLowerCase(); // zh/en/tr/ar ('en-US'→'en')
-  VOICES=speechSynthesis.getVoices().filter(v=>new RegExp('^'+prefix,'i').test(v.lang));
+  VOICES=speechSynthesis.getVoices().filter(v=>voiceLangMatch(v.lang,prefix));
   const sel=document.getElementById('voiceSel');
   sel.innerHTML='<option value="">Авто ('+ttsLang()+')</option>';
   VOICES.forEach(v=>{ const o=document.createElement('option'); o.value=v.voiceURI; o.textContent=v.name+' ('+v.lang+')'; sel.appendChild(o); });
@@ -1551,7 +1561,7 @@ function findLocalVoice(tag){
   if(!('speechSynthesis' in window)) return null;
   const p=(tag||ttsLang()||'zh-CN').split('-')[0].toLowerCase();
   const all=speechSynthesis.getVoices();
-  return all.find(v=>v.lang && v.lang.split('-')[0].toLowerCase()===p) || null;
+  return all.find(v=>v.lang && voiceLangMatch(v.lang,p)) || null;
 }
 // Проиграть текст локальным голосом устройства (fallback вместо тишины, когда сеть не отдала mp3).
 function speakLocalFallback(text, rate, tag){
@@ -1570,7 +1580,7 @@ function speakLocalFallback(text, rate, tag){
 function speak(text,rate,voice){
   return (async ()=>{
     if(!text||!String(text).trim()) return;
-    speechSynthesis.cancel();
+    if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
     // разрешаем региональный Google-тег, если передан «g:<тег>»
     const gtag=googleTag(voice);
     if(!isGoogleVoice(voice) && ('speechSynthesis' in window) && pickVoice()){
@@ -1635,6 +1645,21 @@ function baiduTtsURL(text, tag){
   if(!lan) return null;
   return BAIDU_TTS.replace('TXT', lan).replace('Q', encodeURIComponent(String(text).slice(0,100)));
 }
+// Baidu text2audio (четвёртый сетевой источник): zh/en. Отдельный хост tts.baidu.com —
+// если DuckDuckGo/оператор зарезал и fanyi.baidu.com, остаётся ещё этот.
+const BAIDU_TTS2='https://tts.baidu.com/text2audio?lan=TXT&ie=UTF-8&spd=3&text=Q';
+function baiduTts2URL(text, tag){
+  const lang=(tag||'').toLowerCase();
+  let lan=null;
+  if(lang.startsWith('zh')) lan='zh';
+  else if(lang.startsWith('en')) lan='en';
+  if(!lan) return null;
+  return BAIDU_TTS2.replace('TXT', lan).replace('Q', encodeURIComponent(String(text).slice(0,100)));
+}
+// Флаг «Google-TTS недоступен»: после первой неудачи Google на этом устройстве/сети
+// пропускаем его на следующих словах и сразу идём в Youdao/Baidu (быстрее, без мёртвых таймаутов).
+let googleTtsDown=false;
+function markGoogleTtsDown(){ googleTtsDown=true; }
 // Пробует загрузить mp3 по url: canplay в пределах timeout; error/таймаут → null.
 function tryRemoteAudio(url, timeout){
   return new Promise(res=>{
@@ -1658,10 +1683,15 @@ async function fetchRemoteTTS(text, langTag){
   const gUrl=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tag))+encodeURIComponent(t.slice(0,MAX));
   const yUrl=youdaoTtsURL(t, tag);
   const bUrl=baiduTtsURL(t, tag);
-  // 1) Google translate_tts: до 2 попыток, таймаут 4 с (раньше 1,5 — сервер иногда не успевал отдать canplay).
-  for(let i=0;i<2;i++){
-    const a=await tryRemoteAudio(gUrl, 4000);
-    if(a) return a;
+  const b2Url=baiduTts2URL(t, tag);
+  // 1) Google translate_tts: до 2 попыток, таймаут 2 с (если Google уже «свалился» на этом
+  // устройстве — пропускаем сразу и не жжём по 2×2 с мёртвого таймаута на каждое слово).
+  if(!googleTtsDown){
+    for(let i=0;i<2;i++){
+      const a=await tryRemoteAudio(gUrl, 2000);
+      if(a) return a;
+    }
+    markGoogleTtsDown(); // два провала подряд — считаем Google недоступным до перезагрузки страницы
   }
   // 2) Youdao dictvoice (zh/en) — чтобы не было тишины, если Google недоступен.
   if(yUrl){
@@ -1671,6 +1701,11 @@ async function fetchRemoteTTS(text, langTag){
   // 3) Baidu gettts (zh/en) — ещё одна альтернатива (DuckDuckGo и т.п. не блокируют Baidu).
   if(bUrl){
     const a=await tryRemoteAudio(bUrl, 4000);
+    if(a) return a;
+  }
+  // 4) Baidu text2audio (zh/en) — другой хост tts.baidu.com, на случай блокировки fanyi.baidu.com.
+  if(b2Url){
+    const a=await tryRemoteAudio(b2Url, 4000);
     if(a) return a;
   }
   return null;
@@ -1684,7 +1719,7 @@ const Player={
     opts=opts||{};
     const my=++this.gen;                      // устаревший запуск сам выходит из цикла
     if(this.cur) this._releaseTrack();
-    speechSynthesis.cancel();
+    if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
     this.busy=true; this.stopFlag=false;
     const gap=opts.gap??450;
     const announce=(t)=>this.onSpeedChange&&this.onSpeedChange(t.label||'');
@@ -2914,6 +2949,8 @@ function studyKeysForLang(){
   if(activeLang==='ar'||activeLang==='tr'){
     if(keys[1]) keys[1][1]='Иностр. текст'; // подпись строки «Иероглиф» меняется только для ar/tr
     keys.splice(2,1);                        // убрать «Пиньинь» целиком (в ar/tr нет пиньиня)
+  }else if(activeLang==='en'){
+    if(keys[2]) keys[2][1]='Транскрипция';   // для английского строка транскрипции называется иначе
   }
   return keys;
 }
@@ -2935,7 +2972,7 @@ function setStudyFlag(k,v){
   else if(k==='studySeq'){ studySeqOn=v; settings.studySeq=v; }
   else { studyHanziOn=v; settings.studyHanzi=v; }
   persist(); applyStudyToggles();
-  if(k==='studyAudio'){ if(!v){ Player.stop(); speechSynthesis.cancel(); studyTouch(); } else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); } }
+  if(k==='studyAudio'){ if(!v){ Player.stop(); if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} } studyTouch(); } else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); } }
   if(k==='studySeq'){ const scr=document.getElementById('scr-study'); if(scr && scr.classList.contains('active')) resetStudyQueue(); }
 }
 function openStudySettings(){
@@ -2998,7 +3035,9 @@ function studyVoiceSelectHTML(){
     opts.push('<option value="'+escapeHtml(v.voiceURI)+'"'+(cur===v.voiceURI?' selected':'')+'>'+escapeHtml(v.name+' ('+v.lang+')')+'</option>');
   });
   return `<div style="margin:8px 0 2px"><label style="font-size:12px;color:var(--mut)">Голос озвучки</label>
-    <select id="studyVoiceSel" style="width:100%;margin-top:4px">${opts.join('')}</select></div>`;
+    <select id="studyVoiceSel" style="width:100%;margin-top:4px">${opts.join('')}</select>
+    ${VOICES.length?'':'<div style="font-size:11px;color:var(--mut);margin-top:4px">На этом устройстве/браузере нет локальных голосов для языка — используется сетевой синтез (Google·Youdao·Baidu).</div>'}
+    </div>`;
 }
 function bindStudyVoiceSel(){
   const sel=document.getElementById('studyVoiceSel');
@@ -3088,12 +3127,15 @@ function showStudyCard(){
 // Точные размеры «Учить» при 100% (золотой стандарт, пользователь утвердил 05.10.26):
 // телефон — иероглиф 100px / пиньинь 38px / перевод 27px;
 // десктоп (≥1024px) — иероглиф 91px / пиньинь 35px / перевод 21px (правки 18.10.26, п.6).
+// Английский (латиница, без иероглифов) на десктопе — слово 64px / транскрипция 35px /
+// перевод 25px: 91px для латиницы слишком крупно (правки 19.10.26).
 // Формула «cur» ниже плавно ужимает длинные предложения: база 91/35/21 для 1–4 знаков
 // даёт для предложения (5+ знаков) ~68/27/16 — ровно те размеры, что заказаны для ноутбука.
 // Ползунок «Иероглиф/Пиньинь/Перевод» в модалке умножает базовое значение (mulH/mulP/mulT).
 const STUDY_HZ_MOBILE=100, STUDY_HZ_DESKTOP=91;
 const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=35;
 const STUDY_TR_MOBILE=27, STUDY_TR_DESKTOP=21;
+const STUDY_HZ_EN_DESKTOP=64, STUDY_TR_EN_DESKTOP=25; // английский на десктопе: слово/перевод меньше
 const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
 const STUDY_SENT_MIN=0.52;        // предложение: нижняя граница масштаба (не сжимаем в ноль)
@@ -3108,9 +3150,13 @@ function studyFonts(chars){
   const cur = sent
     ? Math.max(STUDY_SENT_MIN, 1 - Math.max(0, chars-2) * STUDY_DECAY)
     : 1;
-  const hz=(desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE)*STUDY_SENT_RATIO*mulH*cur;
+  // Английский (латиница) на десктопе: слово/перевод меньше золотого стандарта (правки 19.10.26).
+  const enDesk = desktop && activeLang==='en';
+  const hzBase = enDesk ? STUDY_HZ_EN_DESKTOP : (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE);
+  const trBase = enDesk ? STUDY_TR_EN_DESKTOP : (desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE);
+  const hz=hzBase*STUDY_SENT_RATIO*mulH*cur;
   const py=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP*Math.min(1, cur*1.05);
-  const tr=(desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE)*mulT*Math.min(1, cur*1.05);
+  const tr=trBase*mulT*Math.min(1, cur*1.05);
   return {desktop, sent, hz, py, tr, cur};
 }
 function applyStudySizes(){
@@ -4803,6 +4849,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.13.2','19.10.26','Аудио в DuckDuckGo: обращения к speechSynthesis защищены (без движка синтеза озвучка не обрывается); после двух неудач Google-TTS помечается недоступным и пропускается на следующих словах (без мёртвых таймаутов 2×4с), таймаут Google сокращён 4→2с; добавлен четвёртый сетевой источник Baidu text2audio (другой хост tts.baidu.com); в выборе голоса появляется подсказка, когда локальных голосов нет; китайские голоса подбираются и по «cmn-…»/«zh_CN». «Учить» (английский, десктоп): слово 91→64px, перевод 21→25px. Настройки режима: у английского подпись «Пиньинь» → «Транскрипция».'],
   ['1.9.13.1','19.10.26','Синхронизация: исправлена ошибка RLS «new row violates row-level security policy» на DuckDuckGo/Redmi — из-за детерминированных id карточек одинаковое слово у РАЗНЫХ аккаунтов получало один id и upsert лез в чужую строку; теперь конфликт решается по паре user_id+id (нужен новый SQL phase10: составной первичный ключ cards). Статистика: на графиках «Слова» и «История» добавлена нулевая ось y=0 — столбики больше не «висят в воздухе»; подписи «Уровень 1–5» в блоке «Память» выровнены по левому краю.'],
   ['1.9.13','18.10.26','Кнопки «Учить» больше не «прилипают» к нижнему меню (убрана лишняя страховка height:100vh, которая на старых Chrome/DuckDuckGo растягивала экран выше видимой области — статусная строка и шестерёнка снова видны). Озвучка: добавлен третий сетевой источник Baidu (zh/en) на случай блокировки Google-TTS. Синхронизация: перед сохранением склеиваются дубликаты карточек, а при ошибке показывается её текст. Календарь статистики: шрифт −1px (13→12) для влезания цифр в ячейку на узких экранах'],
   ['1.9.12','18.10.26','Аудио: прогрев при первом касании теперь разблокирует и HTML-audio (Google-TTS mp3), а не только speechSynthesis — на старых Chrome (Android) озвучка не блокировалась бы политикой автовоспроизведения (звук пропадал на всех языках, хотя mp3 скачивался). Окно конфликтов синхронизации: добавлена страховка высоты через 100vh — на старых браузерах, не знающих dvh, лист снова прокручивается до кнопки «Применить»'],
