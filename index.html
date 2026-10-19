@@ -570,6 +570,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 .empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
 .empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
+.empty-sub{margin-top:6px; font-size:13px; color:var(--mut); opacity:.85}
 
 /* Изучение: маленькая кнопка настроек в правом верхнем углу экрана */
 .study-top{display:flex; justify-content:flex-end; align-items:center; margin:0 0 4px}
@@ -845,7 +846,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
     </div>
     <div class="empty hidden" id="examEmpty">
       <span class="big-ic">📭</span>
-      <div>Для экзамена нужно хотя бы 4 слова.</div>
+      <div>Пока мало слов для экзамена — нужно хотя бы 4.</div>
+      <div class="empty-sub" id="examEmptyCount"></div>
     </div>
   </section>
 
@@ -1124,7 +1126,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.14.2';
+const APP_VERSION='1.9.14.3';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3974,7 +3976,14 @@ function startExam(){
   examSeq=examBuildSeq();
   examIdx=0; examRight=0; examWrong=[]; examCurrentIt=null;
   document.getElementById('examEmpty').classList.toggle('hidden', examSeq.length>=4);
-  if(examSeq.length<4){ document.getElementById('examBody').innerHTML=''; updateExamScore(); return; }
+  if(examSeq.length<4){
+    document.getElementById('examBody').innerHTML='';
+    const have=queueStudy().filter(it=>it.translation).length;
+    const need=Math.max(0,4-have);
+    document.getElementById('examEmptyCount').textContent='Сейчас слов: '+have+'. Добавьте ещё '+need+' — и можно начинать!';
+    updateExamScore();
+    return;
+  }
   updateExamScore();
   updateExamToggleUI();
   nextExamQ();
@@ -4909,6 +4918,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.14.3','19.10.26','Дружелюбная заглушка экзамена: при нехватке слов теперь показано «Пока мало слов… нужно хотя бы 4» + динамическая подсказка «Сейчас слов: N. Добавьте ещё M — и можно начинать!».'],
   ['1.9.14.2','19.10.26','Автомиграция: у уже существующих английских карточек с пустым полем транскрипции IPA дописывается автоматически при открытии приложения — без ручного входа в каждое слово; уходит в синхронизацию при следующей синхронизации.'],
   ['1.9.14.1','19.10.26','Транскрипция фраз и предложений (английский): теперь одна общая пара скобок вокруг всей фразы, слова разделены двумя пробелами — /θˈæŋk  jˈuː/ вместо /θˈæŋk/ /jˈuː/.'],
   ['1.9.14','19.10.26','Английская транскрипция (IPA): встроен офлайн-словарь ~7,7 тыс. частых слов (британское произношение + американский фолбэк, ~210 КБ) — при вводе английского слова в карточку транскрипция подставляется автоматически (/həˈləʊ/), как пиньинь у китайского; работает без интернета. Поле «Транскрипция» появляется в карточке и пакетном вводе для английского, показывается в «Учить»/словаре/экспорте.'],
