@@ -557,10 +557,16 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   border-color:var(--red) !important;
   color:#fff !important;
 }
-/* Зелёная вспышка (тоны: последний верный тон) — та же анимация, что и красная ошибка,
-   но ярким зелёным. Цвет иконки тона .tm внутри — тоже белым (поверх зелёной заливки). */
+/* Зелёная вспышка (тоны: последний верный тон) — ярким зелёным. Анимация строго
+   ВЕРТИКАЛЬНАЯ (пульс по вертикали без горизонтального сдвига): горизонтальная тряска
+   badShake выталкивала кнопку за правый край и на ноутбуках на мгновение показывала
+   горизонтальный ползунок. Цвет иконки тона .tm/.tl — белым поверх зелёной заливки. */
+@keyframes goodPulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.06)}
+}
 .tone-btns button.good{
-  animation:badShake 1s ease;
+  animation:goodPulse .55s ease 2;
   background-color:var(--green) !important;
   border-color:var(--green) !important;
   color:#fff !important;
@@ -670,7 +676,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Ноутбук/десктоп (≥1024px): нижняя статусная строка экзамена компактнее на ~40%
    (правки 18.10.26, п.10) — меньше высота, отступы и шестерёнка. */
 @media (min-width:1024px){
-  .exam-status-bar{min-height:20px; gap:7px; margin:8px auto 11px}
+  .exam-status-bar{min-height:12px; gap:7px; margin:5px auto 7px}
   .exam-status-bar .study-gear.light{width:18px; height:18px}
   .exam-status-bar .study-gear.light svg{width:18px; height:18px}
   .exam-status-bar .chip{font-size:11px; padding:3px 9px}
@@ -705,7 +711,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Экзамен: блок ответов «Верно-неверно» прижат к низу экрана (как кнопки в «Учить») */
 #scr-exam.active{display:flex; flex-direction:column}
-#examBody{flex:1 1 auto; min-height:0; overflow-y:auto; padding-bottom:4px}
+#examBody{flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; padding-bottom:4px}
 .exam-spacer{flex:1 1 auto; min-height:14px}
 
 /* Экзамен: подбор пар */
@@ -1126,7 +1132,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.14.3';
+const APP_VERSION='1.9.14.4';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3746,23 +3752,14 @@ function startWriteChar(quiet){
       showOutline:writeOutlineOn,
       charDataLoader:(c,ok,err)=>ok(data)
     });
-    // «Контур» (без «Анимации») — бесконечный цикл показа, пока не выключен.
-    // В этом режиме quiz не запускаем: loopCharacterAnimation сам отменяет quiz, а «обводить»
-    // по крутящемуся контуру нельзя — обводка доступна при выключенном «Контуре».
-    if(writeAnimOn){ startWriteQuiz(); playWriteAnim(); }
-    else if(writeOutlineOn){ writeLoopOutline(writer); }
+    // «Контур» = статичный бледный контур + пользователь обводит сам (quiz). Ничего само
+    // не рисуется. «Анимация» = сначала циклическая демонстрация начертания (пользователь
+    // только смотрит), обводить можно после её выключения. Правка 19.10.26: убран ошибочный
+    // loopCharacterAnimation, который заставлял «Контур» рисовать иероглиф самостоятельно.
+    if(writeAnimOn){ playWriteAnim(); }
     else { startWriteQuiz(); }
     if(!quiet) writePlayLoop(writeCurItem);
   });
-}
-// Цикл контура: показываем иероглиф бегущим контуром по кругу, без остановки,
-// пока «Контур» не выключен. Статичный контур-подложку прячем, чтобы не двоился;
-// сетка-направляющая (attachGuide) остаётся фоном. Режим «Анимация» — не смешиваем.
-function writeLoopOutline(w){
-  if(!w || !writeOutlineOn || writeAnimOn) return;
-  try{ w.cancelQuiz(); }catch(e){}
-  try{ w.hideOutline(); }catch(e){}
-  w.loopCharacterAnimation();
 }
 function startWriteQuiz(){
   if(!writer) return;
@@ -3805,8 +3802,27 @@ function toggleWriteAnim(){
   writeAnimOn=!writeAnimOn;
   settings.writeAnim=writeAnimOn; persist();
   applyWriteToggles();
-  if(writeAnimOn){ playWriteAnim(); }
-  else { startWriteChar(); } // немедленное отключение: пересоздаём чистый контур
+  // Включение и выключение пересоздают писателя: при «Анимации» quiz не запускается
+  // (пользователь только смотрит, обводить нельзя), при выключении — чистый контур с обводкой.
+  startWriteChar(true);
+}
+// Пауза между демонстрациями начертания в режиме «Анимация» (правки 19.10.26).
+const WRITE_ANIM_DELAY=1200;
+// Циклическая демонстрация: нарисовать → короткая пауза → снова нарисовать, пока
+// «Анимация» не выключена. Пользователь в этом режиме ТОЛЬКО смотрит (обводить нельзя —
+// quiz не запущен). Каждый цикл рисует заново поверх чистого контура.
+function playWriteAnim(){
+  if(!writer || !writeAnimOn) return;
+  if(writeAnimRunning) return;
+  writeAnimRunning=true;
+  const ch=writeChars[writeCharIdx]; if(!ch) { writeAnimRunning=false; return; }
+  writer.animateCharacter({
+    onComplete:()=>{
+      writeAnimRunning=false;
+      // цикл продолжается, только если анимация всё ещё включена
+      if(writeAnimOn) setTimeout(playWriteAnim, WRITE_ANIM_DELAY);
+    }
+  });
 }
 function toggleWriteRand(){
   // «Рандомно» в тулбаре Письма — тот же флаг, что и в настройках (Обычный/Рандом)
@@ -3827,12 +3843,6 @@ function toggleWriteHint(){
   syncWriteHintSeg();
   onWriteHintChange();
   renderWriteSettings();
-}
-function playWriteAnim(){
-  if(!writer || writeAnimRunning) return;
-  const ch=writeChars[writeCharIdx]; if(!ch) return;
-  writeAnimRunning=true;
-  writer.animateCharacter({onComplete:()=>{ writeAnimRunning=false; }});
 }
 
 // ---------- Шестерёнка «Письмо»: Контур / Рандом / Анимация / Аудио ----------
@@ -4532,6 +4542,7 @@ function drawTone(){
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
       <div class="tone-hanzi">${cells}</div>
+      <div class="tone-tr" id="toneTr" hidden></div>
       <div class="tone-btns">
         <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
         <button data-tone="1"><span class="tm">${TONE_1_ICON}</span><span class="tl">1</span></button>
@@ -4539,7 +4550,6 @@ function drawTone(){
         <button data-tone="3"><span class="tm">${TONE_3_ICON}</span><span class="tl">3</span></button>
         <button data-tone="4"><span class="tm">${TONE_4_ICON}</span><span class="tl">4</span></button>
       </div>
-      <div class="tone-tr" id="toneTr" hidden></div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
 }
@@ -4550,15 +4560,16 @@ function tonePick(n, btn){
   if(cur && cur.num===n){
     cur.revealed=true;   // верный тон → открываем пиньинь этого иероглифа (с знаком тона)
     toneCI++;
-    const isLast=(toneCI>=seg.length);          // последний тон группы (или слова/предложения)
+    const isLast=(toneCI>=seg.length);          // последний тон текущей группы из 3 иероглифов
     drawTone();          // сразу показать открывшийся пиньинь (в т.ч. последнего иероглифа группы)
     if(isLast){
-      // последний верный тон — зелёная вспышка («всё верно, идём дальше»).
-      // Накладываем ПОСЛЕ drawTone() (перерисовка сотрёт класс .good со старой кнопки).
-      const freshBtn=document.querySelector('#examBody [data-tone="'+n+'"]');
-      flashGood(freshBtn, null);
       toneCI=0; toneGI++;
-      if(toneGI>=toneGroups.length){           // все иероглифы отмечены
+      if(toneGI>=toneGroups.length){
+        // Зелёная вспышка — ТОЛЬКО на самом последнем иероглифе последнего слова предложения
+        // (не на каждой промежуточной группе из 3 иероглифов). Накладываем ПОСЛЕ drawTone()
+        // (перерисовка сотрёт класс .good со старой кнопки).
+        const freshBtn=document.querySelector('#examBody [data-tone="'+n+'"]');
+        flashGood(freshBtn, null);
         if(toneError){ examMistakeSoft(examCurrentIt); }  // была ошибка → −1
         else { examCorrect(examCurrentIt); }              // без ошибок → +1
         // пиньинь последнего иероглифа уже открыт (drawTone выше); показываем перевод
@@ -4568,7 +4579,8 @@ function tonePick(n, btn){
         setTimeout(examFinish, 1000, 1);
         return;
       }
-      // следующая группа — через короткую паузу, чтобы успеть увидеть открывшийся пиньинь
+      // следующая группа — через короткую паузу, чтобы успеть увидеть открывшийся пиньинь.
+      // Промежуточные группы зелёным НЕ мигают — вспышка только в конце всего предложения.
       setTimeout(drawTone, 700);
     }
   }else{
@@ -4735,6 +4747,13 @@ function matchDeck(){
   const rest=filteredLangItems().filter(it=>it.translation&&!it.starred);
   return shuffle(star).concat(shuffle(rest));
 }
+// «Предложение» для группировки Подбора: явно помечено kind='sent'/'sentence'
+// ИЛИ длина ≥5 символов без пробелов (та же граница, что визуальный класс .sent в eqWordClass).
+function isSentenceItem(it){
+  const k=String(it.kind||'word');
+  if(k==='sent'||k==='sentence') return true;
+  return (String(it.hanzi||'').replace(/\s+/g,'').length)>=5;
+}
 function matchDraw(arr, n){
   const out=[]; const seen=new Set();
   const src=[...arr];
@@ -4765,13 +4784,20 @@ function matchNextRound(){
     return;
   }
   // раунд всегда включает текущее слово задачи (examCurrentIt) — иначе балл и повтор
-  // относились бы к слову, которого пользователь не видел; остальные — случайные без повторов
+  // относились бы к слову, которого пользователь не видел; остальные — случайные без повторов.
+  // Правка 19.10.26: карточки раунда должны быть ОДНОТИПНЫМИ — либо только слова, либо
+  // только предложения (не мешаем). Тип задаёт текущее слово задачи.
   const cur=examCurrentIt;
   let round=[];
   if(cur && cur.translation){
     round.push(cur);
-    const others=shuffle(deck.filter(x=>x.id!==cur.id));
-    round=round.concat(matchDraw(others, Math.min(need-1, others.length)));
+    const wantSent=isSentenceItem(cur);
+    // однотипные (без текущего) вперёд, затем — при нехватке — остальные, чтобы раунд не был пустым
+    const same=shuffle(deck.filter(x=>x.id!==cur.id && isSentenceItem(x)===wantSent));
+    const other=shuffle(deck.filter(x=>x.id!==cur.id && isSentenceItem(x)!==wantSent));
+    const fill=need-1;
+    round=round.concat(matchDraw(same, Math.min(fill, same.length)));
+    if(round.length<need) round=round.concat(matchDraw(other, need-round.length));
   } else {
     round=matchDraw(deck, Math.min(need, deck.length));
   }
@@ -4918,6 +4944,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.14.4','19.10.26','Экзамен: компактнее нижняя статусная строка на ноутбуке (сам блок, а не шестерёнка); в «Тонах» перевод показывается под пиньинь, а зелёная вспышка — только в самом последнем иероглифе всего предложения (не каждые 3); убрана горизонтальная тряска зелёной вспышки (пропал мигающий ползунок). Подбор: раунд из 5 карточек теперь только из слов ИЛИ только из предложений. Письмо: «Контур» снова статичный с обводкой (не рисует сам), «Анимация» — цикл «рисует → пауза → снова», обводить можно только при выключенной анимации.'],
   ['1.9.14.3','19.10.26','Дружелюбная заглушка экзамена: при нехватке слов теперь показано «Пока мало слов… нужно хотя бы 4» + динамическая подсказка «Сейчас слов: N. Добавьте ещё M — и можно начинать!».'],
   ['1.9.14.2','19.10.26','Автомиграция: у уже существующих английских карточек с пустым полем транскрипции IPA дописывается автоматически при открытии приложения — без ручного входа в каждое слово; уходит в синхронизацию при следующей синхронизации.'],
   ['1.9.14.1','19.10.26','Транскрипция фраз и предложений (английский): теперь одна общая пара скобок вокруг всей фразы, слова разделены двумя пробелами — /θˈæŋk  jˈuː/ вместо /θˈæŋk/ /jˈuː/.'],
