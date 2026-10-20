@@ -673,6 +673,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Экзамен: вопрос с двумя колонками (перевод сверху, псевдо-иероглиф) */
 .exam-q{display:flex; flex-direction:column; align-items:center; gap:4px; text-align:center}
 .exam-q .eq-word{font-family:var(--font-cjk); font-weight:600; line-height:1.2; color:var(--ink); word-break:break-all; font-size:min(30vmin,130px)}
+/* В «Выбор ответов» слово в вопросе кликабельно — повтор озвучки (курсор-указатель) */
+.exam-q .eq-word.tap{cursor:pointer; -webkit-tap-highlight-color:transparent}
 /* Длинные слова/предложения не должны раздуваться на весь экран и выталкивать кнопки ответов:
    чем длиннее текст, тем меньше шрифт — вопрос остаётся компактным, кнопки всегда влезают. */
 .exam-q .eq-word.mid{font-size:min(16vmin,72px)}
@@ -1154,7 +1156,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.15';
+const APP_VERSION='1.9.15.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3224,10 +3226,13 @@ const STUDY_SENT_RATIO=1;          // предложение: тот же раз
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
 const STUDY_SENT_MIN=0.52;        // предложение: нижняя граница масштаба (не сжимаем в ноль)
 const STUDY_DECAY=0.05;           // предложение: насколько уменьшается масштаб за каждый знак сверх 2
-function studyFonts(chars){
+function studyFonts(chars, mult){
   const desktop=innerWidth>=1024;
   const sent=chars>=STUDY_SENT_BREAK;
-  const mulH=settings.mulH||1, mulP=settings.mulP||1, mulT=settings.mulT||1;
+  mult=mult||{};
+  const mulH=mult.h!=null?mult.h:(settings.mulH||1);
+  const mulP=mult.p!=null?mult.p:(settings.mulP||1);
+  const mulT=mult.t!=null?mult.t:(settings.mulT||1);
   // Плавный масштаб по числу знаков (П.1 «правки 07.10.26 16.02» + «правки 07.10.26 23.33»):
   // 1–4 знака — полная база (один иероглиф такого же размера, как 2–3 знака),
   // 5+ плавно ужимается, у длинных фраз включается предложенческий режим.
@@ -3259,9 +3264,11 @@ function applyStudySizes(){
     sz.textContent=Math.round(f.hz)+'px ('+wpc+'% экр) / '+Math.round(f.py)+'px / '+Math.round(f.tr)+'px';
   }
 }
-// Единый размер текста вопроса в «Экзамене» — тот же, что в «Учить» (иер/пин/пер).
+// Множители размера текста в «Экзамене» — ОТДЕЛЬНЫЕ от «Учить» (ползунки в настройках экзамена).
+function examMult(){ return { h:settings.examMulH||1, p:settings.examMulP||1, t:settings.examMulT||1 }; }
+// Единый размер текста вопроса в «Экзамене» — тот же, что в «Учить» (иер/пин/пер), но со своими множителями.
 function eqSizesStyle(hanzi, opts){
-  const f=studyFonts(Array.from((hanzi||'')).length);
+  const f=studyFonts(Array.from((hanzi||'')).length, examMult());
   const o=opts||{};
   const lines=[];
   if(o.word){
@@ -4139,6 +4146,27 @@ function toggleExamAllTr(){
   examAllTr=!examAllTr;
   settings.examAllTr=examAllTr; persist();
 }
+// Ползунок размера текста в настройках экзамена: 50–200 %, шаг 10 (отдельный от «Учить»).
+function examSizeSliderHTML(skey, label){
+  const cur=Math.round((settings[skey]||1)*100);
+  return `<div class="sn-slider"><span class="sn-slider-lab">${escapeHtml(label)}</span><input type="range" min="50" max="200" step="10" value="${cur}" data-exam-size="${skey}"><span class="sn-slider-val" data-exam-size-val="${skey}">${cur}%</span></div>`;
+}
+// Мгновенно применяет размеры текста к текущему вопросу экзамена (не трогает озвучку).
+function applyExamSizes(){
+  const w=document.querySelector('#examBody .eq-word');
+  const py=document.querySelector('#examBody .exam-py');
+  const tr=document.querySelector('#examBody .eq-tr');
+  const hanzi=(w&&w.textContent)||'';
+  const f=studyFonts(Array.from(hanzi).length, examMult());
+  if(w){
+    w.style.fontSize=f.hz.toFixed(1)+'px';
+    w.style.lineHeight=f.sent?'1.3':'1.2';
+    if(f.sent){ w.style.wordBreak='normal'; w.style.overflowWrap='anywhere'; }
+    else { w.style.wordBreak='break-all'; w.style.overflowWrap=''; }
+  }
+  if(py) py.style.fontSize=f.py.toFixed(1)+'px';
+  if(tr) tr.style.fontSize=f.tr.toFixed(1)+'px';
+}
 function toggleExamMode(k){
   examSettings[k]=!examSettings[k];
   // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
@@ -4193,6 +4221,12 @@ function renderExamSettings(){
       <div class="menu-item" style="display:block">
         <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
         <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
+      </div>
+      <div class="menu-item" style="display:block">
+        <div class="mi-label">Размер текста<span class="mi-hint">Отдельно от «Учить»: размер иероглифа / пиньиня / перевода в заданиях</span></div>
+        ${examSizeSliderHTML('examMulH','Иероглиф')}
+        ${examSizeSliderHTML('examMulP','Пиньинь')}
+        ${examSizeSliderHTML('examMulT','Перевод')}
       </div>
       <div class="menu-item">
         <div class="mi-label">Все переводы<span class="mi-hint">Использовать альтернативные переводы в заданиях</span></div>
@@ -4286,6 +4320,15 @@ function renderExamSettings(){
       examGradualDelay=v;
       settings.examGradualDelay=v; persist();
       const val=m.querySelector('[data-exam-grad-val]'); if(val) val.textContent=v+' с';
+    };
+  });
+  m.querySelectorAll('input[type=range][data-exam-size]').forEach(r=>{
+    r.oninput=()=>{
+      const k=r.dataset.examSize;
+      const v=Math.round(Number(r.value));       // шаг 10 %
+      settings[k]=v/100; persist();
+      const val=m.querySelector(`[data-exam-size-val="${k}"]`); if(val) val.textContent=v+'%';
+      applyExamSizes();                           // сразу к текущему вопросу
     };
   });
 }
@@ -4464,11 +4507,14 @@ function renderExamChoice(q){
   // вопрос один раз; число вариантов (4-6-8-10) меняется в шестерёнке → мгновенная перерисовка
   body.innerHTML=`
     <div class="exam-q" style="margin-bottom:14px">
-      <div class="eq-word" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
+      <div class="eq-word tap" id="eqWord" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
     </div>
     <div class="exam-q" style="width:100%">
       <div id="examOpts" class="exam-opts"></div>
     </div>`;
+  // клик по иероглифу/слову в вопросе — проиграть озвучку заново (как в «Подбор» по клику)
+  const w=document.getElementById('eqWord');
+  if(w) w.onclick=()=>{ examTouch(); startExamRepeat(it); };
   function drawOpts(N){
     const correct=examPickTr(it);
     const opts=[correct];
@@ -4966,6 +5012,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15.1','20.10.26','Экзамен: в настройках экзамена под «Задержкой аудио» появились отдельные ползунки размера «Иероглиф / Пиньинь / Перевод» (50–200 %, шаг 10) — независимые от «Учить», применяются сразу к текущему вопросу. Выбор ответов: клик по иероглифу/слову в вопросе проигрывает его озвучку заново.'],
   ['1.9.15','20.10.26','Админ-панель (только для автора): на вкладке «Синхронизация» появился блок «Админ» — список всех пользователей (имя, email, число карточек и синхронизаций) и вход в чужой словарь с просмотром, добавлением, правкой и удалением слов (нужен новый SQL phase11-admin.sql). Синхронизация: исправлены два бага — журнал синхронизаций и счётчик «Всего синхронизаций» не работали (в запись не писался user_id), а «Аудио в Storage» не считал файлы (лежат вложенно по папкам карточек).'],
   ['1.9.14.4','19.10.26','Экзамен: компактнее нижняя статусная строка на ноутбуке (сам блок, а не шестерёнка); в «Тонах» перевод показывается под пиньинь, а зелёная вспышка — только в самом последнем иероглифе всего предложения (не каждые 3); убрана горизонтальная тряска зелёной вспышки (пропал мигающий ползунок). Подбор: раунд из 5 карточек теперь только из слов ИЛИ только из предложений. Письмо: «Контур» снова статичный с обводкой (не рисует сам), «Анимация» — цикл «рисует → пауза → снова», обводить можно только при выключенной анимации.'],
   ['1.9.14.3','19.10.26','Дружелюбная заглушка экзамена: при нехватке слов теперь показано «Пока мало слов… нужно хотя бы 4» + динамическая подсказка «Сейчас слов: N. Добавьте ещё M — и можно начинать!».'],
@@ -7471,7 +7518,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
