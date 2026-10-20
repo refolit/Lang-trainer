@@ -380,6 +380,23 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .data-stats .ds-row{display:flex; justify-content:space-between; align-items:center; font-size:14px; color:var(--mut)}
 .data-stats .ds-row b{color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums}
 .data-stats-note{font-size:12px; color:var(--mut); opacity:.85; margin:-6px 0 12px; line-height:1.45}
+/* Админ-панель: список пользователей и вход в их словарь */
+.admin-list{display:flex; flex-direction:column; gap:8px; margin-top:2px}
+.admin-user{border:1.5px solid var(--line); border-radius:12px; background:var(--card); padding:10px 12px; cursor:pointer}
+.admin-user:active{transform:scale(.99)}
+.admin-u-head{display:flex; align-items:center; gap:8px; font-size:14px}
+.admin-u-name{font-weight:800; color:var(--ink); word-break:break-all}
+.admin-u-me{color:var(--green); font-weight:700; font-size:11.5px; white-space:nowrap}
+.admin-u-mail{color:var(--mut); font-size:12px; word-break:break-all; margin-top:2px}
+.admin-u-meta{display:flex; flex-wrap:wrap; gap:4px 12px; margin-top:6px; font-size:12px; color:var(--mut)}
+.admin-u-meta b{color:var(--ink); font-weight:800}
+.admin-empty{padding:6px 2px; color:var(--mut); font-size:13px}
+/* Редактор чужого словаря (модалка): список карточек + кнопки правки */
+.admin-editor{display:flex; flex-direction:column; gap:8px; margin-top:8px; max-height:60vh; overflow-y:auto}
+.admin-edit-row{display:flex; align-items:center; gap:8px; border:1.5px solid var(--line); border-radius:12px; background:var(--card); padding:8px 12px}
+.admin-edit-row .zh{font-weight:800; color:var(--ink); font-size:16px; min-width:0}
+.admin-edit-row .tr{color:var(--mut); font-size:13px; flex:1; min-width:0; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.admin-edit-row .btn{flex:0 0 auto; width:auto; padding:7px 12px; font-size:13px}
 
 /* Синхронизация: поиск слева (половина ширины), кнопка справа, статус-строка под ними */
 .sync-row{display:flex; align-items:stretch; gap:8px; margin-bottom:6px}
@@ -922,6 +939,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
           <div class="card-h"><span>Журнал синхронизаций</span><span class="muted" style="font-weight:600">последние 30</span></div>
           <div class="synclog" id="slLog"></div>
         </div>
+        <div class="card" style="margin-top:10px" id="adminCard" hidden>
+          <div class="card-h"><span>Админ</span><span class="muted" style="font-weight:600">видите только вы</span></div>
+          <div id="adminBody"></div>
+        </div>
       </div>
 
       <!-- ВКЛАДКА: НАСТРОЙКИ -->
@@ -1033,6 +1054,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalFilter"></div>
 <div class="modal hidden" id="modalTags"></div>
 <div class="modal hidden" id="modalSyncConflicts"></div>
+<div class="modal hidden" id="modalAdmin"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
@@ -1132,7 +1154,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.14.4';
+const APP_VERSION='1.9.15';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4944,6 +4966,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15','20.10.26','Админ-панель (только для автора): на вкладке «Синхронизация» появился блок «Админ» — список всех пользователей (имя, email, число карточек и синхронизаций) и вход в чужой словарь с просмотром, добавлением, правкой и удалением слов (нужен новый SQL phase11-admin.sql). Синхронизация: исправлены два бага — журнал синхронизаций и счётчик «Всего синхронизаций» не работали (в запись не писался user_id), а «Аудио в Storage» не считал файлы (лежат вложенно по папкам карточек).'],
   ['1.9.14.4','19.10.26','Экзамен: компактнее нижняя статусная строка на ноутбуке (сам блок, а не шестерёнка); в «Тонах» перевод показывается под пиньинь, а зелёная вспышка — только в самом последнем иероглифе всего предложения (не каждые 3); убрана горизонтальная тряска зелёной вспышки (пропал мигающий ползунок). Подбор: раунд из 5 карточек теперь только из слов ИЛИ только из предложений. Письмо: «Контур» снова статичный с обводкой (не рисует сам), «Анимация» — цикл «рисует → пауза → снова», обводить можно только при выключенной анимации.'],
   ['1.9.14.3','19.10.26','Дружелюбная заглушка экзамена: при нехватке слов теперь показано «Пока мало слов… нужно хотя бы 4» + динамическая подсказка «Сейчас слов: N. Добавьте ещё M — и можно начинать!».'],
   ['1.9.14.2','19.10.26','Автомиграция: у уже существующих английских карточек с пустым полем транскрипции IPA дописывается автоматически при открытии приложения — без ручного входа в каждое слово; уходит в синхронизацию при следующей синхронизации.'],
@@ -5252,6 +5275,7 @@ async function logSyncEvent(st){
   if(SB_OFFLINE || !_syncUser || !sbClient()) return;
   try{
     await sbClient().from('sync_log').insert({
+      user_id: _syncUser.id,
       device_id: deviceId(), device_label: (st.deviceLabel||'').slice(0,32),
       app_version: APP_VERSION, started_at: st.startedAt||0, duration_ms: st.durationMs||0,
       cards_pushed: st.pushedCards||0, cards_pulled: st.pulledCards||0,
@@ -5281,19 +5305,30 @@ async function loadCloudTotals(){
   let audioFiles=0, audioBytes=0;
   try{
     // Подсчёт файлов аудио в Storage по папке пользователя (без скачивания самих mp3).
-    let offset=0;
-    for(;;){
-      const {data:l,error}=await c.storage.from('recordings').list(_syncUser.id, {limit:200, offset:offset, sortBy:{column:'name',order:'asc'}});
-      if(error) break;
-      const items=l||[];
-      for(const f of items){
-        if(!f.id) continue;                     // id — null у папок
-        audioFiles++;
-        audioBytes += (f.metadata && f.metadata.size) ? +f.metadata.size : 0;
+    // Файлы лежат ВЛОЖЕННО: recordings/<uid>/<card_id>/<slot>.mp3, поэтому list() по uid
+    // возвращает папки карточек (id=null), а mp3 — на уровень глубже. Рекурсивно обходим
+    // все подпапки, чтобы сосчитать файлы и их суммарный размер.
+    const walk = async (path) => {
+      let offset=0;
+      for(;;){
+        const {data:l,error}=await c.storage.from('recordings').list(path, {limit:200, offset:offset, sortBy:{column:'name',order:'asc'}});
+        if(error || !l) break;
+        for(const f of l){
+          if(!f.id) continue;                     // id — null у папок
+          audioFiles++;
+          audioBytes += (f.metadata && f.metadata.size) ? +f.metadata.size : 0;
+        }
+        for(const f of l){
+          if(!f.id){                              // это папка карточки — идём внутрь
+            const sub = path ? (path+'/'+f.name) : f.name;
+            await walk(sub);
+          }
+        }
+        if(l.length<200) break;
+        offset+=200;
       }
-      if(items.length<200) break;
-      offset+=200;
-    }
+    };
+    await walk(_syncUser.id);
   }catch(e){}
   return {cards, byLang, dbBytes, audioBytes, audioFiles, syncCount};
 }
@@ -5324,6 +5359,7 @@ async function renderSyncPanel(){
     cardsEl.textContent='—'; byLangEl.textContent='—'; dbEl.textContent='—'; audEl.textContent='—'; cntEl.textContent='—';
     logEl.innerHTML='<div class="muted" style="padding:4px 2px">Войдите в аккаунт и синхронизируйтесь — здесь появятся данные облака.</div>';
     if(noteEl) noteEl.style.display='none';
+    hideAdminPanel();
     return;
   }
   if(refr) refr.disabled=true;
@@ -5359,6 +5395,7 @@ async function renderSyncPanel(){
     }).join('');
   }
   if(refr) refr.disabled=false;
+  renderAdminPanel();
 }
 function bindSyncPanel(){
   const r=document.getElementById('slRefresh');
@@ -5370,6 +5407,217 @@ function bindSyncPanel(){
     try{ localStorage.setItem('ltDeviceLabel', nm.trim()); }catch(e){}
     toastShort('Устройство: '+(nm.trim()||'(без имени)'));
     renderSyncPanel();
+  };
+}
+
+// ============================================================
+//  Админ-панель (Фаза 11): только для автора — список пользователей
+//  и вход в их словари (просмотр + правка/удаление карточек).
+// ============================================================
+let _adminOk=false;                 // текущий пользователь — админ (кэш is_admin)
+let _adminTarget=null;              // {id, name} пользователя, чей словарь открыт
+let _adminRows=[];                  // сырые строки cards выбранного пользователя
+function hideAdminPanel(){
+  const c=document.getElementById('adminCard'); if(c) c.hidden=true;
+  _adminOk=false;
+}
+// Главный вход: показывает/прячет карточку «Админ» и грузит список пользователей.
+async function renderAdminPanel(){
+  const card=document.getElementById('adminCard');
+  if(!card) return;
+  if(!_syncUser || !sbClient()){ card.hidden=true; return; }
+  const c=sbClient();
+  // is_admin() — дешёвый запрос; кэшируем, чтобы не дёргать при каждом «Обновить».
+  let ok=false;
+  try{
+    const {data,error}=await c.rpc('is_admin');
+    ok=!error && data===true;
+  }catch(e){ ok=false; }
+  _adminOk=ok;
+  card.hidden=!ok;
+  if(!ok) return;
+  const body=document.getElementById('adminBody');
+  body.innerHTML='<div class="muted" style="padding:4px 2px">Загрузка…</div>';
+  let users=[];
+  try{
+    const {data,error}=await c.rpc('admin_users');
+    if(!error && Array.isArray(data)) users=data;
+  }catch(e){ /* не админ / нет RPC — прячем */ }
+  if(!users.length){
+    body.innerHTML='<div class="admin-empty">Пользователей пока нет.</div>';
+    return;
+  }
+  const me=_syncUser.id;
+  body.innerHTML=users.map(u=>{
+    const name=escapeHtml(u.name||u.email||'(без имени)');
+    const mail=u.email&&u.email!==u.name?`<div class="admin-u-mail">${escapeHtml(u.email)}</div>`:'';
+    const last=u.last_sync_at?`посл. синк <b>${fmtDTlog(new Date(u.last_sync_at).getTime())}</b>`:'синков <b>0</b>';
+    return `<div class="admin-user" data-id="${escapeHtml(u.id)}">
+      <div class="admin-u-head"><span class="admin-u-name">${name}</span>${u.id===me?'<span class="admin-u-me">это вы</span>':''}</div>
+      ${mail}
+      <div class="admin-u-meta">
+        <span>карточек <b>${u.cards||0}</b></span>
+        <span>синков <b>${u.syncs||0}</b></span>
+        <span>${last}</span>
+      </div>
+    </div>`;
+  }).join('');
+  body.querySelectorAll('.admin-user').forEach(el=>{
+    el.onclick=()=>{
+      const id=el.dataset.id;
+      const u=users.find(x=>x.id===id);
+      if(u) openAdminUser(u);
+    };
+  });
+}
+// Открывает словарь выбранного пользователя (модалка): список карточек + правка/удаление.
+async function openAdminUser(u){
+  _adminTarget=u;
+  _adminRows=[];
+  const name=u.name||u.email||'(без имени)';
+  const m=document.getElementById('modalAdmin');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Словарь · ${escapeHtml(name)}</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" id="adminBack">✕</button></div>
+    <div class="muted" style="margin-top:4px;font-size:12px">${escapeHtml(u.email||'')}</div>
+    <div id="adminEditList" class="admin-editor"><div class="muted" style="padding:4px 2px">Загрузка…</div></div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn" id="adminAddWord">＋ Добавить слово</button>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('#adminBack').onclick=()=>closeModal('modalAdmin');
+  m.querySelector('#adminAddWord').onclick=()=>openAdminWordForm(null);
+  await reloadAdminCards();
+}
+// Перечитывает карточки выбранного пользователя и рисует список.
+async function reloadAdminCards(){
+  const t=_adminTarget; if(!t || !sbClient()) return;
+  const list=document.getElementById('adminEditList'); if(!list) return;
+  list.innerHTML='<div class="muted" style="padding:4px 2px">Загрузка…</div>';
+  let rows=[];
+  try{
+    const {data,error}=await sbClient().rpc('admin_user_cards',{target:t.id});
+    if(!error && Array.isArray(data)) rows=data;
+  }catch(e){ /* нет прав / RPC */ }
+  _adminRows=rows;
+  if(!rows.length){
+    list.innerHTML='<div class="admin-empty">У этого пользователя пока нет карточек.</div>';
+    return;
+  }
+  // сортировка: свежие по updated_at сверху (как в словаре пользователя)
+  rows=rows.slice().sort((a,b)=>(b.updated_at||0)-(a.updated_at||0));
+  list.innerHTML=rows.map(r=>{
+    const d=r.data||{};
+    const w=String(d.hanzi||''), py=String(d.pinyin||''), tr=String(d.translation||'');
+    const fl=flagSVG(r.lang||'zh');
+    return `<div class="admin-edit-row" data-id="${escapeHtml(r.id)}">
+      ${fl}
+      <div class="zh">${escapeHtml(w)}</div>
+      <div class="tr">${escapeHtml(tr)}</div>
+      <button class="btn sec" data-act="edit">✏️</button>
+      <button class="btn ghost" data-act="del" style="color:var(--red)">🗑</button>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.admin-edit-row').forEach(el=>{
+    const id=el.dataset.id;
+    el.querySelector('[data-act="edit"]').onclick=(e)=>{ e.stopPropagation(); const r=_adminRows.find(x=>x.id===id); if(r) openAdminWordForm(r); };
+    el.querySelector('[data-act="del"]').onclick=(e)=>{ e.stopPropagation(); askAdminDelete(id); };
+  });
+}
+// Форма добавления/правки карточки ЧУЖОГО пользователя (пишет напрямую в cards под его user_id).
+function openAdminWordForm(row){
+  const t=_adminTarget; if(!t) return;
+  const d=(row&&row.data)||{};
+  const isNew=!row;
+  const name=t.name||t.email||'(без имени)';
+  const m=document.getElementById('modalAdmin');
+  const lang=isNew?'zh':(d.lang||'zh');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>${isNew?'Новое слово':'Карточка'} · ${escapeHtml(name)}</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" id="afBack">✕</button></div>
+    <label class="lbl">Язык</label>
+    <select id="afLang">
+      ${LANGS.map(l=>`<option value="${l.code}" ${l.code===lang?'selected':''}>${l.flag} ${l.name}</option>`).join('')}
+    </select>
+    <label class="lbl">Слово</label>
+    <input type="text" id="afHanzi" value="${escapeHtml(d.hanzi||'')}" placeholder="你好">
+    <label class="lbl">Пиньинь / транскрипция</label>
+    <input type="text" id="afPinyin" value="${escapeHtml(d.pinyin||'')}" placeholder="nǐ hǎo">
+    <label class="lbl">Перевод</label>
+    <input type="text" id="afTr" value="${escapeHtml(d.translation||'')}" placeholder="привет">
+    <label class="lbl">Метка (необязательно)</label>
+    <input type="text" id="afTag" value="${escapeHtml(d.tag||'')}" placeholder="HSK1">
+    <label class="lbl"><span style="color:var(--amber)">★</span> Важное слово
+      <input type="checkbox" id="afStar" ${d.starred?'checked':''} style="margin-left:6px; transform:scale(1.3)">
+    </label>
+    <div class="btn-row" style="margin-top:16px"><button class="btn" id="afSave">Сохранить</button></div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('#afBack').onclick=()=>openAdminUser(t);
+  m.querySelector('#afSave').onclick=()=>saveAdminWord(row);
+}
+// Сохраняет карточку чужого пользователя в Supabase (upsert под его user_id).
+async function saveAdminWord(row){
+  const t=_adminTarget; if(!t || !sbClient()) return;
+  const hanzi=document.getElementById('afHanzi').value.trim();
+  if(!hanzi){ toast('Введите слово'); return; }
+  const lang=document.getElementById('afLang').value;
+  const d=(row&&row.data)||{};
+  // Меняем только контент; прогресс (prog_at) и box не трогаем.
+  d.lang=lang; d.kind='word';
+  d.hanzi=hanzi;
+  d.pinyin=document.getElementById('afPinyin').value.trim();
+  d.translation=document.getElementById('afTr').value.trim();
+  d.tag=document.getElementById('afTag').value.trim();
+  d.starred=document.getElementById('afStar').checked;
+  if(!d.addedOn) d.addedOn=dayStr();
+  if(!d.addedAt) d.addedAt=newAddedAt();
+  const id=(row&&row.id)||('k'+hash64(lang+'|'+keyFolded(hanzi)));
+  const ts=now();
+  const up=Math.max((row&&(+row.updated_at||0))||0, ts);
+  const pu=(row&&(+row.prog_at||0))||0;
+  const btn=document.getElementById('afSave'); if(btn){ btn.disabled=true; btn.textContent='Сохраняем…'; }
+  try{
+    const r=await sbClient().from('cards').upsert({
+      id, user_id:t.id, lang, data:d, updated_at:up, prog_at:pu
+    },{onConflict:'user_id,id'});
+    if(r.error) throw r.error;
+    toast('Сохранено');
+    openAdminUser(t);
+  }catch(e){
+    toast('Ошибка: '+(e&&e.message||e));
+    if(btn){ btn.disabled=false; btn.textContent='Сохранить'; }
+  }
+}
+// Удаление карточки чужого пользователя (подтверждение в стиле приложения).
+function askAdminDelete(id){
+  const t=_adminTarget; if(!t) return;
+  const r=_adminRows.find(x=>x.id===id); if(!r) return;
+  const d=r.data||{};
+  const name=t.name||t.email||'(без имени)';
+  const m=document.getElementById('modalAdmin');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Удалить слово</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" id="afBack">✕</button></div>
+    <div style="margin-top:8px;font-size:15px;font-weight:600;color:var(--ink)">Удалить из словаря «${escapeHtml(name)}»?</div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px">
+      <div class="zh" style="font-size:22px">${escapeHtml(d.hanzi||'')}</div>
+      ${d.pinyin?`<div class="py">${escapeHtml(d.pinyin)}</div>`:''}
+      <div class="tr" style="text-align:left">${escapeHtml(d.translation||'')}</div>
+    </div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn sec" style="flex:1" id="afNo">Нет</button>
+      <button class="btn warn" style="flex:1" id="afDelYes">Да</button>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('#afBack').onclick=()=>openAdminUser(t);
+  m.querySelector('#afNo').onclick=()=>openAdminUser(t);
+  m.querySelector('#afDelYes').onclick=async ()=>{
+    try{
+      const rr=await sbClient().from('cards').delete().eq('user_id',t.id).eq('id',id);
+      if(rr.error) throw rr.error;
+      toast('Слово удалено');
+    }catch(e){ toast('Ошибка: '+(e&&e.message||e)); }
+    openAdminUser(t);
   };
 }
 
