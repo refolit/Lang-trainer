@@ -690,13 +690,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .exam-status-bar{
   flex:0 0 auto;
   display:flex; align-items:center; justify-content:center; gap:10px;
-  width:100%; max-width:600px; margin:14px auto 18px;
+  width:100%; max-width:600px; margin:14px auto 0;
   min-height:34px;
 }
 /* Ноутбук/десктоп (≥1024px): нижняя статусная строка экзамена компактнее на ~40%
    (правки 18.10.26, п.10) — меньше высота, отступы и шестерёнка. */
 @media (min-width:1024px){
-  .exam-status-bar{min-height:12px; gap:7px; margin:5px auto 7px}
+  .exam-status-bar{min-height:12px; gap:7px; margin:14px auto 0}
   .exam-status-bar .study-gear.light{width:18px; height:18px}
   .exam-status-bar .study-gear.light svg{width:18px; height:18px}
   .exam-status-bar .chip{font-size:11px; padding:3px 9px}
@@ -731,6 +731,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 /* Экзамен: блок ответов «Верно-неверно» прижат к низу экрана (как кнопки в «Учить») */
 #scr-exam.active{display:flex; flex-direction:column}
+/* «Экзамен»: убираем нижний padding экрана — строка состояния + шестерёнка центрируются
+   между нижней кнопкой ответов и меню вкладок (симметрично «Учить»). */
+#scr-exam{padding-bottom:0}
 #examBody{flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; padding-bottom:4px}
 .exam-spacer{flex:1 1 auto; min-height:14px}
 
@@ -738,7 +741,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 #matchRoot{max-width:600px; margin:0 auto}
 /* Карточки опущены ниже (правки 18.10.26, п.5): больший отступ сверху — удобнее доставать
    пальцем на телефоне. Освободившееся место отдано под более крупный шрифт иероглифа и перевода. */
-.match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:22px 0 14px; align-items:stretch; width:100%}
+.match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:22px 0 0; align-items:stretch; width:100%}
 /* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
 .exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
 .exam-opt{font-size:14px; padding:12px 8px; min-height:70px; word-break:break-word}
@@ -1157,7 +1160,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.15.3';
+const APP_VERSION='1.9.15.4';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4273,7 +4276,7 @@ function renderExamSettings(){
         </div>
       </div>`:''}
       <div class="menu-item">
-        <div class="mi-label">Подбор<span class="mi-hint">Соединить иероглиф и перевод</span></div>
+        <div class="mi-label">Подбор пар<span class="mi-hint">Соединить иероглиф и перевод</span></div>
         <button class="sn-switch ${examSettings.match?'on':''}" data-exam-key="match"></button>
       </div>
       <div class="menu-item">
@@ -4507,7 +4510,7 @@ function renderExamChoice(q){
   const body=document.getElementById('examBody');
   // вопрос один раз; число вариантов (4-6-8-10) меняется в шестерёнке → мгновенная перерисовка
   body.innerHTML=`
-    <div class="exam-q" style="margin-bottom:14px">
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center; margin-bottom:14px">
       <div class="eq-word tap" id="eqWord" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
     </div>
     <div class="exam-q" style="width:100%">
@@ -4609,9 +4612,10 @@ function drawTone(){
       ${examSettings.tonePy?`<span class="tp ${s.revealed?'':'off'}">${s.revealed?escapeHtml(s.pyMark):'·'}</span>`:''}
     </div>`).join('');
   body.innerHTML=`
-    <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
+    <div class="exam-q" style="flex:1 1 auto; justify-content:flex-start; width:100%">
       <div class="tone-hanzi">${cells}</div>
       <div class="tone-tr" id="toneTr" hidden></div>
+      <div class="exam-spacer"></div>
       <div class="tone-btns">
         <button data-tone="0" class="zero"><span class="tm">·</span><span class="tl">0</span></button>
         <button data-tone="1"><span class="tm">${TONE_1_ICON}</span><span class="tl">1</span></button>
@@ -4890,6 +4894,7 @@ function renderMatch(){
   const right=shuffle([...matchRound]);
   const body=document.getElementById('examBody');
   body.innerHTML=`
+    <div class="exam-spacer"></div>
     <div class="match-cols">
       <div class="match-col" id="matchLeft">${left.map(it=>`<button class="btn sec match-pair ${eqWordClass(it.hanzi)}" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`).join('')}</div>
       <div class="match-col" id="matchRight">${right.map(it=>{const t=examPickTr(it);return `<button class="btn sec match-pair match-txt ${eqWordClass(t)}" data-id="${it.id}">${escapeHtml(t)}</button>`;}).join('')}</div>
@@ -5013,6 +5018,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15.4','22.10.26','Экзамен: строка состояния + шестерёнка по центру между кнопками ответов и меню (как в «Учить»), кнопки ответов прижаты к низу во всех подрежимах; «Подбор» переименован в «Подбор пар».'],
   ['1.9.15.3','21.10.26','Учить: строка состояния + шестерёнка теперь по центру между кнопками «◀ Назад/Вперёд ▶» и нижним меню (раньше липла к кнопкам, снизу оставался большой зазор).'],
   ['1.9.15.2','20.10.26','Админ-панель поднята над журналом синхронизаций (на вкладке «Синхронизация»): блок «Админ» больше не уезжает вниз, когда в журнале накапливается много записей.'],
   ['1.9.15.1','20.10.26','Экзамен: в настройках экзамена под «Задержкой аудио» появились отдельные ползунки размера «Иероглиф / Пиньинь / Перевод» (50–200 %, шаг 10) — независимые от «Учить», применяются сразу к текущему вопросу. Выбор ответов: клик по иероглифу/слову в вопросе проигрывает его озвучку заново.'],
