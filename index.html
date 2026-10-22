@@ -1160,7 +1160,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.15.4';
+const APP_VERSION='1.9.15.5';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -5018,6 +5018,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15.5','22.10.26','Вход: подхват сессии из адреса теперь «всеядный» — работает и из implicit-хэша (#access_token), и из PKCE-кода (?code=), поэтому магическая ссылка открывается в любом браузере (раньше часть встроенных просмотрщиков обрезала хэш и вход не завершался).'],
   ['1.9.15.4','22.10.26','Экзамен: строка состояния + шестерёнка по центру между кнопками ответов и меню (как в «Учить»), кнопки ответов прижаты к низу во всех подрежимах; «Подбор» переименован в «Подбор пар».'],
   ['1.9.15.3','21.10.26','Учить: строка состояния + шестерёнка теперь по центру между кнопками «◀ Назад/Вперёд ▶» и нижним меню (раньше липла к кнопкам, снизу оставался большой зазор).'],
   ['1.9.15.2','20.10.26','Админ-панель поднята над журналом синхронизаций (на вкладке «Синхронизация»): блок «Админ» больше не уезжает вниз, когда в журнале накапливается много записей.'],
@@ -7339,7 +7340,7 @@ function cleanStatsOf(lang){
 }
 function sbReady(){ return !SB_OFFLINE && !!window.supabase && typeof window.supabase.createClient==='function'; }
 function sbClient(){
-  if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON, { auth:{ flowType:'implicit' } }); }
+  if(!SB && sbReady()){ SB=window.supabase.createClient(SB_URL, SB_ANON, { auth:{ flowType:'implicit', detectSessionInUrl:false } }); }
   return SB;
 }
 async function localSessionUser(){
@@ -7498,6 +7499,42 @@ async function authSignOut(){
   renderAuth();
   toast('Вы вышли из аккаунта');
 }
+// «Всеядный» вход: подхватываем сессию из адреса ЯВНО, двумя способами.
+// Магическая ссылка одноразовая; часть встроенных браузеров (вьюер письма Gmail,
+// приложение Google и т.п.) обрезает #хэш из адреса — тогда access_token теряется.
+// Поэтому читаем и implicit-хэш (#access_token=…), и PKCE-код (?code=…).
+async function recoverSessionFromUrl(){
+  const c=sbClient(); if(!c) return;
+  let got=false;
+  try{
+    if(location.hash && location.hash.indexOf('access_token')>=0){
+      // implicit-поток: токены лежат во фрагменте адреса.
+      await c.auth.getSessionFromUrl();
+      got=true;
+    }else if(location.search && location.search.indexOf('code=')>=0){
+      // PKCE-поток: код лежит в query, обмениваем его на сессию.
+      const code=new URLSearchParams(location.search).get('code');
+      if(code){ await c.auth.exchangeCodeForSession(code); got=true; }
+    }
+  }catch(e){
+    // Ошибка перехвата не критична: остаёмся «не вошли», приложение не падает.
+  }
+  // Вычищаем токен/код из адреса, чтобы они не висели в истории и не обрабатывались повторно.
+  if(got){
+    try{
+      let clean=location.pathname;
+      if(location.hash && location.hash.indexOf('access_token')>=0){
+        clean+=location.search; // хэш целиком служебный — убираем, оставляем только query (если есть)
+      }else{
+        const usp=new URLSearchParams(location.search);
+        usp.delete('code'); usp.delete('error'); usp.delete('error_description');
+        const q=usp.toString();
+        clean+=q?('?'+q):'';
+      }
+      history.replaceState(null,'',clean);
+    }catch(e){}
+  }
+}
 function initAuthState(){
   renderAuth();
   if(!sbReady()) return;
@@ -7517,6 +7554,9 @@ function initAuthState(){
     }
     else if(event==='SIGNED_OUT') renderAuth();
   });
+  // Всеядный перехват сессии из URL (implicit #access_token / PKCE ?code=).
+  // При успехе сам вызовет SIGNED_IN → renderAuth; иначе ничего не меняет.
+  recoverSessionFromUrl();
 }
 
 // ============================== СИНХРОНИЗАЦИЯ ТОЛЬКО ВРУЧНУЮ ==============================
