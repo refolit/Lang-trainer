@@ -1160,7 +1160,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.15.5';
+const APP_VERSION='1.9.15.6';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2740,6 +2740,7 @@ function flushTrInputs(){
 // Один аудио-файл на карточку (обычная скорость). Кнопка «Прикрепить аудио» — обычная btn,
 // кликается целиком. Если файл прикреплён — строка с именем + ▶ (прослушать) и 🗑 (удалить).
 function renderSlots(){
+  SlotPlayer.stop();
   const box=document.getElementById('audioSlots'); if(!box) return;
   const r=formRec('norm');
   if(r){
@@ -2754,7 +2755,7 @@ function renderSlots(){
     box.innerHTML=`<button class="btn sec" id="btnAddAudio">＋ Прикрепить аудио</button>`;
   }
   box.querySelector('#btnAddAudio').onclick=()=>pickAudioForNext();
-  box.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>playSlot(b.dataset.play));
+  box.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>playSlot(b.dataset.play, b));
   box.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>rmSlot(b.dataset.rm));
 }
 // Прикрепляем файл к единственной (обычной) скорости.
@@ -2771,6 +2772,7 @@ function closeModal(id){
 // Закрывает все модалки. Вызывается первой строкой в каждом открывателе,
 // чтобы карточка/фильтр/список/вход никогда не ложились поверх друг друга.
 function closeAllModals(){
+  SlotPlayer.stop();
   const item=document.getElementById('modalItem');
   if(item && !item.classList.contains('hidden')) dropPendingRec();
   document.querySelectorAll('.modal').forEach(m=>m.classList.add('hidden'));
@@ -2808,15 +2810,45 @@ function autoTranslate(){
     else toast('Не удалось открыть переводчик — вставьте перевод сами');
   }
 }
-async function playSlot(speed){
+// Одиночный плеер предпрослушки аудио в карточке (режим Словарь). Одно нажатие ▶ — играть,
+// повторное — пауза (следующее нажатие продолжает с того же места), поэтому аудио
+// не накладываются друг на друга. Значок кнопки отражает состояние: ⏸ — играет, ▶ — на паузе/стоп.
+const SlotPlayer={
+  cur:null, url:null, btn:null,
+  _icon(g){ if(this.btn) this.btn.textContent=g; },
+  _reset(){ this._icon('▶'); this.cur=null; this.url=null; this.btn=null; },
+  play(url, btn){
+    // Тот же файл: играет → пауза; на паузе → продолжить с того же места.
+    if(this.cur && this.url===url){
+      this.btn=btn;                 // кнопка могла перерисоваться — обновляем ссылку
+      const a=this.cur;
+      if(!a.paused){ a.pause(); this._icon('▶'); }
+      else{ a.play().catch(()=>{}); this._icon('⏸'); }
+      return;
+    }
+    this.stop();                    // другой файл — гасим предыдущий (наложение исключено)
+    this.btn=btn;                   // stop() сбрасывает btn — ставим ссылку после него
+    let a;
+    try{ a=new Audio(url); }catch(e){ this.btn=null; return; }
+    a.onended=()=>this._reset();
+    a.onerror=()=>this._reset();
+    this.cur=a; this.url=url;
+    a.play().catch(()=>{});
+    this._icon('⏸');
+  },
+  stop(){
+    if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
+    this._reset();
+  }
+};
+async function playSlot(speed, btn){
   const r=formRec(speed);
   if(r){
-    if(!r.url && r.path){ await cacheRemoteAudio(editingItem, speed); return playSlotAfter(r); }
-    if(r.url){ const a=new Audio(r.url); a.play(); return; }
+    if(!r.url && r.path){ await cacheRemoteAudio(editingItem, speed); if(r.url) SlotPlayer.play(r.url, btn); return; }
+    if(r.url){ SlotPlayer.play(r.url, btn); return; }
   }
   const t=(editingItem&&editingItem.hanzi)||document.getElementById('fHanzi').value; if(t) speak(t,0.7);
 }
-function playSlotAfter(r){ if(r && r.url){ const a=new Audio(r.url); a.play(); } }
 function rmSlot(speed){
   if(!editingItem) return;
   if(pendingRec[speed]){ URL.revokeObjectURL(pendingRec[speed].url); delete pendingRec[speed]; renderSlots(); return; }
@@ -5018,6 +5050,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15.6','23.10.26','Словарь: кнопка ▶ у аудио в карточке стала переключателем — первое нажатие играет, второе ставит на паузу (следующее продолжает с того же места); повторные нажатия больше не накладывают аудио друг на друга.'],
   ['1.9.15.5','22.10.26','Вход: подхват сессии из адреса теперь «всеядный» — работает и из implicit-хэша (#access_token), и из PKCE-кода (?code=), поэтому магическая ссылка открывается в любом браузере (раньше часть встроенных просмотрщиков обрезала хэш и вход не завершался).'],
   ['1.9.15.4','22.10.26','Экзамен: строка состояния + шестерёнка по центру между кнопками ответов и меню (как в «Учить»), кнопки ответов прижаты к низу во всех подрежимах; «Подбор» переименован в «Подбор пар».'],
   ['1.9.15.3','21.10.26','Учить: строка состояния + шестерёнка теперь по центру между кнопками «◀ Назад/Вперёд ▶» и нижним меню (раньше липла к кнопкам, снизу оставался большой зазор).'],
