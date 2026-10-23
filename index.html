@@ -289,6 +289,22 @@ html[data-theme="dark"] .dc.py{color:#7db8f2}
 }
 .study-speak svg{width:18px; height:18px; display:block; fill:currentColor}
 .study-speak:active{transform:scale(.94)}
+/* Арабский «Учить»: три кнопки управления аудио (⏪ перемотка назад / ▶ плей-пауза / ⏩ вперёд).
+   Показываются только для арабского (класс .on). Круглые, в стиле .study-speak. */
+.study-transport{display:none; justify-content:center; align-items:center; gap:12px; margin:12px 0 0; padding:0}
+.study-transport.on{display:flex}
+.study-tt-btn{
+  width:44px; height:44px; border-radius:50%; border:0; cursor:pointer; padding:0;
+  background:var(--soft); color:var(--mut);
+  display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;
+}
+.study-tt-btn svg{width:22px; height:22px; display:block; fill:currentColor}
+.study-tt-btn:active{transform:scale(.94)}
+.study-tt-btn.play{width:56px; height:56px; background:var(--red); color:#fff; box-shadow:0 4px 0 var(--red-d), 0 5px 12px rgba(198,40,40,.22)}
+.study-tt-btn.play svg{width:26px; height:26px}
+.study-tt-btn.seek{width:auto; min-width:64px; height:44px; padding:0 14px; border-radius:22px; font-size:14px; font-weight:700; color:var(--ink); border:1.5px solid var(--line); background:var(--card)}
+.study-tt-btn.seek:active{transform:scale(.96)}
+.study-tt-btn:disabled{opacity:.4; pointer-events:none}
 /* Плавающая кнопка «Наверх» в словаре (П.4): показывается скроллом ниже 15-й карточки */
 .dict-up-fab{
   position:sticky; bottom:12px; margin:14px 0 0 auto; z-index:5;
@@ -825,6 +841,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <div class="bigtr" id="studyTr"></div>
         <div class="bigsize" id="studySize"></div>
       </div>
+      <div class="study-transport" id="studyTransport">
+        <button class="study-tt-btn seek" id="studyTTBack" title="Перемотать на 5 с назад" aria-label="Перемотать на 5 с назад">&lt;&lt; 5сек</button>
+        <button class="study-tt-btn play" id="studyTTPlay" title="Плей / пауза" aria-label="Плей / пауза"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M320-200v-560l440 280-440 280Z"/></svg></button>
+        <button class="study-tt-btn seek" id="studyTTFwd" title="Перемотать на 5 с вперёд" aria-label="Перемотать на 5 с вперёд">5сек &gt;&gt;</button>
+      </div>
       <div class="study-btns">
         <button class="btn sec" id="studyBack">◀ Назад</button>
         <button class="btn warn" id="studyAgain">✍️ Писать это</button>
@@ -1160,7 +1181,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.15.6';
+const APP_VERSION='1.9.15.7';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1836,6 +1857,11 @@ const Player={
     if(this.cur) this._releaseTrack();
     if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} }
   },
+  // Текущий играющий mp3-файл (для кнопок плей/пауза/перемотки арабских аятов).
+  // Синтез речи (speechSynthesis) не имеет объекта Audio — вернёт null.
+  currentTrack(){
+    return (this.cur && this.cur instanceof Audio && this.cur.src) ? this.cur : null;
+  },
   _releaseTrack(){
     const c=this.cur; this.cur=null;
     try{ c.pause(); c.onended=c.onerror=null; }catch(e){}
@@ -1894,7 +1920,8 @@ const Player={
         if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
         this.cur=a;
         a.onended=finish; a.onerror=finish;
-        tmo=setTimeout(finish, 90000);
+        // Без страховочного таймаута: mp3 может быть длинным (арабские аяты) — конец ловим
+        // по onended, сбой — по onerror. Иначе длинный файл обрывался на 90-й секунде.
         a.play().catch(finish);
       }
     });
@@ -3245,6 +3272,7 @@ function showStudyCard(){
   if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
   else studyPlayLoop(it);
   prefetchNextTTS(studyQueue, studyIdx);
+  updateStudyTransport();
 }
 // Точные размеры «Учить» при 100% (золотой стандарт, пользователь утвердил 05.10.26):
 // телефон — иероглиф 100px / пиньинь 38px / перевод 27px;
@@ -3344,6 +3372,7 @@ function studyPlayLoop(it){
     if(!it) return;
     playItem(it, { onDone: ()=>{
       if(studyGen!==my) return;                          // действие пользователя или уход с карточки
+      updateStudyTransport();                            // аят доиграл — вернуть значок ▶
       const scr=document.getElementById('scr-study');
       if(!scr || !scr.classList.contains('active')) return;
       const cur=studyQueue[studyIdx];
@@ -3392,6 +3421,56 @@ function studySpeak(){
   Player.stop();
   if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='🔊';
   playItem(it,{mode:'study'});   // одно проговаривание обычной скорости, без автоповтора
+}
+
+// ============================== АРАБСКИЙ «УЧИТЬ»: КНОПКИ АУДИО (⏪ ▶ ⏩) ==============================
+// Для арабского языка в режиме «Учить» показываем три кнопки над рядом «Назад/Писать/Вперёд»:
+// перемотка на 5 с назад, плей/пауза (resume), перемотка на 5 с вперёд. Управляют текущим
+// играющим mp3 (аятом). Автоповтор (studyPlayLoop) НЕ прерываем — studyTouch не вызываем,
+// поэтому после паузы/перемотки аят продолжает повторяться как обычно.
+const STUDY_SEEK_STEP=5;                       // шаг перемотки, секунд
+function _studyTransportEl(){ return document.getElementById('studyTransport'); }
+function _studyPlayBtn(){ return document.getElementById('studyTTPlay'); }
+// Обновить состояние кнопок под текущую карточку: показать блок только для арабского,
+// проставить значок ▶/⏸ по состоянию текущего mp3.
+function updateStudyTransport(){
+  const el=_studyTransportEl(); if(!el) return;
+  el.classList.toggle('on', activeLang==='ar');
+  if(activeLang!=='ar') return;
+  const a=Player.currentTrack();
+  const playBtn=_studyPlayBtn();
+  if(playBtn) playBtn.innerHTML = (a && !a.paused)
+    ? '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M360-320v-320h120v320H360Zm240 0v-320h120v320H600Z"/></svg>'  // пауза
+    : '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M320-200v-560l440 280-440 280Z"/></svg>';                  // плей
+}
+// Плей/пауза текущего mp3. Если ничего не играет — запускаем проигрывание заново.
+function studyTransportToggle(){
+  const it=studyQueue[studyIdx]; if(!it) return;
+  const a=Player.currentTrack();
+  if(a){
+    if(!a.paused){ a.pause(); }
+    else{ a.play().catch(()=>{}); }
+    updateStudyTransport();
+    return;
+  }
+  // mp3 сейчас не звучит (аят доиграл и автоповтор завершился) — заново запускаем.
+  const r=liveRec(it,'norm');
+  if(r && r.url){ playItem(it,{mode:'study'}); }
+  else if(r && r.path){ ensureCardAudio(it,['norm']).then(()=>{ if(liveRec(it,'norm') && liveRec(it,'norm').url) playItem(it,{mode:'study'}); }); }
+  updateStudyTransport();
+}
+// Перемотка на ±delta секунд текущего mp3 (в границах файла).
+function studyTransportSeek(delta){
+  const a=Player.currentTrack(); if(!a) return;
+  try{
+    let d=Number(a.duration);
+    if(!isFinite(d) || d<=0) d=null;           // длительность ещё не известна — не лимитируем
+    let t=(Number(a.currentTime)||0)+delta;
+    if(t<0) t=0;
+    if(d!=null && t>d) t=Math.max(0, d-0.1);
+    a.currentTime=t;
+  }catch(e){}
+  updateStudyTransport();
 }
 // --- результат ответа (общий для «Письма» и всех подрежимов «Экзамена») ---
 // Новая стратегия (1.9.5): переходы 6/6/6/7 верных ПОДРЯД (boxStreak); выучено = коробка 5
@@ -5050,6 +5129,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15.7','23.10.26','Арабский «Учить»: над кнопками «Назад/Писать/Вперёд» появился ряд управления аудио — «<< 5сек» (назад), плей/пауза, «5сек >>» (вперёд). Перемотка на 5 секунд, плей/пауза с продолжением с того же места; длинные mp3 больше не обрываются на 90-й секунде.'],
   ['1.9.15.6','23.10.26','Словарь: кнопка ▶ у аудио в карточке стала переключателем — первое нажатие играет, второе ставит на паузу (следующее продолжает с того же места); повторные нажатия больше не накладывают аудио друг на друга.'],
   ['1.9.15.5','22.10.26','Вход: подхват сессии из адреса теперь «всеядный» — работает и из implicit-хэша (#access_token), и из PKCE-кода (?code=), поэтому магическая ссылка открывается в любом браузере (раньше часть встроенных просмотрщиков обрезала хэш и вход не завершался).'],
   ['1.9.15.4','22.10.26','Экзамен: строка состояния + шестерёнка по центру между кнопками ответов и меню (как в «Учить»), кнопки ответов прижаты к низу во всех подрежимах; «Подбор» переименован в «Подбор пар».'],
@@ -6548,6 +6628,9 @@ document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
 document.getElementById('studySpeakBtn').onclick=studySpeak;
+document.getElementById('studyTTBack').onclick=()=>studyTransportSeek(-STUDY_SEEK_STEP);
+document.getElementById('studyTTPlay').onclick=studyTransportToggle;
+document.getElementById('studyTTFwd').onclick=()=>studyTransportSeek(STUDY_SEEK_STEP);
 document.getElementById('writePrev').onclick=writePrev;
 document.getElementById('writeNext').onclick=writeNext;
 document.getElementById('writeSettingsBtn').onclick=openWriteSettings;
