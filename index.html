@@ -1185,7 +1185,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.16.0';
+const APP_VERSION='1.9.16.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1827,7 +1827,7 @@ async function fetchRemoteTTS(text, langTag){
 // ============================== AUDIO SEQUENCE PLAYER ==============================
 // plays tracks sequentially; each track: {kind:'file',url} or {kind:'tts',text,rate}
 const Player={
-  busy:false, gen:0, stopFlag:false, onSpeedChange:null, onDone:null, cur:null,
+  busy:false, gen:0, stopFlag:false, onSpeedChange:null, onDone:null, onTrackStart:null, cur:null,
   async play(tracks, opts){
     opts=opts||{};
     const my=++this.gen;                      // устаревший запуск сам выходит из цикла
@@ -1916,6 +1916,7 @@ const Player={
             if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
             this.cur=a;
             a.onended=finish; a.onerror=finish;
+            a.onplaying=()=>{ this.onTrackStart&&this.onTrackStart(a); };
             tmo=setTimeout(finish, Math.min(90000, 3000+String(t.text||'').length*450));
             try{ a.play().catch(finish); }catch(e){ finish(); }
           }
@@ -1927,6 +1928,7 @@ const Player={
         if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
         this.cur=a;
         a.onended=finish; a.onerror=finish;
+        a.onplaying=()=>{ this.onTrackStart&&this.onTrackStart(a); };
         // Без страховочного таймаута: mp3 может быть длинным (арабские аяты) — конец ловим
         // по onended, сбой — по onerror. Иначе длинный файл обрывался на 90-й секунде.
         a.play().catch(finish);
@@ -1967,6 +1969,7 @@ async function playItem(it, opts){
   ensureCardAudio(it, opts.mode==='exam' ? ['norm'] : (opts.speeds||studySpeeds()));  // в фоне: не блокируем старт звука
   const el=document.getElementById('studySpeed');
   Player.onSpeedChange=(label)=>{ if(el) el.textContent=label?'🔊':''; };
+  Player.onTrackStart=()=>{ updateStudyTransport(); };   // mp3 реально зазвучал — кнопка ▶→⏸
   Player.onDone=()=>{ if(opts.onDone) opts.onDone(); };
   Player.play(tracksFor(it,opts));
 }
@@ -5217,6 +5220,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.16.1','24.10.26','Арабский «Учить»: кнопка плей/паузы теперь переключается сразу, как только аят начал звучать (при автозапуске длинного mp3) — раньше значок ▶ не менялся на ⏸ до конца аята.'],
   ['1.9.16.0','24.10.26','Арабский «Учить»: транспортные кнопки выровнены — все три одинаковые (44px, не круглые, нейтральный фон), центральная больше не красная и не наезжает на «Писать это»; пауза — иконка pause_circle.'],
   ['1.9.15.9','24.10.26','Арабский «Учить»: кнопки управления аудио получили новые иконки Material — перемотка назад/вперёд (стрелки) и плей/пауза (круг-плей, при игре — пауза); текст «5сек» убран.'],
   ['1.9.15.8','24.10.26','Корзина: удаление слова теперь мягкое — карточка помечается удалённой и попадает в «Корзину» (кнопка в словаре), откуда её можно восстановить или удалить навсегда; удаление синхронизируется между устройствами, удалённое старше 30 дней стирается автоматически.'],
