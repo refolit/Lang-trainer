@@ -1185,7 +1185,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.16.3';
+const APP_VERSION='1.9.17';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1884,10 +1884,12 @@ const Player={
           // разрешаем голос: «google»/«g:<тег>» → сетевой Google-mp3 (региональный);
           // иначе локальный voiceURI устройства, если он есть.
           const gtag=googleTag(t.voice);
-          const v = isGoogleVoice(t.voice) ? null : (t.voice ? getVoiceByURI(t.voice) : pickVoice());
+          // t.lang (напр. 'ru-RU' для «Русский→Кит.») принудительно задаёт язык дорожки
+          const langTag=t.lang || gtag || undefined;
+          const v = isGoogleVoice(t.voice) ? null : (t.voice ? getVoiceByURI(t.voice) : (t.lang ? findLocalVoice(t.lang) : pickVoice()));
           if(!isGoogleVoice(t.voice) && v){
             const u=new SpeechSynthesisUtterance(t.text);
-            u.lang=ttsLang(); u.rate=t.rate||1;
+            u.lang=t.lang||ttsLang(); u.rate=t.rate||1;
             u.voice=v;
             u.onend=finish; u.onerror=finish;
             // Chrome bug: speak() сразу после cancel() в том же тике молча глотается
@@ -1907,11 +1909,11 @@ const Player={
             tmo=setTimeout(finish, maxSpeechMs(t.text));
           }else{
             // Google голос (по умолчанию/региональный) или нет локального голоса — сетевой mp3
-            const a=await fetchRemoteTTS(t.text, gtag||undefined);
+            const a=await fetchRemoteTTS(t.text, langTag);
             if(stale()){ try{ if(a){ a.pause(); a.onended=a.onerror=null; } }catch(e){} finish(); return; }
             // Сеть не отдала mp3 (офлайн / Google не ответил): вместо тишины — локальный голос
             // устройства, если он для этого языка есть (иначе — честная тишина, как раньше).
-            if(!a){ await speakLocalFallback(t.text, t.rate, gtag||undefined); finish(); return; }
+            if(!a){ await speakLocalFallback(t.text, t.rate, langTag); finish(); return; }
             // гасим ПРЕДЫДУЩИЙ звук перед стартом нового (единая точка — наложения не будет)
             if(this.cur){ try{ this.cur.pause(); this.cur.onended=this.cur.onerror=null; }catch(e){} }
             this.cur=a;
@@ -1947,14 +1949,23 @@ function tracksFor(it, opts){
   const rateMap={slow:0.55, norm:1, fast:1.18};
   const rec=(sp)=> (it.recordings||[]).find(r=>r.speed===sp);
   const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
-  const out=[];
-  for(const sp of speeds){
-    const r=rec(sp);
-    // пустая ссылка (слёт blob: напр. после восстановления БД) — не ломаем плейлист
-    if(r && r.url) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
+  const rf = !!opts.rf && activeLang==='zh';
+  // «Русский→Кит.» (rf): своя mp3 — на иностранном языке, для русской стороны не подходит —
+  // вместо неё синтезируем русский текст «из центра» (Google ru + локальный русский fallback).
+  if(!rf){
+    const out=[];
+    for(const sp of speeds){
+      const r=rec(sp);
+      // пустая ссылка (слёт blob: напр. после восстановления БД) — не ломаем плейлист
+      if(r && r.url) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
+    }
+    if(out.length) return out;
   }
-  if(out.length) return out;
   const sv=(opts.mode==='study')?(settings.studyVoice||'google'):'';
+  if(rf){
+    const text=trJoined(it)||'';
+    return speeds.map(sp=>({kind:'tts',text,rate:rateMap[sp],reps:R,label:labelMap[sp],voice:'google',lang:'ru'}));
+  }
   return speeds.map(sp=>({kind:'tts',text:it.hanzi,rate:rateMap[sp],reps:R,label:labelMap[sp],voice:sv||opts.voice||''}));
 }
 // В режиме «Учить» слово озвучивается один раз на обычной скорости.
@@ -1966,6 +1977,8 @@ async function playItem(it, opts){
   opts=opts||{};
   opts.mode=opts.mode||'study';
   if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
+  // в режиме «Учить» направление показа определяет, что озвучивать (центр)
+  opts.rf = opts.mode==='study' && studyCurDir==='rf';
   ensureCardAudio(it, opts.mode==='exam' ? ['norm'] : (opts.speeds||studySpeeds()));  // в фоне: не блокируем старт звука
   const el=document.getElementById('studySpeed');
   Player.onSpeedChange=(label)=>{ if(el) el.textContent=label?'🔊':''; };
@@ -3176,6 +3189,9 @@ let studyQueue=[], studyIdx=0;
 // Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
 let studyAudioOn=true, studyPyOn=true, studyTrOn=true, studyHanziOn=true;
 let studySeqOn=false;   // «Подряд»: слова в порядке создания (старые → новые), без SRS-чередования
+// Направление показа ТЕКУЩЕЙ карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
+// Для 'mix' решается на каждый показ случайно и запоминается здесь, чтобы текст и озвучка совпали.
+let studyCurDir='fr';
 // Порядок полей в модалке «Настройки режима Изучение»: Аудио, Иероглиф, Пиньинь, Перевод.
 // Для арабского и турецкого: «Иероглиф» → «Иностр. текст», строка «Пиньинь» скрыта (нет пиньиня).
 const STUDY_KEYS=[
@@ -3195,13 +3211,19 @@ function studyKeysForLang(){
   }
   return keys;
 }
+// Видимость строк «Учить» по смыслу: тумблер «Иероглиф» управляет иероглифом, «Перевод» — русским.
+// В «Русский→Кит.» (rf) иероглиф внизу (поле «Перевод»), русский в центре — тумблеры меняются местами.
+function applyStudyRows(){
+  const rf=studyCurDir==='rf';
+  const hz=document.getElementById('studyHanzi'), py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
+  if(hz) hz.style.display = (rf ? studyTrOn : studyHanziOn) ? '' : 'none';
+  if(py) py.style.display=studyPyOn?'':'none';
+  if(tr) tr.style.display = (rf ? studyHanziOn : studyTrOn) ? '' : 'none';
+}
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
   if(gear) gear.classList.toggle('dim', !(studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn));
-  const hz=document.getElementById('studyHanzi'), py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
-  if(hz) hz.style.display=studyHanziOn?'':'none';
-  if(py) py.style.display=studyPyOn?'':'none';
-  if(tr) tr.style.display=studyTrOn?'':'none';
+  applyStudyRows();
   applyStudySizes();
   renderStudySettings();
 }
@@ -3241,6 +3263,7 @@ function renderStudySettings(){
         </div>
         ${skey?studySizeSliderHTML(skey):''}
         ${key==='studyAudio'?studyVoiceSelectHTML():''}
+        ${key==='studyAudio' && activeLang==='zh' ? studyDirSelectHTML() : ''}
       </div>`;
     }).join('')}
     </div>
@@ -3249,6 +3272,7 @@ function renderStudySettings(){
     b.onclick=()=>{ setStudyFlag(b.dataset.studyKey, !studyFlag(b.dataset.studyKey)); renderStudySettings(); };
   });
   bindStudyVoiceSel();
+  bindStudyDirSel();
   m.querySelectorAll('input[type=range][data-size-key]').forEach(r=>{
     r.oninput=()=>{
       const k=r.dataset.sizeKey;
@@ -3284,6 +3308,22 @@ function bindStudyVoiceSel(){
   const sel=document.getElementById('studyVoiceSel');
   if(!sel) return;
   sel.onchange=()=>{ settings.studyVoice=sel.value; persist(); };
+}
+// Выбор направления перевода «Учить» (пока только для китайского): fr / rf / mix.
+function studyDirSelectHTML(){
+  const cur=settings.studyDir||'fr';
+  const opts=[['fr','Китайский - Русский'],['rf','Русский - Китайский'],['mix','оба направления вперемешку']];
+  return `<div style="margin:8px 0 2px"><label style="font-size:12px;color:var(--mut)">Направление перевода</label>
+    <select id="studyDirSel" style="width:100%;margin-top:4px">${opts.map(o=>'<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')}</select></div>`;
+}
+function bindStudyDirSel(){
+  const sel=document.getElementById('studyDirSel');
+  if(!sel) return;
+  sel.onchange=()=>{
+    settings.studyDir=sel.value; persist();
+    const scr=document.getElementById('scr-study');
+    if(scr && scr.classList.contains('active')) refreshStudyCard();
+  };
 }
 function toggleStudyAudio(){ setStudyFlag('studyAudio', !studyAudioOn); }
 function toggleStudyPy(){ setStudyFlag('studyPy', !studyPyOn); }
@@ -3344,27 +3384,44 @@ function resetStudyQueue(){
   wrap.classList.remove('hidden'); emp.classList.add('hidden');
   showStudyCard();
 }
+// Направление показа карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
+// Для 'mix' решается на каждый показ случайно и запоминается в studyCurDir (текст = озвучка).
+function studyDirFor(it){
+  const d=settings.studyDir||'fr';
+  if(d==='mix') return (Math.random()<0.5)?'fr':'rf';
+  return d;
+}
+// Перерисовать текст/размеры/озвучку текущей карточки (без повторного markShown).
+// Вызывается при показе карточки и при смене направления перевода в настройках.
+function refreshStudyCard(it){
+  it=it||studyQueue[studyIdx];
+  if(!it) return;
+  studyCurDir=studyDirFor(it);
+  const rf=studyCurDir==='rf';
+  const big=document.getElementById('studyHanzi');
+  big.textContent = rf ? (trJoined(it)||'') : it.hanzi;
+  // один класс на все случаи: точный размер задаёт applyStudySizes
+  big.className='big';
+  applyStudySizes();
+  applyStudyRows();
+  // строка статуса: уровень/повторы текущей карточки (компактно, вверху справа)
+  const stLine=document.getElementById('studyStatusLine');
+  const statusLine='Уровень '+levelOf(it)+(isLearned(it) ? ' · Выучено' : (' · Повторов '+(it.correct||0)));
+  if(stLine) stLine.textContent=statusLine;
+  // пиньинь/транскрипция без изменений; «Перевод» — то, чего НЕТ в центре (в rf — иероглиф)
+  document.getElementById('studyPinyin').textContent=pinyinOf(it)||'';
+  document.getElementById('studyTr').textContent = rf ? (it.hanzi||'') : (trJoined(it)||'');
+  if(!studyAudioOn){ document.getElementById('studySpeed').textContent='🔇'; }
+  else studyPlayLoop(it);
+  updateStudyTransport();
+}
 function showStudyCard(){
   if(studyIdx>=studyQueue.length){ resetStudyQueue(); return; }
   const it=studyQueue[studyIdx];
   markShown(it);
   document.getElementById('studyProgress').textContent=(studyIdx+1)+' / '+studyQueue.length;
-  const big=document.getElementById('studyHanzi');
-  big.textContent=it.hanzi;
-  // один класс на все случаи: точный размер задаёт applyStudySizes
-  big.className='big';
-  applyStudySizes();
-  // строка статуса: уровень/повторы текущей карточки (компактно, вверху справа)
-  const stLine=document.getElementById('studyStatusLine');
-  const statusLine='Уровень '+levelOf(it)+(isLearned(it) ? ' · Выучено' : (' · Повторов '+(it.correct||0)));
-  if(stLine) stLine.textContent=statusLine;
-  // пиньинь/транскрипция и перевод видны сразу (и крупно); скрыты, если выключены в тулбаре
-  document.getElementById('studyPinyin').textContent=pinyinOf(it)||'';
-  document.getElementById('studyTr').textContent=trJoined(it)||'';
-  if(!studyAudioOn) document.getElementById('studySpeed').textContent='🔇';
-  else studyPlayLoop(it);
+  refreshStudyCard(it);
   prefetchNextTTS(studyQueue, studyIdx);
-  updateStudyTransport();
 }
 // Точные размеры «Учить» при 100% (золотой стандарт, пользователь утвердил 05.10.26):
 // телефон — иероглиф 100px / пиньинь 38px / перевод 27px;
@@ -3378,11 +3435,13 @@ const STUDY_HZ_MOBILE=100, STUDY_HZ_DESKTOP=91;
 const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=35;
 const STUDY_TR_MOBILE=27, STUDY_TR_DESKTOP=21;
 const STUDY_HZ_EN_DESKTOP=64, STUDY_TR_EN_DESKTOP=25; // английский на десктопе: слово/перевод меньше
+const STUDY_HZ_RF_MOBILE=64, STUDY_HZ_RF_DESKTOP=52;  // «Русский→Кит.»: русский в центре (rf)
+const STUDY_TR_RF_MOBILE=40, STUDY_TR_RF_DESKTOP=36;  // «Русский→Кит.»: иероглиф в поле «Перевод» (rf)
 const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
 const STUDY_SENT_MIN=0.52;        // предложение: нижняя граница масштаба (не сжимаем в ноль)
 const STUDY_DECAY=0.05;           // предложение: насколько уменьшается масштаб за каждый знак сверх 2
-function studyFonts(chars, mult){
+function studyFonts(chars, mult, rf){
   const desktop=innerWidth>=1024;
   const sent=chars>=STUDY_SENT_BREAK;
   mult=mult||{};
@@ -3395,21 +3454,32 @@ function studyFonts(chars, mult){
   const cur = sent
     ? Math.max(STUDY_SENT_MIN, 1 - Math.max(0, chars-2) * STUDY_DECAY)
     : 1;
+  // «Русский→Кит.» (rf): в центре русский текст (меньше), в «Переводе» — иероглиф (свой базовый размер).
   // Английский (латиница) на десктопе: слово/перевод меньше золотого стандарта (правки 19.10.26).
   const enDesk = desktop && activeLang==='en';
-  const hzBase = enDesk ? STUDY_HZ_EN_DESKTOP : (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE);
-  const trBase = enDesk ? STUDY_TR_EN_DESKTOP : (desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE);
-  const hz=hzBase*STUDY_SENT_RATIO*mulH*cur;
+  const hzBase = rf
+    ? (desktop?STUDY_HZ_RF_DESKTOP:STUDY_HZ_RF_MOBILE)
+    : (enDesk ? STUDY_HZ_EN_DESKTOP : (desktop?STUDY_HZ_DESKTOP:STUDY_HZ_MOBILE));
+  const trBase = rf
+    ? (desktop?STUDY_TR_RF_DESKTOP:STUDY_TR_RF_MOBILE)
+    : (enDesk ? STUDY_TR_EN_DESKTOP : (desktop?STUDY_TR_DESKTOP:STUDY_TR_MOBILE));
+  // «Русский→Кит.» (rf): центр = русский (ползунок «Перевод» → mulT), поле «Перевод» = иероглиф
+  // (ползунок «Иероглиф» → mulH). Иначе центр = иероглиф (mulH), перевод = русский (mulT).
+  const hzMul = rf ? mulT : mulH;
+  const trMul = rf ? mulH : mulT;
+  const hz=hzBase*STUDY_SENT_RATIO*hzMul*cur;
   const py=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP*Math.min(1, cur*1.05);
-  const tr=trBase*mulT*Math.min(1, cur*1.05);
+  const tr=trBase*trMul*Math.min(1, cur*1.05);
   return {desktop, sent, hz, py, tr, cur};
 }
 function applyStudySizes(){
   const n=document.getElementById('studyHanzi'); if(!n) return;
-  const f=studyFonts(Array.from((n.textContent||'')).length);
+  const rf=studyCurDir==='rf';
+  const f=studyFonts(Array.from((n.textContent||'')).length, null, rf);
   n.style.fontSize = f.hz.toFixed(1)+'px';
   n.style.lineHeight = f.sent ? 1.4 : '';
-  if(f.sent){ n.style.wordBreak='normal'; n.style.overflowWrap='anywhere'; } else { n.style.wordBreak='break-all'; n.style.overflowWrap=''; }
+  // русский в центре (rf) не режем посередине слова — переносим целиком
+  if(f.sent || rf){ n.style.wordBreak='normal'; n.style.overflowWrap='anywhere'; } else { n.style.wordBreak='break-all'; n.style.overflowWrap=''; }
   const py=document.getElementById('studyPinyin');
   if(py) py.style.fontSize=f.py.toFixed(1)+'px';
   const tr=document.getElementById('studyTr');
@@ -5221,6 +5291,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.17','24.10.26','Учить (китайский): в настройках режима появилось «Направление перевода» — Китайский→Русский / Русский→Китайский / оба вперемешку. В перевёрнутом режиме в центре русский текст, пиньинь без изменений, в «Переводе» — иероглиф; озвучивается русский текст (Google + локальный русский голос как запасной).'],
   ['1.9.16.3','24.10.26','Вход: переход с implicit-флоу на PKCE — токен теперь передаётся через ?code= (а не через #access_token), поэтому магическая ссылка открывается и из мобильных почтовых приложений (Gmail и др.), которые обрезали хэш из адреса.'],
   ['1.9.16.2','24.10.26','Синхронизация: арабский (и другие языки) перестал «застревать» в статусе «не синхронизировано» после синка — облачные карточки теперь нормализуют deleted_at/kind (как локальные), а удаление/восстановление из Корзины сразу обновляет кэш облака. С кнопки «Корзина» убран значок 🗑.'],
   ['1.9.16.1','24.10.26','Арабский «Учить»: кнопка плей/паузы теперь переключается сразу, как только аят начал звучать (при автозапуске длинного mp3) — раньше значок ▶ не менялся на ⏸ до конца аята.'],
@@ -7801,7 +7872,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
