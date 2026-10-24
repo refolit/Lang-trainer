@@ -829,7 +829,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="btn-row" style="margin-bottom:10px">
         <button class="btn sec" id="btnAdd">＋ Слово</button>
         <button class="btn sec" id="btnBatch">Список</button>
-        <button class="btn sec" id="btnTrash">🗑 Корзина</button>
+        <button class="btn sec" id="btnTrash">Корзина</button>
       </div>
     </div>
     <div id="dictList"></div>
@@ -1185,7 +1185,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.16.1';
+const APP_VERSION='1.9.16.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2587,7 +2587,7 @@ async function confirmDeleteCard(id){
   await persist();
   try{
     const c=sbClient();
-    if(c && _syncUser) await pushCard(it, _syncUser);
+    if(c && _syncUser){ await pushCard(it, _syncUser); cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0}; }
   }catch(e){ /* офлайн/нет входа — метка доедет при следующей синхронизации */ }
   renderDict(); updateChips(); refreshModeFilterBadges(); updateTrashButton();
   toastShort('Слово в корзине');
@@ -2609,6 +2609,7 @@ async function purgeCard(id){
     const c=sbClient();
     if(c && _syncUser) await c.from('cards').delete().eq('user_id',_syncUser.id).eq('id',id);
   }catch(e){ /* офлайн/нет входа — удалим из облака при следующем входе */ }
+  delete cloudRecs[id];
 }
 // Восстановить карточку из Корзины: снять deleted_at (метка едет в облако через pushCard).
 async function restoreCard(id){
@@ -2617,7 +2618,7 @@ async function restoreCard(id){
   await persist();
   try{
     const c=sbClient();
-    if(c && _syncUser) await pushCard(it, _syncUser);
+    if(c && _syncUser){ await pushCard(it, _syncUser); cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0}; }
   }catch(e){ /* офлайн/нет входа — восстановление доедет при следующей синхронизации */ }
 }
 // Автоочистка Корзины: удалённое старше 30 дней стирается навсегда (локально + облако).
@@ -2632,7 +2633,7 @@ async function purgeExpiredTrash(){
 function updateTrashButton(){
   const b=document.getElementById('btnTrash'); if(!b) return;
   const n=trashItems().length;
-  b.textContent=n?('🗑 Корзина ('+n+')') : '🗑 Корзина';
+  b.textContent=n?('Корзина ('+n+')') : 'Корзина';
 }
 // Экран Корзины: список удалённых карточек активного языка с восстановлением и удалением.
 function openTrash(){
@@ -5220,6 +5221,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.16.2','24.10.26','Синхронизация: арабский (и другие языки) перестал «застревать» в статусе «не синхронизировано» после синка — облачные карточки теперь нормализуют deleted_at/kind (как локальные), а удаление/восстановление из Корзины сразу обновляет кэш облака. С кнопки «Корзина» убран значок 🗑.'],
   ['1.9.16.1','24.10.26','Арабский «Учить»: кнопка плей/паузы теперь переключается сразу, как только аят начал звучать (при автозапуске длинного mp3) — раньше значок ▶ не менялся на ⏸ до конца аята.'],
   ['1.9.16.0','24.10.26','Арабский «Учить»: транспортные кнопки выровнены — все три одинаковые (44px, не круглые, нейтральный фон), центральная больше не красная и не наезжает на «Писать это»; пауза — иконка pause_circle.'],
   ['1.9.15.9','24.10.26','Арабский «Учить»: кнопки управления аудио получили новые иконки Material — перемотка назад/вперёд (стрелки) и плей/пауза (круг-плей, при игре — пауза); текст «5сек» убран.'],
@@ -6918,6 +6920,12 @@ function cardFromCloud(data, u, pu){
     prog_at:(pu!==undefined ? (+pu||0) : (+src.prog_at||0))
   };
   if(!Array.isArray(it.trs)) it.trs=[];
+  // Нормализуем поля, входящие в itemContentSig, как делает normalizeAppItem:
+  // иначе облачная копия со старым jsonb (без deleted_at/kind) даёт deleted_at=undefined,
+  // а локальная — 0 → itemContentSig различается, decidePart('content') ловит ложный
+  // конфликт/расхождение, и карточка языка «застревает» в статусе «не синхронизировано».
+  it.deleted_at=(+it.deleted_at)||0;
+  it.kind=it.kind||'word';
   seedCardSigs(it);
   return it;
 }
@@ -7524,6 +7532,18 @@ async function doSync(){
       conflictProgress:confProgress, conflictProgressLocal:confProgressLocal, conflictProgressCloud:confProgressCloud
     });
     syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
+    // ДИАГНОСТИКА (временная): если после синка что-то всё ещё «грязное» — распечатать источник.
+    const _dn=dirtyCount();
+    if(_dn>0){
+      console.warn('[sync-diag] осталось грязных: '+_dn);
+      for(const it of items){
+        const c=cloudRecs[it.id];
+        if(c===undefined) console.warn('[sync-diag] card нет в cloudRecs:', it.lang, JSON.stringify(it.hanzi), 'u='+it.updated_at, 'pu='+it.prog_at);
+        else if((it.updated_at||0)>(c.u||0) || (it.prog_at||0)>(c.pu||0)) console.warn('[sync-diag] card новее:', it.lang, JSON.stringify(it.hanzi), 'loc='+it.updated_at+'/'+it.prog_at, 'cloud='+c.u+'/'+c.pu);
+      }
+      if((settings.updated_at||0)>cloudSettingsU) console.warn('[sync-diag] settings новее: loc='+settings.updated_at+' cloud='+cloudSettingsU);
+      for(const lg of Object.keys(statsByLang)) if((statsByLang[lg].updated_at||0)>cloudStatsUOf(lg)) console.warn('[sync-diag] stats['+lg+'] новее: loc='+statsByLang[lg].updated_at+' cloud='+cloudStatsUOf(lg));
+    }
     // П.13: если вкладка «Синхронизация» открыта — сразу обновляем её журнал после успешного синка
     if(moreTab==='sync') renderSyncPanel();
   }catch(e){
