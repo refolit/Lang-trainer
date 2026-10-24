@@ -671,6 +671,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Окно «Метки»: строка с полем + кнопки ✓ / 🗑 */
 .tag-row{display:flex; align-items:center; gap:6px; margin-bottom:8px}
 .tag-inp{flex:1 1 auto; min-width:0}
+/* Экран «Корзина» */
+.trash-list{display:flex; flex-direction:column; gap:8px; max-height:52vh; overflow:auto}
+.trash-row{display:flex; gap:10px; align-items:center; border:1.5px solid var(--line); border-radius:14px; padding:10px 12px}
+.trash-info{flex:1 1 auto; min-width:0}
+.trash-btns{display:flex; flex-direction:column; gap:6px; flex:0 0 auto}
 .sn-block:last-child{border-bottom:0}
 .sn-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0 4px; font-size:15px; font-weight:700; border-bottom:0}
 .sn-switch{width:50px; height:30px; border-radius:999px; border:0; background:var(--soft2); position:relative; cursor:pointer; transition:background .15s; flex:0 0 auto}
@@ -827,6 +832,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="btn-row" style="margin-bottom:10px">
         <button class="btn sec" id="btnAdd">＋ Слово</button>
         <button class="btn sec" id="btnBatch">Список</button>
+        <button class="btn sec" id="btnTrash">🗑 Корзина</button>
       </div>
     </div>
     <div id="dictList"></div>
@@ -1081,6 +1087,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalFilter"></div>
 <div class="modal hidden" id="modalTags"></div>
 <div class="modal hidden" id="modalSyncConflicts"></div>
+<div class="modal hidden" id="modalTrash"></div>
 <div class="modal hidden" id="modalAdmin"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
@@ -1181,7 +1188,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.15.7';
+const APP_VERSION='1.9.15.8';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1209,7 +1216,9 @@ function uid(){ return 'i'+Date.now().toString(36)+Math.random().toString(36).sl
 // Активный язык у карточки (миграция проставила 'zh' старым записям); незнакомые коды → 'zh'.
 function langOf(it){ return LANG_MAP[it&&it.lang] ? it.lang : 'zh'; }
 // Карточки активного языка (порядок items не меняем — только копия для чтения).
-function langItems(){ return items.filter(it=>langOf(it)===activeLang); }
+function langItems(){ return items.filter(it=>langOf(it)===activeLang && !it.deleted_at); }
+// Удалённые (в Корзине) карточки активного языка — для экрана Корзины.
+function trashItems(){ return items.filter(it=>langOf(it)===activeLang && it.deleted_at); }
 function langInfo(){ return LANG_MAP[activeLang]||LANGS[0]; }
 function hasStrokes(){ return !!langInfo().has_strokes; }
 function ttsLang(){ return langInfo().tts||'zh-CN'; }
@@ -1367,7 +1376,7 @@ function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; sta
 // Причина: раньше один updated_at перештамповывался при любой смене единой сигнатуры, и бутовая
 // миграция делала всю старую базу «свежей» — старая база затирала свежий прогресс другого устройства.
 // Теперь таймстамп двигается ТОЛЬКО при реальном действии пользователя, по своей части.
-const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn','addedAt'];
+const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn','addedAt','deleted_at'];
 const P_FIELDS=['box','dueSess','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow','boxStreak',
                 'correct','wrong','wrongMonth','wrongDay','wrongStreak','correctStreak','correctStreakDays','lastCorrectDay','learnedOn'];
 // Сигнатура контента: что пользователь ввёл/пометил/записал. Аудио — по слотам (speed+имя файла),
@@ -1379,7 +1388,7 @@ function itemContentSig(it){
   const trs=(Array.isArray(it.trs)&&it.trs.length) ? it.trs : undefined;
   return JSON.stringify([
     it.id, it.lang, it.kind, it.hanzi, it.pinyin, it.translation, trs, it.note, it.tag,
-    it.starred, it.addedOn, it.addedAt, recSig
+    it.starred, it.addedOn, it.addedAt, it.deleted_at, recSig
   ]);
 }
 // Сигнатура прогресса: SRS-состояние (коробка, счётчики, повторы, даты заучивания).
@@ -1443,6 +1452,7 @@ function normalizeAppItem(it){
   it.lastCorrectDay=it.lastCorrectDay||''; it.learnedOn=it.learnedOn||'';
   it.wrongDay=String(it.wrongDay||'');
   it.addedOn=it.addedOn||''; it.lang=it.lang||'zh'; it.kind=it.kind||'word';
+  it.deleted_at=(+it.deleted_at)||0;
   ensureAddedAt(it);
   if(!Array.isArray(it.recordings)) it.recordings=[];
   if(!Array.isArray(it.trs)) it.trs=[];
@@ -2285,7 +2295,7 @@ function renderTagsModal(){
 function renameTag(oldName, newName){
   let n=0;
   for(const it of items){
-    if(langOf(it)!==activeLang) continue;
+    if(langOf(it)!==activeLang || it.deleted_at) continue;
     if((it.tag||'').trim()===oldName){ it.tag=newName; n++; }
   }
   persist().then(()=>{ renderDict(); renderTagsModal(); toastShort('Метка переименована ('+n+' сл.)'); });
@@ -2293,7 +2303,7 @@ function renameTag(oldName, newName){
 function deleteTag(oldName){
   let n=0;
   for(const it of items){
-    if(langOf(it)!==activeLang) continue;
+    if(langOf(it)!==activeLang || it.deleted_at) continue;
     if((it.tag||'').trim()===oldName){ it.tag=''; n++; }
   }
   persist().then(()=>{ renderDict(); renderTagsModal(); toastShort('Метка удалена ('+n+' сл.)'); });
@@ -2474,6 +2484,7 @@ function renderDict(){
   const arr=dictFiltered();
   updateChips();
   updateDictFilterChips();
+  updateTrashButton();
   if(!arr.length){
     list.innerHTML='<div class="dict-total">Всего слов 0</div><div class="empty"><span class="big-ic">📭</span>Пока пусто.<br>Нажмите «＋ Слово», чтобы добавить первую карточку.</div>';
     return;
@@ -2542,7 +2553,7 @@ function renderDict(){
   });
   bindDictUpFab();
 }
-// --- Удаление карточки словаря ---
+// --- Удаление карточки словаря (мягкое: в Корзину) ---
 let delPendingId=null;
 // Спросить подтверждение: аккуратная модалка в стиле приложения (Да/Нет).
 function askDeleteCard(id){
@@ -2551,8 +2562,8 @@ function askDeleteCard(id){
   closeAllModals();
   const m=document.getElementById('modalDelete');
   m.innerHTML=`<div class="sheet">
-    <div class="row"><h2>Удалить слово</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalDelete')">✕</button></div>
-    <div style="margin-top:8px;font-size:15px;font-weight:600;color:var(--ink)">Вы точно хотите удалить это слово?</div>
+    <div class="row"><h2>В корзину</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalDelete')">✕</button></div>
+    <div style="margin-top:8px;font-size:15px;font-weight:600;color:var(--ink)">Убрать это слово в Корзину?<br><span style="font-weight:400;color:var(--mut)">Слово можно восстановить или удалить навсегда из Корзины.</span></div>
     <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px">
       <div class="dc zh" style="font-size:22px">${escapeHtml(it.hanzi)}</div>
       ${pinyinOf(it)?`<div class="dc py">${escapeHtml(pinyinOf(it))}</div>`:''}
@@ -2566,10 +2577,24 @@ function askDeleteCard(id){
   m.classList.remove('hidden');
   m.querySelector('#btnDelConfirm').onclick=()=>confirmDeleteCard(id);
 }
-// Фактическое удаление: локальная база + аудио (blob-кэш + IndexedDB + файлы в Storage),
-// затем облачная строка Supabase — чтобы слово не вернулось при следующей синхронизации.
+// Мягкое удаление: ставим метку deleted_at (карточка скрывается из всех режимов и попадает в
+// Корзину). Аудио НЕ трогаем — оно нужно для восстановления. При онлайне метка сразу едет в
+// облако (pushCard), поэтому удаление синхронизируется через обычный LWW-мерж по времени.
 async function confirmDeleteCard(id){
   closeModal('modalDelete');
+  const it=items.find(x=>x.id===id); if(!it) return;
+  it.deleted_at=now();
+  await persist();
+  try{
+    const c=sbClient();
+    if(c && _syncUser) await pushCard(it, _syncUser);
+  }catch(e){ /* офлайн/нет входа — метка доедет при следующей синхронизации */ }
+  renderDict(); updateChips(); refreshModeFilterBadges(); updateTrashButton();
+  toastShort('Слово в корзине');
+}
+// Безвозвратное удаление карточки (из Корзины): аудио (blob-кэш + IndexedDB + Storage),
+// локальная запись и облачная строка — чтобы слово не вернулось при синхронизации.
+async function purgeCard(id){
   const idx=items.findIndex(x=>x.id===id); if(idx<0) return;
   const it=items[idx];
   revokeAll(it);
@@ -2584,8 +2609,74 @@ async function confirmDeleteCard(id){
     const c=sbClient();
     if(c && _syncUser) await c.from('cards').delete().eq('user_id',_syncUser.id).eq('id',id);
   }catch(e){ /* офлайн/нет входа — удалим из облака при следующем входе */ }
-  renderDict(); updateChips(); refreshModeFilterBadges();
-  toastShort('Слово удалено');
+}
+// Восстановить карточку из Корзины: снять deleted_at (метка едет в облако через pushCard).
+async function restoreCard(id){
+  const it=items.find(x=>x.id===id); if(!it) return;
+  it.deleted_at=0;
+  await persist();
+  try{
+    const c=sbClient();
+    if(c && _syncUser) await pushCard(it, _syncUser);
+  }catch(e){ /* офлайн/нет входа — восстановление доедет при следующей синхронизации */ }
+}
+// Автоочистка Корзины: удалённое старше 30 дней стирается навсегда (локально + облако).
+const TRASH_TTL=30*86400000;
+async function purgeExpiredTrash(){
+  const cut=now()-TRASH_TTL;
+  const expired=items.filter(it=>it.deleted_at && it.deleted_at<cut);
+  if(!expired.length) return;
+  for(const it of expired) await purgeCard(it.id);
+}
+// Счётчик на кнопке «Корзина» в словаре.
+function updateTrashButton(){
+  const b=document.getElementById('btnTrash'); if(!b) return;
+  const n=trashItems().length;
+  b.textContent=n?('🗑 Корзина ('+n+')') : '🗑 Корзина';
+}
+// Экран Корзины: список удалённых карточек активного языка с восстановлением и удалением.
+function openTrash(){
+  closeAllModals();
+  renderTrash();
+}
+function renderTrash(){
+  const m=document.getElementById('modalTrash');
+  const list=trashItems().sort((a,b)=>(b.deleted_at||0)-(a.deleted_at||0));
+  const fmt=d=>{ const dt=new Date(d); return String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+'.'+dt.getFullYear(); };
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Корзина</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalTrash')">✕</button></div>
+    <div class="muted" style="margin:8px 0 6px">Удалённые карточки этого языка. Через 30 дней они удаляются навсегда автоматически.</div>
+    ${list.length?`<div class="trash-list">${list.map(it=>`
+      <div class="trash-row" data-id="${it.id}">
+        <div class="trash-info">
+          <div class="dc zh">${escapeHtml(it.hanzi)}</div>
+          ${pinyinOf(it)?`<div class="dc py">${escapeHtml(pinyinOf(it))}</div>`:''}
+          <div class="dc tr" style="text-align:left">${escapeHtml(trJoined(it)||'')}</div>
+          <div class="muted" style="font-size:12px">Удалено ${fmt(it.deleted_at)}</div>
+        </div>
+        <div class="trash-btns">
+          <button class="btn sec" data-act="restore">Восстановить</button>
+          <button class="btn warn" data-act="purge">Навсегда</button>
+        </div>
+      </div>`).join('')}</div>`
+      :'<div class="empty"><span class="big-ic">🗑</span>Корзина пуста.</div>'}
+    ${list.length?`<div class="row" style="margin-top:14px"><button class="btn warn" style="flex:1" id="btnTrashEmpty">Очистить корзину</button></div>`:''}
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelectorAll('.trash-row [data-act]').forEach(b=>{
+    b.onclick=async ()=>{
+      const id=b.closest('.trash-row').dataset.id;
+      if(b.dataset.act==='restore'){ await restoreCard(id); toastShort('Слово восстановлено'); }
+      else{ await purgeCard(id); toastShort('Слово удалено навсегда'); }
+      renderTrash(); updateTrashButton(); renderDict(); updateChips(); refreshModeFilterBadges();
+    };
+  });
+  const emptyBtn=m.querySelector('#btnTrashEmpty');
+  if(emptyBtn) emptyBtn.onclick=async ()=>{
+    for(const it of trashItems().slice()) await purgeCard(it.id);
+    renderTrash(); updateTrashButton(); renderDict(); updateChips(); refreshModeFilterBadges();
+    toastShort('Корзина очищена');
+  };
 }
 // Плавающая кнопка «Наверх» (П.4): появляется, когда 15-я карточка ушла за верх экрана.
 // Стрелка прижата к правому краю содержимого словаря на уровне полосы прокрутки.
@@ -5129,6 +5220,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.15.8','24.10.26','Корзина: удаление слова теперь мягкое — карточка помечается удалённой и попадает в «Корзину» (кнопка в словаре), откуда её можно восстановить или удалить навсегда; удаление синхронизируется между устройствами, удалённое старше 30 дней стирается автоматически.'],
   ['1.9.15.7','23.10.26','Арабский «Учить»: над кнопками «Назад/Писать/Вперёд» появился ряд управления аудио — «<< 5сек» (назад), плей/пауза, «5сек >>» (вперёд). Перемотка на 5 секунд, плей/пауза с продолжением с того же места; длинные mp3 больше не обрываются на 90-й секунде.'],
   ['1.9.15.6','23.10.26','Словарь: кнопка ▶ у аудио в карточке стала переключателем — первое нажатие играет, второе ставит на паузу (следующее продолжает с того же места); повторные нажатия больше не накладывают аудио друг на друга.'],
   ['1.9.15.5','22.10.26','Вход: подхват сессии из адреса теперь «всеядный» — работает и из implicit-хэша (#access_token), и из PKCE-кода (?code=), поэтому магическая ссылка открывается в любом браузере (раньше часть встроенных просмотрщиков обрезала хэш и вход не завершался).'],
@@ -6463,7 +6555,7 @@ async function doExport(){
       const rec=await DB.get('aud:'+it.id+':'+r.speed);
       recs.push({speed:r.speed, name:r.name, data: rec?await blobToB64(new Blob([rec.buf],{type:rec.type})):null});
     }
-    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,boxStreak:it.boxStreak,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,addedAt:it.addedAt||0,lang:langOf(it),updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
+    return {kind:it.kind,hanzi:it.hanzi,pinyin:it.pinyin,translation:it.translation,tag:it.tag,starred:it.starred,box:it.box,dueSess:it.dueSess,newDone:it.newDone,nsGood:it.nsGood,nsStreak:it.nsStreak,nsSess:it.nsSess,nsDoneSess:it.nsDoneSess,nsLastGoodShow:it.nsLastGoodShow,boxStreak:it.boxStreak,lastShowN:it.lastShowN,lastSeen:it.lastSeen,nextDue:it.nextDue,correct:it.correct,wrong:it.wrong,correctStreak:it.correctStreak,correctStreakDays:it.correctStreakDays,lastCorrectDay:it.lastCorrectDay,learnedOn:it.learnedOn,addedOn:it.addedOn,addedAt:it.addedAt||0,lang:langOf(it),deleted_at:it.deleted_at||0,updated_at:it.updated_at||0,prog_at:it.prog_at||0,recordings:recs};
   }));
   const blob=new Blob([JSON.stringify({items:out,settings,statsByLang},null,1)],{type:'application/json'});
   downloadBlob(blob,'hanzi-backup '+versionDate()+'.json');
@@ -6480,7 +6572,7 @@ async function doImportFile(file){
     for(const each of items) revokeAll(each);
     items=[];
     for(const d of (j.items||[])){
-      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,boxStreak:d.boxStreak||0,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',addedAt:+d.addedAt||0,lang:d.lang||'zh',trs:d.trs||undefined,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
+      const it={id:uid(),kind:d.kind||'word',hanzi:d.hanzi,pinyin:d.pinyin||'',translation:d.translation||'',tag:d.tag||'',starred:d.starred||false,note:'',recordings:[],box:d.box||1,dueSess:d.dueSess||0,newDone:d.newDone||0,nsGood:d.nsGood||0,nsStreak:d.nsStreak||0,nsSess:d.nsSess||0,nsDoneSess:d.nsDoneSess==null?null:d.nsDoneSess,nsLastGoodShow:d.nsLastGoodShow==null?null:d.nsLastGoodShow,boxStreak:d.boxStreak||0,lastShowN:d.lastShowN||0,lastSeen:d.lastSeen||0,nextDue:d.nextDue||0,correct:d.correct||0,wrong:d.wrong||0,correctStreak:d.correctStreak||0,correctStreakDays:d.correctStreakDays||0,lastCorrectDay:d.lastCorrectDay||'',learnedOn:d.learnedOn||'',addedOn:d.addedOn||'',addedAt:+d.addedAt||0,lang:d.lang||'zh',trs:d.trs||undefined,deleted_at:+d.deleted_at||0,updated_at:d.updated_at||0,prog_at:d.prog_at||0};
       if(String(d.hanzi||'').trim()) assignStableId(it);   // одинаковый материал = одинаковый id при импорте
       migrateItem(it);
       ensureAddedAt(it);   // старые бэкапы без addedAt — по дню добавления
@@ -6608,6 +6700,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.datas
 // ============================== TOOLBAR BIND ==============================
 document.getElementById('btnAdd').onclick=()=>openItemModal(null);
 document.getElementById('btnBatch').onclick=openBatch;
+document.getElementById('btnTrash').onclick=openTrash;
 document.getElementById('btnSync').onclick=doSync;
 document.getElementById('dictSearch').oninput=renderDict;
 document.querySelectorAll('[data-dict-filter]').forEach(b=>{
@@ -7414,6 +7507,7 @@ async function doSync(){
     makeLocalUnique();
     await persist(); await refreshAll();
     lastSyncAt=now();
+    await purgeExpiredTrash();   // автоочистка Корзины после успешного синка
     await saveMeta();
     // Фоновая докачка mp3 из облака (не блокирует финал синхронизации).
     if(_syncUser && sbClient()) prefetchCloudAudio();
@@ -7733,6 +7827,7 @@ async function boot(){
   if(_meta){ lastSyncAt=_meta.lastSync||0; cloudRecs=normalizeCloudRecs(_meta.recs); cloudSettingsU=_meta.settingsU||0; cloudStatsU=_meta.statsU||{}; }
   renderLangSeg();
   await persist();
+  await purgeExpiredTrash();   // автоочистка Корзины: удалённое старше 30 дней стираем навсегда
   maybeOfferSamples();
   refreshSyncUI();
   bindSettings();
