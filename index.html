@@ -1381,24 +1381,24 @@ function fillMissingEnIpa(){
 // следующего повтора nextDue (полночь последнего показа + BOX_INT[box] суток). Мягкая и
 // идемпотентная (ЛОКАЛЬНЫЙ флаг localStorage — каждое устройство мигрирует само, флаг не
 // синхронизируется). Новое / ещё не показанное слово → nextDue=0 (due сразу), показанное —
-// «последний показ + интервал коробки». При РЕАЛЬНОМ изменении nextDue сдвигаем prog_at в now():
-// это одноразовое действие, и карточка должна честно «победить» облачную по LWW (пуш), а не
-// застрять в ложном конфликте «равный таймстамп + разная сигнатура».
+// «последний показ + интервал коробки». У расписанных слов (newDone && lastSeen>0) prog_at
+// сдвигаем в now() БЕЗУСЛОВНО: одноразовое действие, и карточка должна честно «победить»
+// облачную по LWW (пуш), а не застрять в ложном конфликте «равный таймстамп + разная сигнатура»
+// (в т.ч. после первого варианта миграции, где nextDue уже совпал, но prog_at не двигался).
+// Флаг отдельный (V2) — чтобы устройства, прогнавшие старый вариант, прошли его заново.
 function migrateSrsDays(){
-  try{ if(localStorage.getItem('srsDayMigrated')) return; }catch(e){ return; }
+  try{ if(localStorage.getItem('srsDayMigratedV2')) return; }catch(e){ return; }
   const t=now(); let changed=0;
   for(const it of items){
     const b=normBox(it);
-    const base=(!it.newDone || !(+it.lastSeen||0)) ? 0 : dayStart(+it.lastSeen||0);
+    const scheduled=(it.newDone && (+it.lastSeen||0)>0);
+    const base=scheduled ? dayStart(+it.lastSeen||0) : 0;
     const nd = base>0 ? base + BOX_INT[b]*86400000 : 0;
-    if((it.nextDue||0)!==nd){
-      it.nextDue=nd;
-      if((it.prog_at||0)<t) it.prog_at=t;   // реальное изменение прогресса → пушим по LWW
-      changed++;
-    }
+    if((it.nextDue||0)!==nd){ it.nextDue=nd; changed++; }
+    if(scheduled && (it.prog_at||0)<t) it.prog_at=t;   // расписание в днях обязано победить облако
     seedCardSigs(it);
   }
-  try{ localStorage.setItem('srsDayMigrated','1'); }catch(e){}
+  try{ localStorage.setItem('srsDayMigratedV2','1'); }catch(e){}
   if(changed) console.log('[migrate] SRS→дни: nextDue пересчитан у '+changed+' карт.');
 }
 function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; stats.activity[t]=(stats.activity[t]||0)+1; }
