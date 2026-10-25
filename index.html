@@ -1185,7 +1185,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.18';
+const APP_VERSION='1.9.18.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1379,21 +1379,27 @@ function fillMissingEnIpa(){
 }
 // Миграция SRS на интервалы в ДНЯХ (1.9.18): у существующих карточек вычисляем момент
 // следующего повтора nextDue (полночь последнего показа + BOX_INT[box] суток). Мягкая и
-// идемпотентная (флаг settings.srsDayMigrated): новое / ещё не показанное слово → nextDue=0
-// (due сразу), показанное — «последний показ + интервал коробки». Прогресс-таймстамп
-// (prog_at) НЕ трогаем: пере-сеем подпись после правки, чтобы persist() не «омолодил» слово.
+// идемпотентная (ЛОКАЛЬНЫЙ флаг localStorage — каждое устройство мигрирует само, флаг не
+// синхронизируется). Новое / ещё не показанное слово → nextDue=0 (due сразу), показанное —
+// «последний показ + интервал коробки». При РЕАЛЬНОМ изменении nextDue сдвигаем prog_at в now():
+// это одноразовое действие, и карточка должна честно «победить» облачную по LWW (пуш), а не
+// застрять в ложном конфликте «равный таймстамп + разная сигнатура».
 function migrateSrsDays(){
-  if(settings.srsDayMigrated) return;
+  try{ if(localStorage.getItem('srsDayMigrated')) return; }catch(e){ return; }
+  const t=now(); let changed=0;
   for(const it of items){
     const b=normBox(it);
-    if(!it.newDone || !(+it.lastSeen||0)){ it.nextDue=0; }
-    else {
-      const base=dayStart(+it.lastSeen||0);
-      it.nextDue = base>0 ? base + BOX_INT[b]*86400000 : 0;
+    const base=(!it.newDone || !(+it.lastSeen||0)) ? 0 : dayStart(+it.lastSeen||0);
+    const nd = base>0 ? base + BOX_INT[b]*86400000 : 0;
+    if((it.nextDue||0)!==nd){
+      it.nextDue=nd;
+      if((it.prog_at||0)<t) it.prog_at=t;   // реальное изменение прогресса → пушим по LWW
+      changed++;
     }
-    seedCardSigs(it);   // подпись прогресса совпала с новым nextDue → persist не двигает prog_at
+    seedCardSigs(it);
   }
-  settings.srsDayMigrated=true;
+  try{ localStorage.setItem('srsDayMigrated','1'); }catch(e){}
+  if(changed) console.log('[migrate] SRS→дни: nextDue пересчитан у '+changed+' карт.');
 }
 function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; stats.activity[t]=(stats.activity[t]||0)+1; }
 
@@ -1468,7 +1474,7 @@ function normalizeAppItem(it){
   it.updated_at=(+it.updated_at)||0;
   it.prog_at=(+it.prog_at)||0;
   it.box=Math.max(1, Math.min(5, +it.box||1));
-  it.dueSess=+it.dueSess||0; it.correct=+it.correct||0; it.wrong=+it.wrong||0; it.wrongMonth=+it.wrongMonth||0;
+  it.dueSess=+it.dueSess||0; it.correct=+it.correct||0; it.wrong=+it.wrong||0; it.wrongMonth=+it.wrongMonth||0; it.wrongStreak=+it.wrongStreak||0;
   it.correctStreak=+it.correctStreak||0; it.correctStreakDays=+it.correctStreakDays||0;
   it.nsStreak=+it.nsStreak||0; it.nsSess=+it.nsSess||0; it.nsGood=+it.nsGood||0; it.boxStreak=+it.boxStreak||0;
   it.nsDoneSess=it.nsDoneSess==null?null:it.nsDoneSess;
@@ -5334,6 +5340,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.18.1','25.10.26','Синхронизация: устранены ложные конфликты на уже синхронизированных карточках — локальная и облачная копии теперь нормализуют поля (addedAt, wrongMonth, wrongDay, wrongStreak) одинаково, поэтому при равных таймстампах сигнатуры больше не расходятся и окно конфликтов не всплывает на старых словах; при ничьей таймстампов по умолчанию остаётся локальная версия (раньше ошибочно побеждало облако).'],
   ['1.9.18','25.10.26','SRS на интервалах в днях: повтор планируется по календарным суткам (1/2/4/7/15 дней), а не по числу заходов в режим. Учить: очередь больше не пустеет — когда слова на сегодня пройдены, автоматически подтягиваются слова со следующих дней («досрочно»); «Вперёд ▶» больше не меняет состояние слова (только просмотр), SRS двигается только ответами в экзамене/письме. Существующие слова переведены на новую схему мягко, без потери прогресса.'],
   ['1.9.17','24.10.26','Учить (китайский): в настройках режима появилось «Направление перевода» — Китайский→Русский / Русский→Китайский / оба вперемешку. В перевёрнутом режиме в центре русский текст, пиньинь без изменений, в «Переводе» — иероглиф; озвучивается русский текст (Google + локальный русский голос как запасной).'],
   ['1.9.16.3','24.10.26','Вход: переход с implicit-флоу на PKCE — токен теперь передаётся через ?code= (а не через #access_token), поэтому магическая ссылка открывается и из мобильных почтовых приложений (Gmail и др.), которые обрезали хэш из адреса.'],
@@ -7022,6 +7029,7 @@ function cardFromCloud(data, u, pu){
     recordings:recs,
     box:Math.max(1,Math.min(5,+src.box||1)),
     dueSess:+src.dueSess||0, correct:+src.correct||0, wrong:+src.wrong||0,
+    wrongMonth:+src.wrongMonth||0, wrongDay:String(src.wrongDay||''), wrongStreak:+src.wrongStreak||0,
     correctStreak:+src.correctStreak||0, correctStreakDays:+src.correctStreakDays||0,
     nsStreak:+src.nsStreak||0, nsSess:+src.nsSess||0,
     nsGood:+src.nsGood||0, boxStreak:+src.boxStreak||0,
@@ -7042,6 +7050,10 @@ function cardFromCloud(data, u, pu){
   // конфликт/расхождение, и карточка языка «застревает» в статусе «не синхронизировано».
   it.deleted_at=(+it.deleted_at)||0;
   it.kind=it.kind||'word';
+  // addedAt вычисляем ТАК ЖЕ, как локально (ensureAddedAt в normalizeAppItem): для старых
+  // карточек без поля addedAt облачная копия иначе оставалась бы с 0, а локальная — с
+  // вычисленным значением → ложный контент-конфликт при равных updated_at.
+  ensureAddedAt(it);
   seedCardSigs(it);
   return it;
 }
@@ -7332,9 +7344,9 @@ function modalSyncConflicts(rows){
     const cnt={content:{n:0,local:0,cloud:0}, progress:{n:0,local:0,cloud:0}};
     for(const row of rows){
       if(row.content){ cnt.content.n++;
-        if((row.it.updated_at||0)>(row.cloudIt.updated_at||0)) cnt.content.local++; else cnt.content.cloud++; }
+        if((row.it.updated_at||0)>=(row.cloudIt.updated_at||0)) cnt.content.local++; else cnt.content.cloud++; }
       if(row.progress){ cnt.progress.n++;
-        if((row.it.prog_at||0)>(row.cloudIt.prog_at||0)) cnt.progress.local++; else cnt.progress.cloud++; }
+        if((row.it.prog_at||0)>=(row.cloudIt.prog_at||0)) cnt.progress.local++; else cnt.progress.cloud++; }
     }
     // По умолчанию сторона, где свежих изменений больше (если ничья — локально).
     const def=p=> cnt[p].local>=cnt[p].cloud ? 'local' : 'cloud';
