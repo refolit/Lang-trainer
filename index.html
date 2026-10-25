@@ -1185,7 +1185,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.17';
+const APP_VERSION='1.9.18';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1194,8 +1194,11 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 let SB=null;                                   // клиент Supabase (создаётся лениво, после загрузки SDK)
 const SB_OFFLINE=window.__NO_SUPABASE__===true; // в офлайн-сборке SDK заменён заглушкой
 
-// ============================== SRS (5 коробок, интервалы в сессиях) ==============================
-const BOX_INT=[0,2,3,5,8,12]; // сессий до следующего показа; индекс = коробка (1..5)
+// ============================== SRS (5 коробок, интервалы в ДНЯХ) ==============================
+// 1.9.18: интервал повтора теперь календарный (в днях), а не в сессиях. Слово из коробки N
+// возвращается через BOX_INT[N] дней; момент повтора хранится в it.nextDue (epoch-ms полуночи
+// «дня due»). Показ вечером → due с утра через N дней (весь день).
+const BOX_INT=[0,1,2,4,7,15]; // дней до следующего показа; индекс = коробка (1..5)
 const SRS_NEW_NEED=4;         // (старая схема) верных ответов суммарно, чтобы новое слово покинуло коробку 1
 const SRS_NEW_PER_SESS=10;    // максимум новых слов в очереди одной сессии
 // Новая стратегия (1.9.5): переходы по числу верных ПОДРЯД (boxStreak) — 6/6/6/7.
@@ -1257,6 +1260,14 @@ async function setLang(lang){
   }catch(e){}
 }
 function now(){ return Date.now(); }
+// Полночь (локально) текущего дня — база для «календарного» интервала повтора.
+function dayStart(ts){
+  const d=ts?new Date(ts):new Date();
+  d.setHours(0,0,0,0);
+  return d.getTime();
+}
+// Момент повтора через n дней: 0 — «due сейчас», иначе полночь сегодня + n суток.
+function dueInDays(n){ return n<=0 ? 0 : dayStart()+n*86400000; }
 function dayStr(d){
   d=d||new Date();
   const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dd=String(d.getDate()).padStart(2,'0');
@@ -1366,6 +1377,24 @@ function fillMissingEnIpa(){
   if(n) console.log('[migrate] EN транскрипция дополнена: '+n+' карт.');
   return n;
 }
+// Миграция SRS на интервалы в ДНЯХ (1.9.18): у существующих карточек вычисляем момент
+// следующего повтора nextDue (полночь последнего показа + BOX_INT[box] суток). Мягкая и
+// идемпотентная (флаг settings.srsDayMigrated): новое / ещё не показанное слово → nextDue=0
+// (due сразу), показанное — «последний показ + интервал коробки». Прогресс-таймстамп
+// (prog_at) НЕ трогаем: пере-сеем подпись после правки, чтобы persist() не «омолодил» слово.
+function migrateSrsDays(){
+  if(settings.srsDayMigrated) return;
+  for(const it of items){
+    const b=normBox(it);
+    if(!it.newDone || !(+it.lastSeen||0)){ it.nextDue=0; }
+    else {
+      const base=dayStart(+it.lastSeen||0);
+      it.nextDue = base>0 ? base + BOX_INT[b]*86400000 : 0;
+    }
+    seedCardSigs(it);   // подпись прогресса совпала с новым nextDue → persist не двигает prog_at
+  }
+  settings.srsDayMigrated=true;
+}
 function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; stats.activity[t]=(stats.activity[t]||0)+1; }
 
 // ============================== СИГНАТУРЫ LWW (Фаза 8) ==============================
@@ -1374,7 +1403,7 @@ function logActivity(){ const t=dayStr(); stats.activity=stats.activity||{}; sta
 // миграция делала всю старую базу «свежей» — старая база затирала свежий прогресс другого устройства.
 // Теперь таймстамп двигается ТОЛЬКО при реальном действии пользователя, по своей части.
 const C_FIELDS=['lang','kind','hanzi','pinyin','translation','trs','note','tag','starred','addedOn','addedAt','deleted_at'];
-const P_FIELDS=['box','dueSess','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow','boxStreak',
+const P_FIELDS=['box','dueSess','nextDue','newDone','nsGood','nsStreak','nsSess','nsDoneSess','nsLastGoodShow','boxStreak',
                 'correct','wrong','wrongMonth','wrongDay','wrongStreak','correctStreak','correctStreakDays','lastCorrectDay','learnedOn'];
 // Сигнатура контента: что пользователь ввёл/пометил/записал. Аудио — по слотам (speed+имя файла),
 // без blob/cloud-URL: прикрепление/удаление записи делает карточку «новее», а смена URL — нет.
@@ -1388,10 +1417,10 @@ function itemContentSig(it){
     it.starred, it.addedOn, it.addedAt, it.deleted_at, recSig
   ]);
 }
-// Сигнатура прогресса: SRS-состояние (коробка, счётчики, повторы, даты заучивания).
+// Сигнатура прогресса: SRS-состояние (коробка, счётчики, повторы, даты заучивания, nextDue).
 function itemProgSig(it){
   return JSON.stringify([
-    it.box, it.dueSess, it.newDone, it.nsGood, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow, it.boxStreak,
+    it.box, it.dueSess, it.nextDue, it.newDone, it.nsGood, it.nsStreak, it.nsSess, it.nsDoneSess, it.nsLastGoodShow, it.boxStreak,
     it.correct, it.wrong, it.wrongMonth, it.wrongDay, it.wrongStreak, it.correctStreak, it.correctStreakDays, it.lastCorrectDay,
     it.learnedOn
   ]);
@@ -2464,7 +2493,7 @@ function demoteLevel(id){
   const b=normBox(it);
   const nb=Math.max(1, b-1);
   if(nb===b){ persist().then(()=>{ renderDict(); toastShort('Слово уже на минимальном уровне'); }); return; }
-  it.box=nb; it.dueSess=0;
+  it.box=nb; it.nextDue=0;
   persist().then(()=>{ renderDict(); toastShort('Уровень этого слова понижен'); });
 }
 // ↑ повышение уровня на 1 (без подтверждения; короткое уведомление на 1 секунду).
@@ -2472,7 +2501,7 @@ function promoteLevel(id){
   const it=items.find(x=>x.id===id); if(!it) return;
   const b=normBox(it);
   if(b>=5){ persist().then(()=>{ renderDict(); toastShort('Слово уже на высшем уровне'); }); return; }
-  it.box=b+1; it.dueSess=0;
+  it.box=b+1; it.nextDue=0;
   persist().then(()=>{ renderDict(); toastShort('Уровень этого слова повышен'); });
 }
 function levelOf(it){ return normBox(it); }
@@ -3184,6 +3213,7 @@ function attachGuide(el, size){
 
 // ============================== STUDY ==============================
 let studyQueue=[], studyIdx=0;
+let studyRunSeen=new Set();  // id слов, показанных в ТЕКУЩЕМ заходе «Учить» (для честного «досрочно»)
 // Настройки показа в «Учить»: аудио (озвучка + автоповтор), пиньинь, перевод.
 // Показ строк карточки в «Учить»: аудио, пиньинь, перевод, иероглиф.
 // Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
@@ -3333,16 +3363,27 @@ function shuffle(a){
   return a;
 }
 // Приоритет: звёзды наверху; внутри — «давно не видел — первым» (меньше lastSeen первым).
-function studyPool(){
-  const due=filteredLangItems().filter(it=>it.translation && isDue(it));
+// opt.seenSet — id уже показанных в текущем заходе «Учить» (исключаем, иначе очередь
+// зациклится на одном дне). opt.ahead — «досрочно»: когда due на сегодня исчерпаны,
+// берём слова со следующей БУДУЩЕЙ даты повтора (завтра → послезавтра → …), чтобы
+// активный пользователь не упирался в пустоту.
+function studyPool(opt){
+  opt=opt||{};
+  const all=filteredLangItems().filter(it=>it.translation && (!opt.seenSet || !opt.seenSet.has(it.id)));
   const seen=it=>(it.lastSeen||it.nextDue||0);
+  let due=all.filter(isDue);
+  if(opt.ahead && !due.length && all.length){
+    let horizon=Infinity;
+    for(const it of all){ const nd=it.nextDue||0; if(nd>now() && nd<horizon) horizon=nd; }
+    if(horizon!==Infinity) due=all.filter(it=>(it.nextDue||0)<=horizon);
+  }
   return [].concat(
     due.filter(it=>it.starred).sort((a,b)=>seen(a)-seen(b)),
     due.filter(it=>!it.starred).sort((a,b)=>seen(a)-seen(b))
   );
 }
-function queueStudy(){
-  const due=studyPool();
+function queueStudy(opt){
+  const due=studyPool(opt);
   const newW=due.filter(it=>isNewWord(it)).slice(0, SRS_NEW_PER_SESS); // лимит новых за сессию
   const oldW=due.filter(it=>!isNewWord(it));
   // 2 новых : 1 старое; если старых нет — новые подряд; если новых нет — цикл старых.
@@ -3364,13 +3405,14 @@ function buildStudyQueue(){
     });
     return q.length?q:[];
   }
-  const q=queueStudy(); return q.length?q:[];
+  const q=queueStudy({ahead:true, seenSet:studyRunSeen}); return q.length?q:[];
 }
 function startStudy(){
   Player.stop();
   clearStudyIdle();
   applyStudyToggles();
   enterSession();
+  studyRunSeen=new Set();   // новый заход — счётчик «показано в этом заходе» обнуляем
   resetStudyQueue();
 }
 // перестроить очередь БЕЗ открытия новой сессии (конец очереди → зацикливание)
@@ -3418,6 +3460,7 @@ function refreshStudyCard(it){
 function showStudyCard(){
   if(studyIdx>=studyQueue.length){ resetStudyQueue(); return; }
   const it=studyQueue[studyIdx];
+  studyRunSeen.add(it.id);
   markShown(it);
   document.getElementById('studyProgress').textContent=(studyIdx+1)+' / '+studyQueue.length;
   refreshStudyCard(it);
@@ -3559,7 +3602,6 @@ function studyNext(){
   if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='';
   const it=studyQueue[studyIdx]; if(!it) return;
   Player.stop();
-  it.nextDue=now(); // пометим как просмотренный, чтобы не блокировало повторение
   touchStreak();
   logActivity();
   studyIdx++;
@@ -3643,14 +3685,14 @@ function srsGood(it){
   it.wrongStreak=0;
   if(!srsNew()){
     // === старая схема ===
-    if(!it.newDone){ it.box=1; it.dueSess=(SESS||0)+BOX_INT[1]; } // новое: коробка 1, повтор через BOX_INT[1] сессий (не каждую)
+    if(!it.newDone){ it.box=1; it.nextDue=dueInDays(BOX_INT[1]); } // новое: коробка 1, повтор через BOX_INT[1] дней
     else {
       const b=normBox(it);
-      if(b>=5){ it.dueSess=(SESS||0)+BOX_INT[5]; }         // коробка 5 — навсегда, раз в 8 сессий
-      else if(it.dueSess && (SESS||0)<(+it.dueSess)){ /* ещё не пришло время — откладываем */ }
+      if(b>=5){ it.nextDue=dueInDays(BOX_INT[5]); }         // коробка 5 — навсегда, раз в 15 дней
+      else if(it.nextDue && now()<(+it.nextDue)){ /* ещё не пришло время — откладываем */ }
       else {
         it.box=Math.min(5, b+1);
-        it.dueSess=(SESS||0)+BOX_INT[normBox(it)];
+        it.nextDue=dueInDays(BOX_INT[normBox(it)]);
       }
     }
     return;
@@ -3659,18 +3701,18 @@ function srsGood(it){
   const b=normBox(it);
   if(b>=5){
     it.boxStreak=0;                                       // выучено — остаётся навсегда
-    it.dueSess=(SESS||0)+BOX_INT[5];
+    it.nextDue=dueInDays(BOX_INT[5]);
     return;
   }
   it.boxStreak=(it.boxStreak||0)+1;
   if(it.boxStreak>=srsNeedFrom(b)){                       // набрано нужное число верных подряд — переход
     it.box=b+1;
     it.boxStreak=0;
-    it.dueSess=(SESS||0)+BOX_INT[it.box];
+    it.nextDue=dueInDays(BOX_INT[it.box]);
     if(it.box===2 && !it.newDone){ it.newDone=1; }        // покинул коробку 1 — «не новое»
     if(it.box>=5 && !it.learnedOn){ it.learnedOn=dayStr(); toast('✨ «'+it.hanzi+'» выучено'); }
   } else {
-    it.dueSess=(SESS||0)+BOX_INT[b];                      // ещё не набрал — откладываем до следующего показа
+    it.nextDue=dueInDays(BOX_INT[b]);                     // ещё не набрал — откладываем до следующего показа
   }
 }
 // общий счётчик «нового» (только старая схема): SRS_NEW_NEED верных ответов СУММАРНО — не обязательно
@@ -3689,7 +3731,7 @@ function newGood(it){
     it.newDone=1;                                       // накоплено нужное число верных — «не новое»
     it.nsGood=0;
     it.box=Math.max(2, it.box||1);                      // покидает коробку 1 → коробка 2
-    it.dueSess=(SESS||0)+BOX_INT[2];
+    it.nextDue=dueInDays(BOX_INT[2]);
     toast('✨ «'+it.hanzi+'» больше не новое');
   }
 }
@@ -3699,15 +3741,15 @@ function demoteBox(it){
   if(srsNew()){
     const b=normBox(it);
     it.boxStreak=0;
-    if(b>=5){ it.box=4; it.dueSess=0; }                 // выучено теряется: 5 → 4
-    else { it.dueSess=0; }                               // остаёмся на том же уровне
+    if(b>=5){ it.box=4; it.nextDue=0; }                 // выучено теряется: 5 → 4, due сейчас
+    else { it.nextDue=0; }                               // остаёмся на том же уровне, due сейчас
     return;
   }
   const b=normBox(it);
-  if(b>=5){ it.box=3; it.dueSess=0; }                  // из коробки 5 — в коробку 3
-  else if(b===4 || b===3){ it.box=b-2; it.dueSess=0; }  // 4→2, 3→1 (гарантирует повтор ниже)
-  else if(b===2){ it.box=1; it.dueSess=0; }             // 2→1
-  else { it.box=1; it.dueSess=0; }                      // 1→1
+  if(b>=5){ it.box=3; it.nextDue=0; }                  // из коробки 5 — в коробку 3
+  else if(b===4 || b===3){ it.box=b-2; it.nextDue=0; }  // 4→2, 3→1 (гарантирует повтор ниже)
+  else if(b===2){ it.box=1; it.nextDue=0; }             // 2→1
+  else { it.box=1; it.nextDue=0; }                      // 1→1
 }
 function srsBad(it){
   it.wrong=(it.wrong||0)+1;
@@ -3732,11 +3774,12 @@ function srsGoodSoft(it){
   if(srsNew()){ srsGood(it); return; }
   it.correct=(it.correct||0)+1;
   it.wrongStreak=0;
-  if(!it.newDone){ it.dueSess=(SESS||0)+BOX_INT[1]; return; } // новое: коробка 1, повтор через BOX_INT[1] сессий
+  if(!it.newDone){ it.nextDue=dueInDays(BOX_INT[1]); return; } // новое: коробка 1, повтор через BOX_INT[1] дней
   srsGood(it);
 }
-// Звёздочка всегда в очереди (не зависит от dueSess), поэтому dueSess=0 не мешает.
-function isDue(it){ return it.starred || ((it.dueSess||0)<=(SESS||0)); }
+// Звёздочка всегда в очереди (не зависит от due). Остальные — «due сегодня»: nextDue <= now.
+// Новое слово (nextDue=0) всегда due — появится в очереди сразу (лимит новых режет дозу).
+function isDue(it){ return it.starred || ((it.nextDue||0)<=now()); }
 
 // ============================== WRITING ==============================
 // writeChars = китайские иероглифы текущего слова/предложения (по порядку, без знаков препинания)
@@ -5291,6 +5334,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.18','25.10.26','SRS на интервалах в днях: повтор планируется по календарным суткам (1/2/4/7/15 дней), а не по числу заходов в режим. Учить: очередь больше не пустеет — когда слова на сегодня пройдены, автоматически подтягиваются слова со следующих дней («досрочно»); «Вперёд ▶» больше не меняет состояние слова (только просмотр), SRS двигается только ответами в экзамене/письме. Существующие слова переведены на новую схему мягко, без потери прогресса.'],
   ['1.9.17','24.10.26','Учить (китайский): в настройках режима появилось «Направление перевода» — Китайский→Русский / Русский→Китайский / оба вперемешку. В перевёрнутом режиме в центре русский текст, пиньинь без изменений, в «Переводе» — иероглиф; озвучивается русский текст (Google + локальный русский голос как запасной).'],
   ['1.9.16.3','24.10.26','Вход: переход с implicit-флоу на PKCE — токен теперь передаётся через ?code= (а не через #access_token), поэтому магическая ссылка открывается и из мобильных почтовых приложений (Gmail и др.), которые обрезали хэш из адреса.'],
   ['1.9.16.2','24.10.26','Синхронизация: арабский (и другие языки) перестал «застревать» в статусе «не синхронизировано» после синка — облачные карточки теперь нормализуют deleted_at/kind (как локальные), а удаление/восстановление из Корзины сразу обновляет кэш облака. С кнопки «Корзина» убран значок 🗑.'],
@@ -7907,6 +7951,7 @@ async function boot(){
   for(const it of items) normalizeAppItem(it);   // Фаза 8: скаляры + сеем __sigC/__sigP; таймстампы НЕ трогаем
   fillMissingEnIpa();                            // 1.9.14.2: дописать IPA пустым EN-карточкам (до склейки/синка)
   const dupMerged=makeLocalUnique();             // склейка одинаковых карточек (язык+слово) до синка
+  migrateSrsDays();                              // 1.9.18: dueSess/сессии → nextDue (дни), мягко и один раз
   SHOW_N=items.reduce((m,it)=>Math.max(m, it.lastShowN||0), 0);
   for(const it of items) await hydrateRecordings(it);
   // Фаза 8 (жёсткое правило): таймстампы НЕ ставим в now() при загрузке/миграции.
