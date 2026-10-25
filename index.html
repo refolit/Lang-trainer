@@ -726,6 +726,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Каждый иероглиф — колонка: иероглиф сверху, его пиньинь под ним посередине (правки 18.10.26). */
 .tone-cell{display:inline-flex; flex-direction:column; align-items:center; gap:2px; min-width:64px}
 .tone-hanzi .tc{font-size:min(20vmin,72px); font-weight:600; padding:2px 8px; border-radius:12px; color:var(--mut); background:var(--soft); line-height:1.2}
+.tone-hanzi .tc.tap{cursor:pointer; -webkit-tap-highlight-color:transparent}
 .tone-hanzi .tc.cur{color:#fff; background:var(--red); box-shadow:0 1px 6px rgba(198,40,40,.4)}
 /* Пиньинь под своим иероглифом: открытый — тёмный жирный, ещё не открытый — точка-плейсхолдер
    (держит высоту строки, чтобы колонки не «прыгали» при открытии). */
@@ -1185,7 +1186,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.18.1';
+const APP_VERSION='1.9.18.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4445,6 +4446,11 @@ function examSpeakDelayed(it){
 // Возвращает промис, который завершается, когда озвучивание ЗАКОНЧИЛОСЬ (для повтора от конца).
 async function examSpeakWord(it){
   if(!examAudioOn) return;
+  await examSpeakOnce(it);
+}
+// Одиночное проигрывание БЕЗ проверки флага «Аудио»: клик по иероглифу в вопросе при
+// выключенном аудио всё равно должен озвучить слово один раз (каждый клик — ещё раз).
+async function examSpeakOnce(it){
   if(!it||!it.hanzi) return;
   await ensureCardAudio(it, ['norm']);
   const r=liveRec(it, 'norm');
@@ -4792,7 +4798,7 @@ function renderExamTF(q){
   // затем перевод — с паузой (0–6 с, шаг 1 с). При 0 с показываем всё сразу (как раньше).
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:center">
-      <div class="eq-word" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
+      <div class="eq-word tap" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
       <div class="exam-py" id="tfPy" style="${eqSizesStyle(it.hanzi,{py:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(py)}</div>
       <div class="eq-tr" id="tfTr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(tr)}</div>
     </div>
@@ -4806,6 +4812,10 @@ function renderExamTF(q){
     if(taskOk){ examCorrect(it); examFinish(1); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
+  // клик по иероглифу/слову: при выключенном аудио — проиграть один раз (каждый клик = одно проигрывание);
+  // при включённом аудио — без изменений (повтор идёт штатно).
+  const w=document.querySelector('#examBody .exam-q .eq-word');
+  if(w) w.onclick=()=>{ examTouch(); if(!examAudioOn) examSpeakOnce(it); };
   // «Постепенно» (Верно-неверно): иероглиф → (x) → пиньинь → (x) → перевод → (x) → аудио.
   // Аудио при включённом «Постепенно» звучит только ПОСЛЕ раскрытия перевода (не сразу).
   if(examGradual && examGradualDelay>0){
@@ -4838,9 +4848,10 @@ function renderExamChoice(q){
     <div class="exam-q" style="width:100%">
       <div id="examOpts" class="exam-opts"></div>
     </div>`;
-  // клик по иероглифу/слову в вопросе — проиграть озвучку заново (как в «Подбор» по клику)
+  // клик по иероглифу/слову в вопросе — при включённом аудио повторить (как в «Подбор» по клику),
+  // при выключенном аудио — проиграть один раз (каждый клик = одно проигрывание).
   const w=document.getElementById('eqWord');
-  if(w) w.onclick=()=>{ examTouch(); startExamRepeat(it); };
+  if(w) w.onclick=()=>{ examTouch(); if(examAudioOn) startExamRepeat(it); else examSpeakOnce(it); };
   function drawOpts(N){
     const correct=examPickTr(it);
     const opts=[correct];
@@ -4930,7 +4941,7 @@ function drawTone(){
   // Пиньинь открывается только после верного выбора тона именно этого иероглифа.
   const cells=seg.map((s,i)=>`
     <div class="tone-cell">
-      <span class="tc ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>
+      <span class="tc tap ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>
       ${examSettings.tonePy?`<span class="tp ${s.revealed?'':'off'}">${s.revealed?escapeHtml(s.pyMark):'·'}</span>`:''}
     </div>`).join('');
   body.innerHTML=`
@@ -4947,6 +4958,12 @@ function drawTone(){
       </div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
+  // клик по иероглифу: при выключенном аудио — проиграть слово один раз (каждый клик = одно проигрывание);
+  // при включённом аудио — без изменений (повтор идёт штатно).
+  body.querySelectorAll('.tone-hanzi .tc').forEach(c=>c.onclick=()=>{
+    examTouch();
+    if(!examAudioOn && examCurrentIt) examSpeakOnce(examCurrentIt);
+  });
 }
 function tonePick(n, btn){
   examTouch();
@@ -5340,6 +5357,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.18.2','25.10.26','Экзамен: клик по иероглифу/слову при выключенном аудио теперь проигрывает озвучку один раз (выбор ответов, верно-неверно, тоны); при включённом аудио поведение не изменилось.'],
   ['1.9.18.1','25.10.26','Синхронизация: устранены ложные конфликты на уже синхронизированных карточках — локальная и облачная копии теперь нормализуют поля (addedAt, wrongMonth, wrongDay, wrongStreak) одинаково, поэтому при равных таймстампах сигнатуры больше не расходятся и окно конфликтов не всплывает на старых словах; при ничьей таймстампов по умолчанию остаётся локальная версия (раньше ошибочно побеждало облако).'],
   ['1.9.18','25.10.26','SRS на интервалах в днях: повтор планируется по календарным суткам (1/2/4/7/15 дней), а не по числу заходов в режим. Учить: очередь больше не пустеет — когда слова на сегодня пройдены, автоматически подтягиваются слова со следующих дней («досрочно»); «Вперёд ▶» больше не меняет состояние слова (только просмотр), SRS двигается только ответами в экзамене/письме. Существующие слова переведены на новую схему мягко, без потери прогресса.'],
   ['1.9.17','24.10.26','Учить (китайский): в настройках режима появилось «Направление перевода» — Китайский→Русский / Русский→Китайский / оба вперемешку. В перевёрнутом режиме в центре русский текст, пиньинь без изменений, в «Переводе» — иероглиф; озвучивается русский текст (Google + локальный русский голос как запасной).'],
