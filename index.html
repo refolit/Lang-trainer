@@ -979,6 +979,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <!-- ВКЛАДКА: НАСТРОЙКИ -->
       <div id="moreTabSettings" class="hidden">
         <div class="card">
+          <div class="card-h">Направление и озвучка</div>
+          <div id="globalAudioBlock"></div>
+        </div>
+        <div class="card">
           <label class="lbl">Язык</label>
           <div class="seg" id="langSeg"></div>
         </div>
@@ -1159,7 +1163,8 @@ async function clearTtsCache(){
 let items = [];            // array of item
 let settings = {
   hint:2, voiceURI:'', studyVoice:'', mulH:1, mulP:1, mulT:1,
-  writeOrder:'rand', writeHint:'on', writeHintSize:1, writeNavSize:1   // П.6/8/9 «22.26»: Рандом и подсказка вкл по умолчанию
+  writeOrder:'rand', writeHint:'on', writeHintSize:1, writeNavSize:1,   // П.6/8/9 «22.26»: Рандом и подсказка вкл по умолчанию
+  dir:'fr', foreignAudio:true, foreignVoice:'', ruAudio:true, ruVoice:''
 };
 let stats = { streak:0, lastDay:'', activity:{} };
 // Активный язык (Фаза 5): справочник языков; у каждого — свои карточки и статистика.
@@ -1186,7 +1191,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.18.2';
+const APP_VERSION='1.9.19';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1252,6 +1257,7 @@ async function setLang(lang){
   if('speechSynthesis' in window) loadVoices(); // заново подбираем голоса под язык
   await persist();
   refreshAll();
+  renderGlobalAudioSettings(); // язык сменился → перерисовать названия/варианты голосов
   maybeOfferSamples();
   // в фоне: сохраняем выбор языка в профиль (не блокируем интерфейс)
   if(SB_OFFLINE || !sbReady() || !_syncUser) return;
@@ -1674,7 +1680,7 @@ function loadVoices(){
 }
 if('speechSynthesis' in window){
   loadVoices();
-  speechSynthesis.onvoiceschanged=loadVoices;
+  speechSynthesis.onvoiceschanged=()=>{ loadVoices(); renderGlobalAudioSettings(); };
 }
 function pickVoice(){
   const pref=ttsLang();
@@ -1682,7 +1688,11 @@ function pickVoice(){
 }
 function getVoiceByURI(uri){
   if(!uri) return null;
-  return VOICES.find(v=>v.voiceURI===uri) || null;
+  // Русский канал озвучки может ссылаться на голос языка, отличного от активного (VOICES
+  // отфильтрован под активный язык) — потому доискиваем среди ВСЕХ голосов устройства.
+  return VOICES.find(v=>v.voiceURI===uri)
+    || (('speechSynthesis' in window) ? speechSynthesis.getVoices().find(v=>v.voiceURI===uri) : null)
+    || null;
 }
 // Региональные варианты Google-озвучки (сетевой mp3): у одного языка разные акценты.
 // Ключ voice в «Голос озвучки» имеет вид «g:<тег>», обычный «google» — авто (ttsLang()).
@@ -1690,8 +1700,12 @@ const GOOGLE_VOICES={
   zh:[{tag:'zh-CN',label:'Китайский (материковый)'},{tag:'zh-TW',label:'Китайский (тайваньский)'}],
   en:[{tag:'en-US',label:'English (US)'},{tag:'en-GB',label:'English (UK)'},{tag:'en-AU',label:'English (AU)'},{tag:'en-IN',label:'English (IN)'}],
   tr:[{tag:'tr-TR',label:'Türkçe'}],
-  ar:[{tag:'ar-SA',label:'العربية (SA)'},{tag:'ar',label:'العربية'}]
+  ar:[{tag:'ar-SA',label:'العربية (SA)'},{tag:'ar',label:'العربية'}],
+  ru:[{tag:'ru-RU',label:'Русский'}]
 };
+// Русские названия языков (для подписей «Направление перевода» в глобальных настройках).
+const LANG_RU={zh:'Китайский',en:'Английский',tr:'Турецкий',ar:'Арабский'};
+function foreignName(){ return LANG_RU[activeLang]||langInfo().name; }
 // «google» / «» → авто-тег; «g:zh-TW» → конкретный региональный тег; иначе локальный voiceURI.
 function googleTag(v){
   if(v && v.indexOf('g:')===0) return v.slice(2);
@@ -1976,33 +1990,40 @@ const Player={
   _sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 };
 
-// Общие «дорожки» для слова: MP3 есть → файлы; нет → TTS тремя скоростями.
-// study: speeds = выбранная скорость (или все подряд); exam: всегда ['norm'].
+// Общие «дорожки» для слова: два независимых аудио-канала (иностранный и русский)
+// звучат подряд в порядке направления — 'fr' (иностр→рус) / 'rf' (рус→иностр).
+// Иностранный канал: своё mp3 (norm) → файл; иначе синтез текста it.hanzi.
+// Русский канал: синтез перевода (Google ru + локальный русский fallback).
+function foreignVoice(){ return settings.foreignVoice||'google'; }
+function ruVoice(){ return settings.ruVoice||'google'; }
+function foreignTracks(it, opts, speeds, rateMap, labelMap, R){
+  const rec=(sp)=> (it.recordings||[]).find(r=>r.speed===sp);
+  const out=[];
+  for(const sp of speeds){
+    const r=rec(sp);
+    // пустая ссылка (слёт blob: напр. после восстановления БД) — не ломаем плейлист
+    if(r && r.url) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
+  }
+  if(out.length) return out;
+  const sv=foreignVoice();
+  return speeds.map(sp=>({kind:'tts',text:it.hanzi,rate:rateMap[sp],reps:R,label:labelMap[sp],voice:sv||opts.voice||''}));
+}
+function russianTracks(it, speeds, rateMap, labelMap, R){
+  const text=trJoined(it)||'';
+  return speeds.map(sp=>({kind:'tts',text,rate:rateMap[sp],reps:R,label:labelMap[sp],voice:ruVoice(),lang:'ru'}));
+}
 function tracksFor(it, opts){
   opts=opts||{};
   const R=opts.reps ?? 1;                          // одно проговаривание на скорость
   const labelMap={slow:'медленно', norm:'обычно', fast:'быстро'};
   const rateMap={slow:0.55, norm:1, fast:1.18};
-  const rec=(sp)=> (it.recordings||[]).find(r=>r.speed===sp);
   const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
-  const rf = !!opts.rf && activeLang==='zh';
-  // «Русский→Кит.» (rf): своя mp3 — на иностранном языке, для русской стороны не подходит —
-  // вместо неё синтезируем русский текст «из центра» (Google ru + локальный русский fallback).
-  if(!rf){
-    const out=[];
-    for(const sp of speeds){
-      const r=rec(sp);
-      // пустая ссылка (слёт blob: напр. после восстановления БД) — не ломаем плейлист
-      if(r && r.url) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
-    }
-    if(out.length) return out;
-  }
-  const sv=(opts.mode==='study')?(settings.studyVoice||'google'):'';
-  if(rf){
-    const text=trJoined(it)||'';
-    return speeds.map(sp=>({kind:'tts',text,rate:rateMap[sp],reps:R,label:labelMap[sp],voice:'google',lang:'ru'}));
-  }
-  return speeds.map(sp=>({kind:'tts',text:it.hanzi,rate:rateMap[sp],reps:R,label:labelMap[sp],voice:sv||opts.voice||''}));
+  const dir = opts.dir || (settings.dir||'fr');
+  const foreignOn = settings.foreignAudio!==false;
+  const ruOn = settings.ruAudio!==false;
+  const f = foreignOn ? foreignTracks(it,opts,speeds,rateMap,labelMap,R) : [];
+  const r = ruOn ? russianTracks(it,speeds,rateMap,labelMap,R) : [];
+  return dir==='rf' ? [...r, ...f] : [...f, ...r];
 }
 // В режиме «Учить» слово озвучивается один раз на обычной скорости.
 // Повтор — только при продолжительном простое (см. studyIdle) или кнопкой «Повторить».
@@ -2013,8 +2034,8 @@ async function playItem(it, opts){
   opts=opts||{};
   opts.mode=opts.mode||'study';
   if(opts.mode!=='exam') opts.speeds=opts.speeds||studySpeeds();
-  // в режиме «Учить» направление показа определяет, что озвучивать (центр)
-  opts.rf = opts.mode==='study' && studyCurDir==='rf';
+  // направление озвучивания: в «Учить» — направление текущего показа (центр), иначе глобальное
+  opts.dir = opts.mode==='study' ? studyCurDir : (settings.dir||'fr');
   ensureCardAudio(it, opts.mode==='exam' ? ['norm'] : (opts.speeds||studySpeeds()));  // в фоне: не блокируем старт звука
   const el=document.getElementById('studySpeed');
   Player.onSpeedChange=(label)=>{ if(el) el.textContent=label?'🔊':''; };
@@ -2054,7 +2075,7 @@ function prefetchGoogleTTS(text, tag){
 function prefetchNextTTS(queue, idx, lookahead=2){
   try{
     if(!queue || !Array.isArray(queue)) return;
-    const gtag=googleTag(settings.studyVoice||'google');
+    const gtag=googleTag(foreignVoice());
     const tag=gtag||undefined;
     let n=0;
     for(let i=idx+1; i<queue.length && n<lookahead; i++){
@@ -2076,8 +2097,8 @@ async function playWordNorm(it){
   if(rec){
     if(!rec.url && rec.path) await cacheRemoteAudio(it,'norm');
     if(rec.url) Player.play([{kind:'file',url:rec.url}]);
-    else speak(it.hanzi,1, settings.studyVoice||'google');
-  }else speak(it.hanzi,1, settings.studyVoice||'google');
+    else speak(it.hanzi,1, foreignVoice());
+  }else speak(it.hanzi,1, foreignVoice());
 }
 
 // ============================== RECORDINGS / AUDIO FILES ==============================
@@ -3224,15 +3245,16 @@ let studyRunSeen=new Set();  // id слов, показанных в ТЕКУЩ�
 // Настройки показа в «Учить»: аудио (озвучка + автоповтор), пиньинь, перевод.
 // Показ строк карточки в «Учить»: аудио, пиньинь, перевод, иероглиф.
 // Размеры строк (mulH/mulP/mulT) регулируются ползунками здесь же, в модалке «Настройки режима».
-let studyAudioOn=true, studyPyOn=true, studyTrOn=true, studyHanziOn=true;
+let studyPyOn=true, studyTrOn=true, studyHanziOn=true;
 let studySeqOn=false;   // «Подряд»: слова в порядке создания (старые → новые), без SRS-чередования
 // Направление показа ТЕКУЩЕЙ карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
 // Для 'mix' решается на каждый показ случайно и запоминается здесь, чтобы текст и озвучка совпали.
 let studyCurDir='fr';
-// Порядок полей в модалке «Настройки режима Изучение»: Аудио, Иероглиф, Пиньинь, Перевод.
+// Аудио в «Учить» включено, когда включён хотя бы один из двух глобальных каналов.
+function studyAudioOn(){ return settings.foreignAudio!==false || settings.ruAudio!==false; }
+// Порядок полей в модалке «Настройки режима Изучение»: Иероглиф, Пиньинь, Перевод, Подряд.
 // Для арабского и турецкого: «Иероглиф» → «Иностр. текст», строка «Пиньинь» скрыта (нет пиньиня).
 const STUDY_KEYS=[
-  ['studyAudio','Аудио','🔊 озвучка + автоповтор', null],
   ['studyHanzi','Иероглиф','размер шрифта','mulH'],
   ['studyPy','Пиньинь','размер шрифта','mulP'],
   ['studyTr','Перевод','размер шрифта','mulT'],
@@ -3259,20 +3281,18 @@ function applyStudyRows(){
 }
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
-  if(gear) gear.classList.toggle('dim', !(studyAudioOn&&studyPyOn&&studyTrOn&&studyHanziOn));
+  if(gear) gear.classList.toggle('dim', !(studyPyOn&&studyTrOn&&studyHanziOn));
   applyStudyRows();
   applyStudySizes();
   renderStudySettings();
 }
-function studyFlag(k){ return k==='studyAudio'?studyAudioOn:(k==='studyPy'?studyPyOn:(k==='studyTr'?studyTrOn:(k==='studySeq'?studySeqOn:studyHanziOn))); }
+function studyFlag(k){ return k==='studyPy'?studyPyOn:(k==='studyTr'?studyTrOn:(k==='studySeq'?studySeqOn:studyHanziOn)); }
 function setStudyFlag(k,v){
-  if(k==='studyAudio'){ studyAudioOn=v; settings.studyAudio=v; }
-  else if(k==='studyPy'){ studyPyOn=v; settings.studyPy=v; }
+  if(k==='studyPy'){ studyPyOn=v; settings.studyPy=v; }
   else if(k==='studyTr'){ studyTrOn=v; settings.studyTr=v; }
   else if(k==='studySeq'){ studySeqOn=v; settings.studySeq=v; }
   else { studyHanziOn=v; settings.studyHanzi=v; }
   persist(); applyStudyToggles();
-  if(k==='studyAudio'){ if(!v){ Player.stop(); if('speechSynthesis' in window){ try{ speechSynthesis.cancel(); }catch(e){} } studyTouch(); } else { const it=studyQueue[studyIdx]; if(it) studyPlayLoop(it); } }
   if(k==='studySeq'){ const scr=document.getElementById('scr-study'); if(scr && scr.classList.contains('active')) resetStudyQueue(); }
 }
 function openStudySettings(){
@@ -3299,8 +3319,6 @@ function renderStudySettings(){
           <button class="sn-switch ${v?'on':''}" data-study-key="${key}"></button>
         </div>
         ${skey?studySizeSliderHTML(skey):''}
-        ${key==='studyAudio'?studyVoiceSelectHTML():''}
-        ${key==='studyAudio' && activeLang==='zh' ? studyDirSelectHTML() : ''}
       </div>`;
     }).join('')}
     </div>
@@ -3308,8 +3326,6 @@ function renderStudySettings(){
   m.querySelectorAll('.sn-switch').forEach(b=>{
     b.onclick=()=>{ setStudyFlag(b.dataset.studyKey, !studyFlag(b.dataset.studyKey)); renderStudySettings(); };
   });
-  bindStudyVoiceSel();
-  bindStudyDirSel();
   m.querySelectorAll('input[type=range][data-size-key]').forEach(r=>{
     r.oninput=()=>{
       const k=r.dataset.sizeKey;
@@ -3320,49 +3336,6 @@ function renderStudySettings(){
     };
   });
 }
-// Выбор голоса «Учить»: Google (сетевой, по умолчанию) + его региональные варианты
-// + локальные голоса устройства (speechSynthesis).
-function studyVoiceSelectHTML(){
-  const cur=settings.studyVoice||'google';
-  const opts=['<option value="google"'+(cur==='google'?' selected':'')+'>Google (сетевой)</option>'];
-  // региональные Google-варианты активного языка (сетевой mp3, разные акценты)
-  const gv=(GOOGLE_VOICES[activeLang]||[]);
-  if(gv.length>1){
-    gv.forEach(g=>{
-      const val='g:'+g.tag;
-      opts.push('<option value="'+val+'"'+(cur===val?' selected':'')+'>Google · '+escapeHtml(g.label)+'</option>');
-    });
-  }
-  VOICES.forEach(v=>{
-    opts.push('<option value="'+escapeHtml(v.voiceURI)+'"'+(cur===v.voiceURI?' selected':'')+'>'+escapeHtml(v.name+' ('+v.lang+')')+'</option>');
-  });
-  return `<div style="margin:8px 0 2px"><label style="font-size:12px;color:var(--mut)">Голос озвучки</label>
-    <select id="studyVoiceSel" style="width:100%;margin-top:4px">${opts.join('')}</select>
-    ${VOICES.length?'':'<div style="font-size:11px;color:var(--mut);margin-top:4px">На этом устройстве/браузере нет локальных голосов для языка — используется сетевой синтез (Google·Youdao·Baidu).</div>'}
-    </div>`;
-}
-function bindStudyVoiceSel(){
-  const sel=document.getElementById('studyVoiceSel');
-  if(!sel) return;
-  sel.onchange=()=>{ settings.studyVoice=sel.value; persist(); };
-}
-// Выбор направления перевода «Учить» (пока только для китайского): fr / rf / mix.
-function studyDirSelectHTML(){
-  const cur=settings.studyDir||'fr';
-  const opts=[['fr','Китайский - Русский'],['rf','Русский - Китайский'],['mix','оба направления вперемешку']];
-  return `<div style="margin:8px 0 2px"><label style="font-size:12px;color:var(--mut)">Направление перевода</label>
-    <select id="studyDirSel" style="width:100%;margin-top:4px">${opts.map(o=>'<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')}</select></div>`;
-}
-function bindStudyDirSel(){
-  const sel=document.getElementById('studyDirSel');
-  if(!sel) return;
-  sel.onchange=()=>{
-    settings.studyDir=sel.value; persist();
-    const scr=document.getElementById('scr-study');
-    if(scr && scr.classList.contains('active')) refreshStudyCard();
-  };
-}
-function toggleStudyAudio(){ setStudyFlag('studyAudio', !studyAudioOn); }
 function toggleStudyPy(){ setStudyFlag('studyPy', !studyPyOn); }
 function toggleStudyTr(){ setStudyFlag('studyTr', !studyTrOn); }
 function shuffle(a){
@@ -3436,7 +3409,7 @@ function resetStudyQueue(){
 // Направление показа карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
 // Для 'mix' решается на каждый показ случайно и запоминается в studyCurDir (текст = озвучка).
 function studyDirFor(it){
-  const d=settings.studyDir||'fr';
+  const d=settings.dir||'fr';
   if(d==='mix') return (Math.random()<0.5)?'fr':'rf';
   return d;
 }
@@ -3460,7 +3433,7 @@ function refreshStudyCard(it){
   // пиньинь/транскрипция без изменений; «Перевод» — то, чего НЕТ в центре (в rf — иероглиф)
   document.getElementById('studyPinyin').textContent=pinyinOf(it)||'';
   document.getElementById('studyTr').textContent = rf ? (it.hanzi||'') : (trJoined(it)||'');
-  if(!studyAudioOn){ document.getElementById('studySpeed').textContent='🔇'; }
+  if(!studyAudioOn()){ document.getElementById('studySpeed').textContent='🔇'; }
   else studyPlayLoop(it);
   updateStudyTransport();
 }
@@ -3589,7 +3562,7 @@ function studyPlayLoop(it){
       if(!scr || !scr.classList.contains('active')) return;
       const cur=studyQueue[studyIdx];
       if(!cur || cur.id!==it.id) return;                 // карточка сменилась
-      if(!studyAudioOn) return;                          // выключили аудио — больше не повторяем
+      if(!studyAudioOn()) return;                        // выключили аудио — больше не повторяем
       if(studyRepeats>=STUDY_REPEAT_MAX) return;         // лимит повторов достигнут — затихаем
       studyRepeats++;
       studyRepeatTmo=setTimeout(()=>{
@@ -4270,9 +4243,9 @@ function renderWriteSettings(){
 // каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
 let examSeq=[], examIdx=0, examRight=0, examWrong=[];
 let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false, write:false, tonePy:true};
-let examAudioOn=true; // 🔊 Аудио в Экзамене (по умолчанию, как и в Письме)
 let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
 let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
+let examCurDir='fr';  // направление текущего вопроса (fr/rf); mix решается случайно на каждый вопрос
 let examAudioDelay=0; // 🔇 Задержка озвучки нового слова в экзамене, в секундах (0–6, шаг 0,5)
 let examDelayTimer=null; // таймер отложенной озвучки (снимается при смене вопроса/уходе/выкл. аудио)
 let examGradual=true;    // «Постепенно» (Верно-неверно): иероглиф → пиньинь → перевод с паузой
@@ -4380,6 +4353,7 @@ function nextExamQ(){
   updateExamScore();
   const q=examSeq[examIdx];
   examCurrentIt=q.it;
+  examCurDir=(settings.dir||'fr')==='mix' ? (Math.random()<0.5?'fr':'rf') : (settings.dir||'fr');
   markShown(q.it);
   clearExamIdle(); examLastMove=0;
   if(q.mode==='tf') renderExamTF(q);
@@ -4415,14 +4389,14 @@ let examRepeatGen=0, examRepeatTmo=null;
 function startExamRepeat(it){
   const my=++examRepeatGen;
   if(examRepeatTmo){ clearTimeout(examRepeatTmo); examRepeatTmo=null; }
-  if(!examAudioOn) return;
+  if(!examAudioOn()) return;
   if(!it || !it.hanzi) return;
   (async()=>{
     while(true){
       if(my!==examRepeatGen) return;                  // ответ/уход/смена вопроса
       const scr=document.getElementById('scr-exam');
       if(!scr || !scr.classList.contains('active')) return;
-      if(!examAudioOn) return;
+      if(!examAudioOn()) return;
       if(examCurrentIt && examCurrentIt.id!==it.id) return;
       await examSpeakWord(it);                        // ждём КОНЦА озвучивания
       if(my!==examRepeatGen) return;
@@ -4433,19 +4407,20 @@ function startExamRepeat(it){
 }
 // Озвучка нового слова в вопросе: с задержкой «Задержка аудио» (0–6 с), затем переменные повторы.
 // При 0 — сразу. Задержка касается только ПЕРВОГО озвучивания.
+// Аудио в экзамене включено, когда включён хотя бы один из двух глобальных каналов.
+function examAudioOn(){ return settings.foreignAudio!==false || settings.ruAudio!==false; }
 function examSpeakDelayed(it){
-  if(!examAudioOn) return;
+  if(!examAudioOn()) return;
   if(!it || !it.hanzi) return;
   const delay=(examAudioDelay||0)*1000;
   if(!delay){ startExamRepeat(it); return; }
   clearTimeout(examDelayTimer);
-  examDelayTimer=setTimeout(()=>{ examDelayTimer=null; if(examAudioOn) startExamRepeat(it); }, delay);
+  examDelayTimer=setTimeout(()=>{ examDelayTimer=null; if(examAudioOn()) startExamRepeat(it); }, delay);
 }
-// повтор слова целиком (обычный темп). Если у слова есть сохранённое mp3 (в том числе
-// пришедшее из облака — подтягиваем его по path), играем файл; иначе синтез речи.
+// повтор слова целиком (обычный темп) двумя каналами в порядке направления вопроса.
 // Возвращает промис, который завершается, когда озвучивание ЗАКОНЧИЛОСЬ (для повтора от конца).
 async function examSpeakWord(it){
-  if(!examAudioOn) return;
+  if(!examAudioOn()) return;
   await examSpeakOnce(it);
 }
 // Одиночное проигрывание БЕЗ проверки флага «Аудио»: клик по иероглифу в вопросе при
@@ -4453,26 +4428,9 @@ async function examSpeakWord(it){
 async function examSpeakOnce(it){
   if(!it||!it.hanzi) return;
   await ensureCardAudio(it, ['norm']);
-  const r=liveRec(it, 'norm');
-  if(r && r.url){
-    await new Promise(res=>{
-      Player.play([{kind:'file',url:r.url,reps:1,label:'обычно'}], {gap:0, onDone:res});
-    });
-  } else {
-    // Синтез идёт через Player (как файл), а не через speak(): у speak() сетевой Google-mp3
-    // грузится асинхронно и не проверяет токен, поэтому при переходе к следующему слову
-    // «договаривал» поверх нового. Player.play() проверяет stale() — старый запуск гасится.
-    await new Promise(res=>{
-      Player.play([{kind:'tts',text:it.hanzi,rate:1,reps:1,label:'обычно',voice:''}], {gap:0, onDone:res});
-    });
-  }
-}
-function toggleExamAudio(){
-  examAudioOn=!examAudioOn;
-  settings.examAudio=examAudioOn; persist();
-  clearExamIdle();
-  if(!examAudioOn){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-  else { const it=examCurrentIt; if(it&&it.hanzi){ startExamRepeat(it); } }
+  await new Promise(res=>{
+    Player.play(tracksFor(it,{mode:'exam',dir:examCurDir,reps:1}), {gap:0, onDone:res});
+  });
 }
 function toggleExamAllTr(){
   examAllTr=!examAllTr;
@@ -4546,10 +4504,6 @@ function renderExamSettings(){
       <button data-tab="modes" class="${tab==='modes'?'active':''}">Подрежимы</button>
     </div>
     <div id="examSettingsGeneral" class="${tab==='general'?'':'hidden'}">
-      <div class="menu-item">
-        <div class="mi-label">Аудио<span class="mi-hint">Озвучка слов в заданиях</span></div>
-        <button class="sn-switch ${examAudioOn?'on':''}" data-exam-key="audio"></button>
-      </div>
       <div class="menu-item" style="display:block">
         <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
         <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
@@ -4625,7 +4579,6 @@ function renderExamSettings(){
       else if(k==='match'){ toggleExamMode('match'); renderExamSettings(); }
       else if(k==='write'){ toggleExamMode('write'); renderExamSettings(); }
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
-      else if(k==='audio'){ toggleExamAudio(); renderExamSettings(); }
       else if(k==='gradual'){ toggleExamGradual(); renderExamSettings(); }
       else if(k==='tonePy'){ toggleExamTonePy(); renderExamSettings(); }
     };
@@ -4786,21 +4739,26 @@ function eqWordClass(hanzi){
 }
 function renderExamTF(q){
   const it=q.it;
+  const rf=examCurDir==='rf';
   const showOk=Math.random()<0.5;
-  let tr=examPickTr(it);
+  // Вопрос — «главная» сторона направления; перевод — «обратная». fr: главное иероглиф, обратное русский;
+  // rf: главное русский, обратное иероглиф. Верно/неверно проверяет соответствие ОБРАТНОЙ стороны.
+  const main=rf ? examPickTr(it) : it.hanzi;
+  let back=rf ? it.hanzi : examPickTr(it);
   if(!showOk){
-    const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
-    if(others.length) tr=others[Math.floor(Math.random()*others.length)];
+    // Неверная пара подбирается с ОБРАТНОЙ стороны: в fr — другой перевод, в rf — другой иероглиф.
+    const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>rf?x.hanzi:examPickTr(x));
+    if(others.length) back=others[Math.floor(Math.random()*others.length)];
   }
   const py=it.pinyin||pinyinOf(it)||'';
   const body=document.getElementById('examBody');
-  // «Постепенно» (только Верно-неверно, вкл по умолчанию): сначала иероглиф, затем пиньинь,
+  // «Постепенно» (только Верно-неверно, вкл по умолчанию): сначала вопрос, затем пиньинь (fr),
   // затем перевод — с паузой (0–6 с, шаг 1 с). При 0 с показываем всё сразу (как раньше).
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:center">
-      <div class="eq-word tap" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
-      <div class="exam-py" id="tfPy" style="${eqSizesStyle(it.hanzi,{py:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(py)}</div>
-      <div class="eq-tr" id="tfTr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${examGradual&&examGradualDelay>0?'':escapeHtml(tr)}</div>
+      <div class="eq-word tap" style="${eqSizesStyle(main,{word:true})}">${escapeHtml(main)}</div>
+      <div class="exam-py" id="tfPy" style="${eqSizesStyle(it.hanzi,{py:true})}">${(examGradual&&examGradualDelay>0)?'':escapeHtml(py)}</div>
+      <div class="eq-tr" id="tfTr" style="${eqSizesStyle(it.hanzi,{tr:true})}">${(examGradual&&examGradualDelay>0)?'':escapeHtml(back)}</div>
     </div>
     <div class="btn-col">
       <button class="btn ok" data-v="1">Верно</button>
@@ -4812,10 +4770,10 @@ function renderExamTF(q){
     if(taskOk){ examCorrect(it); examFinish(1); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
-  // клик по иероглифу/слову: при выключенном аудио — проиграть один раз (каждый клик = одно проигрывание);
+  // клик по слову: при выключенном аудио — проиграть один раз (каждый клик = одно проигрывание);
   // при включённом аудио — без изменений (повтор идёт штатно).
   const w=document.querySelector('#examBody .exam-q .eq-word');
-  if(w) w.onclick=()=>{ examTouch(); if(!examAudioOn) examSpeakOnce(it); };
+  if(w) w.onclick=()=>{ examTouch(); if(!examAudioOn()) examSpeakOnce(it); };
   // «Постепенно» (Верно-неверно): иероглиф → (x) → пиньинь → (x) → перевод → (x) → аудио.
   // Аудио при включённом «Постепенно» звучит только ПОСЛЕ раскрытия перевода (не сразу).
   if(examGradual && examGradualDelay>0){
@@ -4824,7 +4782,7 @@ function renderExamTF(q){
       const p=document.getElementById('tfPy'); if(p) p.textContent=py;
       examGradualTmo2=setTimeout(()=>{
         examGradualTmo2=null;
-        const t=document.getElementById('tfTr'); if(t) t.textContent=tr;
+        const t=document.getElementById('tfTr'); if(t) t.textContent=back;
         examGradualTmo3=setTimeout(()=>{
           examGradualTmo3=null;
           startExamRepeat(it);          // аудио — после раскрытия перевода
@@ -4839,23 +4797,32 @@ function renderExamTF(q){
 // ---------- Выбор ответов ----------
 function renderExamChoice(q){
   const it=q.it;
+  const rf=examCurDir==='rf';
   const body=document.getElementById('examBody');
-  // вопрос один раз; число вариантов (4-6-8-10) меняется в шестерёнке → мгновенная перерисовка
+  // fr: вопрос = иероглиф, варианты = переводы; rf: вопрос = перевод, варианты = иероглифы.
+  const qText = rf ? examPickTr(it) : it.hanzi;
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:center; margin-bottom:14px">
-      <div class="eq-word tap" id="eqWord" style="${eqSizesStyle(it.hanzi,{word:true})}">${escapeHtml(it.hanzi)}</div>
+      <div class="eq-word tap" id="eqWord" style="${eqSizesStyle(qText,{word:true})}">${escapeHtml(qText)}</div>
     </div>
     <div class="exam-q" style="width:100%">
       <div id="examOpts" class="exam-opts"></div>
     </div>`;
-  // клик по иероглифу/слову в вопросе — при включённом аудио повторить (как в «Подбор» по клику),
-  // при выключенном аудио — проиграть один раз (каждый клик = одно проигрывание).
+  // клик по слову в вопросе — при включённом аудио повторить, при выключенном — проиграть один раз.
   const w=document.getElementById('eqWord');
-  if(w) w.onclick=()=>{ examTouch(); if(examAudioOn) startExamRepeat(it); else examSpeakOnce(it); };
+  if(w) w.onclick=()=>{ examTouch(); if(examAudioOn()) startExamRepeat(it); else examSpeakOnce(it); };
   function drawOpts(N){
-    const correct=examPickTr(it);
+    let correct, others, isRight;
+    if(rf){
+      correct=it.hanzi;
+      others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>x.hanzi);
+      isRight=(o)=>o===it.hanzi;
+    }else{
+      correct=examPickTr(it);
+      others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
+      isRight=(o)=>trList(it).includes(o);
+    }
     const opts=[correct];
-    const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
     shuffle(others);
     for(const o of others){
       if(opts.length>=N) break;
@@ -4875,7 +4842,7 @@ function renderExamChoice(q){
       b.appendChild(t);
       b.onclick=()=>{
         examTouch();
-        if(trList(it).includes(o)){ examCorrectCounted(it); examFinish(1); }
+        if(isRight(o)){ examCorrectCounted(it); examFinish(1); }
         else { examMistake(it); flashBad(b, ()=>examFinish(1)); }
       };
       box.appendChild(b);
@@ -4962,7 +4929,7 @@ function drawTone(){
   // при включённом аудио — без изменений (повтор идёт штатно).
   body.querySelectorAll('.tone-hanzi .tc').forEach(c=>c.onclick=()=>{
     examTouch();
-    if(!examAudioOn && examCurrentIt) examSpeakOnce(examCurrentIt);
+    if(!examAudioOn() && examCurrentIt) examSpeakOnce(examCurrentIt);
   });
 }
 function tonePick(n, btn){
@@ -5185,7 +5152,7 @@ function matchStart(){
   matchRound=[]; matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   matchError=false; matchErrItems=[];
   matchNextRound();
-  if(examAudioOn && matchRound.length && matchRound[0]) examSpeakWord(matchRound[0]);
+  if(examAudioOn() && matchRound.length && matchRound[0]) examSpeakWord(matchRound[0]);
 }
 function matchNextRound(){
   const deck=matchDeck();
@@ -5219,24 +5186,32 @@ function matchNextRound(){
   // Прогрев озвучки раунда (правки 18.10.26): клик по иероглифу должен звучать мгновенно,
   // а не после долгой загрузки Google-mp3. Слова без своего mp3 подписываем на TTS заранее —
   // service worker кладёт mp3 в кэш, и при клике он отдаётся сразу.
-  if(examAudioOn){
+  if(examAudioOn()){
     for(const w of matchRound){
       const rec=liveRec(w,'norm');
       if(rec && (rec.url || rec.path)) continue;   // есть своё mp3 — прогрев не нужен
-      prefetchGoogleTTS(w.hanzi, googleTag(settings.studyVoice||'google')||undefined);
+      prefetchGoogleTTS(w.hanzi, googleTag(foreignVoice())||undefined);
     }
   }
   renderMatch();
 }
 function renderMatch(){
+  const rf=examCurDir==='rf';
+  // fr: слева иероглифы, справа переводы; rf: слева переводы, справа иероглифы.
   const left=shuffle([...matchRound]);
   const right=shuffle([...matchRound]);
   const body=document.getElementById('examBody');
+  const cell=(it)=> rf
+    ? (()=>{const t=examPickTr(it);return `<button class="btn sec match-pair match-txt ${eqWordClass(t)}" data-id="${it.id}">${escapeHtml(t)}</button>`;})()
+    : `<button class="btn sec match-pair ${eqWordClass(it.hanzi)}" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`;
+  const cellR=(it)=> rf
+    ? `<button class="btn sec match-pair ${eqWordClass(it.hanzi)}" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`
+    : (()=>{const t=examPickTr(it);return `<button class="btn sec match-pair match-txt ${eqWordClass(t)}" data-id="${it.id}">${escapeHtml(t)}</button>`;})();
   body.innerHTML=`
     <div class="exam-spacer"></div>
     <div class="match-cols">
-      <div class="match-col" id="matchLeft">${left.map(it=>`<button class="btn sec match-pair ${eqWordClass(it.hanzi)}" data-id="${it.id}">${escapeHtml(it.hanzi)}</button>`).join('')}</div>
-      <div class="match-col" id="matchRight">${right.map(it=>{const t=examPickTr(it);return `<button class="btn sec match-pair match-txt ${eqWordClass(t)}" data-id="${it.id}">${escapeHtml(t)}</button>`;}).join('')}</div>
+      <div class="match-col" id="matchLeft">${left.map(cell).join('')}</div>
+      <div class="match-col" id="matchRight">${right.map(cellR).join('')}</div>
     </div>`;
   document.querySelectorAll('#matchLeft button').forEach(b=>{
     b.onclick=()=>matchPickLeft(b.dataset.id, b);
@@ -5357,6 +5332,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.19','26.10.26','Глобальные «Направление и озвучка» (Ещё → Настройки, вверху): направление перевода (иностр→рус / рус→иностр / вперемешку) стало общим для Учить и Экзамена; два независимых аудио-канала — иностранный (mp3/синтез) и русский (синтез перевода) — звучат подряд в порядке направления, каждый со своим переключателем и выбором голоса (Google + региональные + локальные). Подбор пар меняет столбцы местами по направлению, верно-неверно и выбор ответов задают вопрос с выбранной стороны.'],
   ['1.9.18.2','25.10.26','Экзамен: клик по иероглифу/слову при выключенном аудио теперь проигрывает озвучку один раз (выбор ответов, верно-неверно, тоны); при включённом аудио поведение не изменилось.'],
   ['1.9.18.1','25.10.26','Синхронизация: устранены ложные конфликты на уже синхронизированных карточках — локальная и облачная копии теперь нормализуют поля (addedAt, wrongMonth, wrongDay, wrongStreak) одинаково, поэтому при равных таймстампах сигнатуры больше не расходятся и окно конфликтов не всплывает на старых словах; при ничьей таймстампов по умолчанию остаётся локальная версия (раньше ошибочно побеждало облако).'],
   ['1.9.18','25.10.26','SRS на интервалах в днях: повтор планируется по календарным суткам (1/2/4/7/15 дней), а не по числу заходов в режим. Учить: очередь больше не пустеет — когда слова на сегодня пройдены, автоматически подтягиваются слова со следующих дней («досрочно»); «Вперёд ▶» больше не меняет состояние слова (только просмотр), SRS двигается только ответами в экзамене/письме. Существующие слова переведены на новую схему мягко, без потери прогресса.'],
@@ -6660,6 +6636,85 @@ function bindSettings(){
   seg('writeHintSeg','writeHint','str',onWriteHintChange);
   document.getElementById('voiceSel').onchange=e=>{ settings.voiceURI=e.target.value; persist(); };
   applySizes();
+  renderGlobalAudioSettings();
+}
+// ---- Глобальные «Направление и озвучка» (карточка вверху Настроек) ----
+// Два независимых канала: иностранный (mp3/синтез) и русский (синтез перевода),
+// звучат подряд в порядке направления. Направление — глобальное (Учить/Экзамен и др.).
+function globalVoiceOptions(cur, kind){
+  // kind: 'foreign' (активный язык) или 'ru' (русский) — свои региональные Google-варианты.
+  const opts=['<option value="google"'+(cur==='google'?' selected':'')+'>Google (сетевой)</option>'];
+  const gv=(GOOGLE_VOICES[kind==='ru'?'ru':activeLang]||[]);
+  gv.forEach(g=>{
+    const val='g:'+g.tag;
+    opts.push('<option value="'+val+'"'+(cur===val?' selected':'')+'>Google · '+escapeHtml(g.label)+'</option>');
+  });
+  // локальные голоса устройства: для иностранного — активного языка, для русского — ru
+  const prefix=(kind==='ru')?'ru':(ttsLang()||'zh-CN').split('-')[0].toLowerCase();
+  const local=speechSynthesis?speechSynthesis.getVoices().filter(v=>voiceLangMatch(v.lang,prefix)):[];
+  local.forEach(v=>{
+    opts.push('<option value="'+escapeHtml(v.voiceURI)+'"'+(cur===v.voiceURI?' selected':'')+'>'+escapeHtml(v.name+' ('+v.lang+')')+'</option>');
+  });
+  return opts.join('');
+}
+function renderGlobalAudioSettings(){
+  const box=document.getElementById('globalAudioBlock');
+  if(!box) return;
+  const fn=foreignName();
+  const dir=settings.dir||'fr';
+  const dirOpts=[['fr',fn+' - Русский'],['rf','Русский - '+fn],['mix','вперемешку']]
+    .map(o=>'<option value="'+o[0]+'"'+(dir===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
+  box.innerHTML=`
+    <label class="lbl">Направление перевода</label>
+    <select id="globalDirSel" style="width:100%">${dirOpts}</select>
+    <div class="menu-item" style="margin-top:4px">
+      <div class="mi-label">Аудио ${fn}<span class="mi-hint">Озвучка ${fn} текста</span></div>
+      <button class="sn-switch ${settings.foreignAudio!==false?'on':''}" data-global-key="foreignAudio"></button>
+    </div>
+    <div class="menu-item" style="display:block; padding:6px 0 10px">
+      <div class="mi-label">Выбрать голос ${fn}<span class="mi-hint">Синтез ${fn} текста</span></div>
+      <select id="globalForeignVoiceSel" style="width:100%;margin-top:6px">${globalVoiceOptions(settings.foreignVoice||'google','foreign')}</select>
+    </div>
+    <div class="menu-item">
+      <div class="mi-label">Аудио Русский<span class="mi-hint">Озвучка перевода</span></div>
+      <button class="sn-switch ${settings.ruAudio!==false?'on':''}" data-global-key="ruAudio"></button>
+    </div>
+    <div class="menu-item" style="display:block; padding:6px 0 10px">
+      <div class="mi-label">Выбрать голос Русский<span class="mi-hint">Синтез русского перевода</span></div>
+      <select id="globalRuVoiceSel" style="width:100%;margin-top:6px">${globalVoiceOptions(settings.ruVoice||'google','ru')}</select>
+    </div>`;
+  const dirSel=document.getElementById('globalDirSel');
+  if(dirSel) dirSel.onchange=()=>{
+    settings.dir=dirSel.value; persist();
+    const scr=document.getElementById('scr-study');
+    if(scr && scr.classList.contains('active')) refreshStudyCard();
+    const escr=document.getElementById('scr-exam');
+    if(escr && escr.classList.contains('active')) restartExamSeq();
+  };
+  const fv=document.getElementById('globalForeignVoiceSel');
+  if(fv) fv.onchange=()=>{ settings.foreignVoice=fv.value; persist(); };
+  const rv=document.getElementById('globalRuVoiceSel');
+  if(rv) rv.onchange=()=>{ settings.ruVoice=rv.value; persist(); };
+  box.querySelectorAll('[data-global-key]').forEach(b=>{
+    b.onclick=()=>{
+      const k=b.dataset.globalKey;
+      if(k==='foreignAudio') settings.foreignAudio = settings.foreignAudio===false;
+      else settings.ruAudio = settings.ruAudio===false;
+      persist();
+      // мгновенно применить к текущим режимам
+      const scr=document.getElementById('scr-study');
+      if(scr && scr.classList.contains('active')){
+        const it=studyQueue[studyIdx];
+        if(it){ if(studyAudioOn()) studyPlayLoop(it); else { Player.stop(); document.getElementById('studySpeed').textContent='🔇'; } }
+      }
+      const escr=document.getElementById('scr-exam');
+      if(escr && escr.classList.contains('active')){
+        if(examAudioOn()){ const it=examCurrentIt; if(it&&it.hanzi) startExamRepeat(it); }
+        else clearExamIdle();
+      }
+      renderGlobalAudioSettings();
+    };
+  });
 }
 function onWriteOrderChange(){
   // порядок слов в письме сменился — перестроить список; текущая карточка остаётся активной
@@ -6930,7 +6985,7 @@ function bindAudioLifecycle(){
     if(document.hidden){ stopAllAudio(); studyTouch(); clearWritePlay(); }
     else{
       const scr=document.getElementById('scr-study');
-      if(scr && scr.classList.contains('active') && studyAudioOn){
+      if(scr && scr.classList.contains('active') && settings.foreignAudio!==false){
         const it=studyQueue[studyIdx];
         if(it) studyPlayLoop(it);
       }
@@ -7946,7 +8001,10 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',dir:'fr',foreignAudio:true,foreignVoice:'',ruAudio:true,ruVoice:'',sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  // Миграция 1.10.0: направление и голос «Учить» переехали в глобальные dir/foreignVoice.
+  if(settings.dir==null){ settings.dir=settings.studyDir||'fr'; }
+  if(settings.foreignVoice==null){ settings.foreignVoice=settings.studyVoice||''; }
   // 1.8.10: «сотня» в ползунках теперь равна прежнему виду при 60/60/70 — один раз ставим ползунки на 100%,
   // чтобы пользователю не пришлось докручивать вручную (мультипликативный флаг нельзя: 0.6 уже сохранён и неотличим от выбранного).
   if(!settings.studySizeStd){
@@ -7955,7 +8013,6 @@ async function boot(){
     if(settings.mulT===0.7) settings.mulT=1;
     settings.studySizeStd=true;
   }
-  studyAudioOn=settings.studyAudio!==false;
   studyPyOn=settings.studyPy!==false;
   studyTrOn=settings.studyTr!==false;
   studyHanziOn=settings.studyHanzi!==false;
@@ -7970,7 +8027,6 @@ async function boot(){
   if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
   stats=statsByLang[activeLang];
   examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch, write:!!settings.examWrite, tonePy:settings.examTonePy!==false};
-  examAudioOn=settings.examAudio!==false;
   examAllTr=settings.examAllTr!==false;
   examAudioDelay=Number(settings.examAudioDelay)||0;
   examGradual=settings.examGradual!==false;
