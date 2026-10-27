@@ -116,6 +116,11 @@ header.top .sub{display:flex; gap:6px; align-items:center}
 }
 .chip b{color:var(--ink); font-weight:800}
 header.top .ver{font-size:11px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
+/* Полоска-таймер режима «Листание» (правки 27.10.26): 3px, движется слева направо за 6 с. */
+.browse-bar{height:3px; background:transparent; overflow:hidden; position:relative; display:none}
+.browse-bar.on{display:block}
+.browse-fill{height:100%; width:0%; background:var(--red); border-radius:0 2px 2px 0; transition:width 6s linear}
+.browse-fill.reset{transition:none}
 
 /* Screens. Скролл-зона заканчивается НАД нижним меню: сама полоса прокрутки
    не уезжает под панель вкладок (и последний контент тоже). */
@@ -329,6 +334,15 @@ html[data-theme="plum"] .dc.py{color:#c7aef0}
 }
 .study-speak svg{width:18px; height:18px; display:block; fill:currentColor}
 .study-speak:active{transform:scale(.94)}
+/* Кнопка-переключатель режима «Листание» (правки 27.10.26) — между статусом и 🔊 */
+.study-browse{
+  width:28px; height:28px; border-radius:50%; border:1.5px solid var(--line); cursor:pointer; flex:0 0 auto; padding:0;
+  background:var(--card); color:var(--mut); display:inline-flex; align-items:center; justify-content:center;
+  font-size:13px; line-height:1; box-shadow:var(--shadow-sm);
+}
+.study-browse svg{width:16px; height:16px; display:block; fill:currentColor}
+.study-browse.on{background:var(--red); color:#fff; border-color:var(--red)}
+.study-browse:active{transform:scale(.94)}
 /* Арабский «Учить»: три кнопки управления аудио (⏪ перемотка назад / ▶ плей-пауза / ⏩ вперёд).
    Показываются только для арабского (класс .on). Все три одинаковые: 44px, скруглённый
    прямоугольник, нейтральный фон — центральная плей/пауза не выделяется и не наезжает на «Писать это». */
@@ -860,6 +874,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   </div>
 </header>
 
+<!-- Полоска-таймер режима «Листание»: 3px, движется слева направо за 6 с на каждое слово. -->
+<div class="browse-bar" id="browseBar"><div class="browse-fill" id="browseFill"></div></div>
+
 <main>
   <!-- СЛОВАРЬ -->
   <section class="screen active" id="scr-dict">
@@ -906,6 +923,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="study-status">
         <span class="chip" id="studyProgress">0 / 0</span>
         <span class="stline" id="studyStatusLine"></span>
+        <button class="study-browse" id="studyBrowseBtn" title="Листание" aria-label="Листание"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/></svg></button>
         <span class="speaker" id="studySpeed"></span>
         <span class="flt-mode-badge hidden" id="studyFltBadge"></span>
         <button class="study-speak" id="studySpeakBtn" title="Проиграть ещё раз" aria-label="Проиграть ещё раз"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
@@ -1242,7 +1260,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.19';
+const APP_VERSION='1.9.19.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1658,6 +1676,7 @@ function go(scrId, writeIt){
   stopAllAudio();
   clearExamIdle();
   clearStudyIdle();
+  browseReset();
   clearWritePlay();
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(scrId).classList.add('active');
@@ -2069,12 +2088,10 @@ function tracksFor(it, opts){
   const labelMap={slow:'медленно', norm:'обычно', fast:'быстро'};
   const rateMap={slow:0.55, norm:1, fast:1.18};
   const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
-  const dir = opts.dir || (settings.dir||'fr');
+  // Русский аудио-канал в Учить/Экзамен не звучит (правки 27.10.26): только иностранный.
+  // Русская озвучка осталась только в режиме «Листание» (проигрывается отдельно, см. browsePlayRussian).
   const foreignOn = settings.foreignAudio!==false;
-  const ruOn = settings.ruAudio!==false;
-  const f = foreignOn ? foreignTracks(it,opts,speeds,rateMap,labelMap,R) : [];
-  const r = ruOn ? russianTracks(it,speeds,rateMap,labelMap,R) : [];
-  return dir==='rf' ? [...r, ...f] : [...f, ...r];
+  return foreignOn ? foreignTracks(it,opts,speeds,rateMap,labelMap,R) : [];
 }
 // В режиме «Учить» слово озвучивается один раз на обычной скорости.
 // Повтор — только при продолжительном простое (см. studyIdle) или кнопкой «Повторить».
@@ -3301,8 +3318,8 @@ let studySeqOn=false;   // «Подряд»: слова в порядке соз
 // Направление показа ТЕКУЩЕЙ карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
 // Для 'mix' решается на каждый показ случайно и запоминается здесь, чтобы текст и озвучка совпали.
 let studyCurDir='fr';
-// Аудио в «Учить» включено, когда включён хотя бы один из двух глобальных каналов.
-function studyAudioOn(){ return settings.foreignAudio!==false || settings.ruAudio!==false; }
+// Аудио в «Учить» — только иностранный канал (русский убран из Учить/Экзамен, правки 27.10.26).
+function studyAudioOn(){ return settings.foreignAudio!==false; }
 // Порядок полей в модалке «Настройки режима Изучение»: Иероглиф, Пиньинь, Перевод, Подряд.
 // Для арабского и турецкого: «Иероглиф» → «Иностр. текст», строка «Пиньинь» скрыта (нет пиньиня).
 const STUDY_KEYS=[
@@ -3656,6 +3673,135 @@ function studySpeak(){
   Player.stop();
   if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='🔊';
   playItem(it,{mode:'study'});   // одно проговаривание обычной скорости, без автоповтора
+}
+
+// ============================== ЛИСТАНИЕ (правки 27.10.26) ==============================
+// Режим «Листание» в «Учить»: карточки полностью раскрываются и сменяются сами, по кругу,
+// без кликов. На слово: иероглиф → 3с → пиньинь + китайское аудио → 2с → перевод +
+// русское аудио → 1с → следующее слово. Полоска-таймер (3px) под шапкой заполняется
+// слева направо за 6с на каждое слово и сбрасывается с приходом нового иероглифа.
+let browseOn=false;                 // включено ли «Листание»
+let browseTmo=null, browseGen=0;    // таймер цикла и поколение (для отмены при выключении/уходе)
+const BROWSE_HANZI_MS=3000, BROWSE_PY_MS=2000, BROWSE_TR_MS=1000;  // паузы между фазами
+const BROWSE_BAR_MS=6000;           // полоска заполняется за 6 с на каждое слово
+function _browseBarEl(){ return document.getElementById('browseBar'); }
+function _browseFillEl(){ return document.getElementById('browseFill'); }
+// Старт полоски-таймера: мгновенный сброс в 0, затем плавное заполнение до 100% за 6 с.
+function browseBarStart(){
+  const bar=_browseBarEl(), fill=_browseFillEl();
+  if(!bar || !fill) return;
+  bar.classList.add('on');
+  fill.classList.add('reset');
+  fill.style.width='0%';
+  // сбросить transition, чтобы первый кадр стартовал строго с 0 (иначе transition сгладит возврат)
+  void fill.offsetWidth;
+  fill.classList.remove('reset');
+  fill.style.width='100%';
+}
+function browseBarStop(){
+  const bar=_browseBarEl(), fill=_browseFillEl();
+  if(bar) bar.classList.remove('on');
+  if(fill){ fill.style.width='0%'; }
+}
+// Показать в карточке только то, что нужно на текущей фазе «Листания», и заполнить поля.
+// Фазы: 0 — только иероглиф; 1 — +пиньинь; 2 — +перевод. Всегда направление fr (иностр → рус).
+function browseRender(it, phase){
+  studyCurDir='fr';
+  const hz=document.getElementById('studyHanzi'), py=document.getElementById('studyPinyin'), tr=document.getElementById('studyTr');
+  if(hz){ hz.textContent=it.hanzi||''; hz.style.display=''; }
+  if(py){ py.textContent=pinyinOf(it)||''; py.style.display = phase>=1 ? '' : 'none'; }
+  if(tr){ tr.textContent=trJoined(it)||''; tr.style.display = phase>=2 ? '' : 'none'; }
+  applyStudySizes();
+}
+// Иностранное аудио (китайское и т.п.) — как в обычном «Учить», без русского канала.
+function browsePlayForeign(it){
+  if(settings.foreignAudio===false) return;
+  ensureCardAudio(it, studySpeeds());
+  playItem(it, {mode:'study'});
+}
+// Русская озвучка перевода — отдельно, только в «Листании»; уважает тумблер «Русский голос».
+function browsePlayRussian(it){
+  if(settings.ruAudio===false) return;
+  const text=trJoined(it)||'';
+  if(!text) return;
+  const rateMap={slow:0.55, norm:1, fast:1.18};
+  Player.play(russianTracks(it,['norm'],rateMap,{norm:'обычно'},1));
+}
+// Полный цикл одного слова: 0(иер) → 1(пин+ин.аудио) → 2(перевод+рус.аудио) → следующее.
+function browseStep(it){
+  const my=browseGen;
+  Player.stop();          // чистая тишина на старте нового иероглифа (гасим хвост русской озвучки)
+  browseRender(it,0);
+  browseBarStart();
+  browseTmo=setTimeout(()=>{
+    if(browseGen!==my || !browseOn) return;
+    browseRender(it,1);
+    browsePlayForeign(it);
+    browseTmo=setTimeout(()=>{
+      if(browseGen!==my || !browseOn) return;
+      browseRender(it,2);
+      browsePlayRussian(it);
+      browseTmo=setTimeout(()=>{
+        if(browseGen!==my || !browseOn) return;
+        browseNext();
+      }, BROWSE_TR_MS);
+    }, BROWSE_PY_MS);
+  }, BROWSE_HANZI_MS);
+}
+// Переход к следующему слову (по кругу): двигаем studyIdx через существующую очередь.
+function browseNext(){
+  const q=studyQueue;
+  if(!q || !q.length) return;
+  studyIdx = (studyIdx+1) % q.length;
+  const it=q[studyIdx];
+  document.getElementById('studyProgress').textContent=(studyIdx+1)+' / '+q.length;
+  browseStep(it);
+}
+// Включить/выключить «Листание» кнопкой.
+function toggleBrowse(){
+  if(browseOn){ browseOff(); } else { browseStart(); }
+}
+function browseStart(){
+  if(!studyQueue || !studyQueue.length) return;
+  browseOn=true;
+  studyGen++;                     // останавливаем автоповтор обычного «Учить»
+  clearStudyIdle();
+  Player.stop();
+  browseGen++;
+  // скрыть кнопки и статус, кроме самого переключателя (он остаётся видимым)
+  document.querySelectorAll('#scr-study .study-btns, #scr-study .study-transport').forEach(el=>el.classList.add('hidden'));
+  const st=document.querySelector('#scr-study .study-status');
+  if(st){ st.querySelectorAll('#studyProgress, #studyStatusLine, #studySpeed, #studyFltBadge, #studySpeakBtn').forEach(el=>el.classList.add('hidden')); }
+  const btn=document.getElementById('studyBrowseBtn'); if(btn) btn.classList.add('on');
+  // показать карточку целиком, начиная с текущего слова (фаза 0 — только иероглиф)
+  const it=studyQueue[studyIdx] || studyQueue[0];
+  if(it) browseStep(it);
+}
+function browseOff(){
+  browseOn=false;
+  browseGen++;
+  if(browseTmo){ clearTimeout(browseTmo); browseTmo=null; }
+  Player.stop();
+  browseBarStop();
+  const btn=document.getElementById('studyBrowseBtn'); if(btn) btn.classList.remove('on');
+  document.querySelectorAll('#scr-study .study-btns, #scr-study .study-transport').forEach(el=>el.classList.remove('hidden'));
+  const st=document.querySelector('#scr-study .study-status');
+  if(st){ st.querySelectorAll('#studyProgress, #studyStatusLine, #studySpeed, #studyFltBadge, #studySpeakBtn').forEach(el=>el.classList.remove('hidden')); }
+  // вернуть обычный показ текущей карточки (полностью) и штатный автоповтор
+  refreshStudyCard(studyQueue[studyIdx]);
+}
+// Тихая остановка «Листания» при уходе со экрана/новой сессии: гасим таймеры и полоску,
+// возвращаем скрытые элементы (без повторного показа карточки — им займётся обычный показ).
+function browseReset(){
+  if(!browseOn) return;
+  browseOn=false;
+  browseGen++;
+  if(browseTmo){ clearTimeout(browseTmo); browseTmo=null; }
+  browseBarStop();
+  const btn=document.getElementById('studyBrowseBtn'); if(btn) btn.classList.remove('on');
+  document.querySelectorAll('#scr-study .study-btns, #scr-study .study-transport').forEach(el=>el.classList.remove('hidden'));
+  const st=document.querySelector('#scr-study .study-status');
+  if(st){ st.querySelectorAll('#studyProgress, #studyStatusLine, #studySpeed, #studyFltBadge, #studySpeakBtn').forEach(el=>el.classList.remove('hidden')); }
 }
 
 // ============================== АРАБСКИЙ «УЧИТЬ»: КНОПКИ АУДИО (⏪ ▶ ⏩) ==============================
@@ -4462,8 +4608,8 @@ function startExamRepeat(it){
 }
 // Озвучка нового слова в вопросе: с задержкой «Задержка аудио» (0–6 с), затем переменные повторы.
 // При 0 — сразу. Задержка касается только ПЕРВОГО озвучивания.
-// Аудио в экзамене включено, когда включён хотя бы один из двух глобальных каналов.
-function examAudioOn(){ return settings.foreignAudio!==false || settings.ruAudio!==false; }
+// Аудио в экзамене — только иностранный канал (русский убран из Учить/Экзамен, правки 27.10.26).
+function examAudioOn(){ return settings.foreignAudio!==false; }
 function examSpeakDelayed(it){
   if(!examAudioOn()) return;
   if(!it || !it.hanzi) return;
@@ -5387,6 +5533,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.19.1','27.10.26','Настройки → карточка «Аудио» (бывш. «Направление и озвучка»): направление перевода — кнопки с флагами (иностр→рус / рус→иностр / вперемешку) вместо выпадашки; «Китайский голос» и «Русский голос» — выпадашка и тумблер вкл/выкл в одну строку, подсказки убраны. У «вперемешку» флаги не показываются. Оформление: 4 новые тёмные темы (синяя тёмная, лесная, графитовая, сливовая). Убран текст «Про установку». Учить/Экзамен: русское аудио больше не звучит ни в каком направлении — только иностранный канал. Учить: новый режим «Листание» — карточки сами сменяются по кругу (иероглиф → 3с → пиньинь + иностранное аудио → 2с → перевод + русское аудио → 1с → следующее слово); полоска-таймер 3px под шапкой заполняется за 6с на каждое слово; кнопки и статус при этом скрыты. Экзамен: исправлена регрессия — при фильтре «уровень 1» (или малом наборе слов) экзамен показывал пустое окно вместо карточек.'],
   ['1.9.19','26.10.26','Глобальные «Направление и озвучка» (Ещё → Настройки, вверху): направление перевода (иностр→рус / рус→иностр / вперемешку) стало общим для Учить и Экзамена; два независимых аудио-канала — иностранный (mp3/синтез) и русский (синтез перевода) — звучат подряд в порядке направления, каждый со своим переключателем и выбором голоса (Google + региональные + локальные). Подбор пар меняет столбцы местами по направлению, верно-неверно и выбор ответов задают вопрос с выбранной стороны.'],
   ['1.9.18.2','25.10.26','Экзамен: клик по иероглифу/слову при выключенном аудио теперь проигрывает озвучку один раз (выбор ответов, верно-неверно, тоны); при включённом аудио поведение не изменилось.'],
   ['1.9.18.1','25.10.26','Синхронизация: устранены ложные конфликты на уже синхронизированных карточках — локальная и облачная копии теперь нормализуют поля (addedAt, wrongMonth, wrongDay, wrongStreak) одинаково, поэтому при равных таймстампах сигнатуры больше не расходятся и окно конфликтов не всплывает на старых словах; при ничьей таймстампов по умолчанию остаётся локальная версия (раньше ошибочно побеждало облако).'],
@@ -6732,18 +6879,17 @@ function renderGlobalAudioSettings(){
       <select id="globalRuVoiceSel">${globalVoiceOptions(settings.ruVoice||'google','ru')}</select>
       <button class="sn-switch ${settings.ruAudio!==false?'on':''}" data-global-key="ruAudio"></button>
     </div>`;
-  // Направление — сегмент с флагами (как блок «Язык»)
+  // Направление — сегмент с флагами (как блок «Язык»); у «вперемешку» флагов нет.
   const seg=document.getElementById('globalDirSeg');
   if(seg){
-    const dirs=[['fr',fFlag,rFlag,fn+' - Русский'],['rf',rFlag,fFlag,'Русский - '+fn],['mix',fFlag,rFlag,'вперемешку']];
+    const dirs=[['fr',[fFlag,rFlag],fn+' - Русский'],['rf',[rFlag,fFlag],'Русский - '+fn],['mix',[],'вперемешку']];
     dirs.forEach(d=>{
       const b=document.createElement('button');
       b.type='button';
       b.dataset.dir=d[0];
-      const fl1=document.createElement('span'); fl1.className='flg'; fl1.innerHTML=d[1];
-      const fl2=document.createElement('span'); fl2.className='flg'; fl2.innerHTML=d[2];
-      const nm=document.createElement('span'); nm.className='nm'; nm.textContent=d[3];
-      b.appendChild(fl1); b.appendChild(fl2); b.appendChild(document.createTextNode(' ')); b.appendChild(nm);
+      (d[1]||[]).forEach(flag=>{ const fl=document.createElement('span'); fl.className='flg'; fl.innerHTML=flag; b.appendChild(fl); });
+      const nm=document.createElement('span'); nm.className='nm'; nm.textContent=d[2];
+      b.appendChild(document.createTextNode(' ')); b.appendChild(nm);
       if(d[0]===dir) b.classList.add('active');
       b.onclick=()=>{
         settings.dir=d[0]; persist();
@@ -6987,6 +7133,7 @@ document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
 document.getElementById('studySpeakBtn').onclick=studySpeak;
+document.getElementById('studyBrowseBtn').onclick=toggleBrowse;
 document.getElementById('studyTTBack').onclick=()=>studyTransportSeek(-STUDY_SEEK_STEP);
 document.getElementById('studyTTPlay').onclick=studyTransportToggle;
 document.getElementById('studyTTFwd').onclick=()=>studyTransportSeek(STUDY_SEEK_STEP);
@@ -7047,8 +7194,13 @@ function bindAudioLifecycle(){
   // цепочка автоповторов «Учить» при этом обрывается (иначе отложенный таймер включит звук в фоне),
   // а при возврате на карточку — возобновляется.
   document.addEventListener('visibilitychange', ()=>{
-    if(document.hidden){ stopAllAudio(); studyTouch(); clearWritePlay(); }
+    if(document.hidden){ stopAllAudio(); studyTouch(); clearWritePlay(); if(browseOn){ browseGen++; if(browseTmo){ clearTimeout(browseTmo); browseTmo=null; } } }
     else{
+      if(browseOn){ /* вернулись из фона в «Листании» — продолжить текущее слово с полоской заново */
+        const bit=studyQueue[studyIdx];
+        if(bit) browseStep(bit);
+        return;
+      }
       const scr=document.getElementById('scr-study');
       if(scr && scr.classList.contains('active') && settings.foreignAudio!==false){
         const it=studyQueue[studyIdx];
