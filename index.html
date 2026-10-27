@@ -50,6 +50,42 @@ html[data-theme="blue"]{
   --shadow-sm:0 1px 2px rgba(37,63,91,.08);
   --shadow-md:0 6px 16px rgba(37,63,91,.12);
 }
+/* Тёмно-синяя — ночная синяя: #10141f */
+html[data-theme="navy"]{
+  --bg:#10141f; --card:#1a2230; --ink:#e8eef5; --mut:#8494a8;
+  --red:#e05252; --red-d:#b23a3a; --green:#6cae75; --amber:#e6b23a;
+  --line:#2a3548; --soft:#1e2736; --soft2:#1a2230; --sec-d:#000000;
+  --nav-bg:rgba(16,20,31,.96);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45);
+}
+/* Лесная — тёмный лес/олива: #141a14 */
+html[data-theme="forest"]{
+  --bg:#141a14; --card:#1d241d; --ink:#e9efe6; --mut:#8fa08a;
+  --red:#e07a5f; --red-d:#b25a48; --green:#7fb069; --amber:#d9b14c;
+  --line:#2a332a; --soft:#232c23; --soft2:#1f281f; --sec-d:#000000;
+  --nav-bg:rgba(20,26,20,.96);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45);
+}
+/* Графитовая — нейтральный холодный серый: #19191a */
+html[data-theme="graphite"]{
+  --bg:#19191a; --card:#242424; --ink:#ececec; --mut:#9a9a9a;
+  --red:#e05252; --red-d:#b23a3a; --green:#6cae75; --amber:#e6b23a;
+  --line:#333333; --soft:#2b2b2b; --soft2:#262626; --sec-d:#000000;
+  --nav-bg:rgba(25,25,26,.96);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45);
+}
+/* Сливовая — тёплый фиолетовый: #191322 */
+html[data-theme="plum"]{
+  --bg:#191322; --card:#241d33; --ink:#efeaf6; --mut:#9a8fb5;
+  --red:#e07a8a; --red-d:#b25a6a; --green:#7fa06a; --amber:#d9a94c;
+  --line:#332c44; --soft:#2b2438; --soft2:#271f33; --sec-d:#000000;
+  --nav-bg:rgba(25,19,34,.96);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.35);
+  --shadow-md:0 6px 16px rgba(0,0,0,.45);
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%}
 body{
@@ -258,6 +294,10 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .dc.zh{font-family:var(--font-cjk); font-size:24px; font-weight:600}
 .dc.py{color:#1565c0; font-size:14px; font-weight:700; white-space:pre-wrap}
 html[data-theme="dark"] .dc.py{color:#7db8f2}
+html[data-theme="navy"] .dc.py{color:#7db8f2}
+html[data-theme="forest"] .dc.py{color:#8fc07a}
+html[data-theme="graphite"] .dc.py{color:#7db8f2}
+html[data-theme="plum"] .dc.py{color:#c7aef0}
 .dc.tr{color:var(--ink); font-size:14px; font-weight:700; text-align:right}
 .dc-side{display:flex; flex-direction:row; align-items:center; gap:8px; justify-content:space-between}
 /* Кнопки карточки теперь в один ряд (★ ✍️ ↑ 🔊 ↓) */
@@ -679,6 +719,14 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .sn-switch::after{content:''; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.25); transition:left .15s}
 .sn-switch.on{background:var(--red)}
 .sn-switch.on::after{left:23px}
+/* Строка «голос» в карточке Аудио: выпадашка слева (растёт), тумблер справа (фиксирован) */
+.voice-row{display:flex; align-items:center; gap:10px}
+.voice-row select{flex:1 1 auto; min-width:0}
+.voice-row .sn-switch{flex:0 0 auto}
+#globalDirSeg{flex-wrap:wrap}
+#globalDirSeg .nm{white-space:nowrap}
+#themeSeg{flex-wrap:wrap}
+#themeSeg button{flex:1 1 auto; white-space:nowrap}
 .sn-slider{display:flex; align-items:center; gap:10px; padding:0 0 12px}
 .sn-slider .sn-slider-lab{flex:0 0 auto; font-size:12px; color:var(--mut); font-weight:600}
 .sn-slider input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--red); height:28px; margin:0}
@@ -979,7 +1027,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <!-- ВКЛАДКА: НАСТРОЙКИ -->
       <div id="moreTabSettings" class="hidden">
         <div class="card">
-          <div class="card-h">Направление и озвучка</div>
+          <div class="card-h">Аудио</div>
           <div id="globalAudioBlock"></div>
         </div>
         <div class="card">
@@ -1020,6 +1068,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
             <button data-v="dark">🌙 Тёмная</button>
             <button data-v="sepia">🕯 Песочная</button>
             <button data-v="blue">🌊 Синяя</button>
+            <button data-v="navy">🌌 Синяя тёмная</button>
+            <button data-v="forest">🌲 Лесная</button>
+            <button data-v="graphite">⬛ Графитовая</button>
+            <button data-v="plum">🍇 Сливовая</button>
           </div>
         </div>
 
@@ -1055,8 +1107,6 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
             <a href="https://tts.wangwangit.com/" target="_blank" rel="noopener">tts.wangwangit.com</a>
             и прикрепите файл к слову/фразе (одна запись на карточку). Если файла нет — озвучивается
             встроенным голосом телефона.
-            <br><br><b style="color:var(--ink)">Про установку.</b> Чтобы появился значок на главном экране
-            и работало без интернета, файл нужно разместить на хостинге (Netlify/GitHub Pages) — подскажу как.
           </div>
         </div>
       </div>
@@ -1182,7 +1232,8 @@ const FLAG_SVG={
   zh:'<svg viewBox="0 0 16 11" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" fill="#DE2910"/><g fill="#FFDE00"><polygon points="5.71,2.10 6.53,4.22 8.97,4.26 7.02,5.63 7.73,7.78 5.71,6.50 3.70,7.78 4.41,5.63 2.46,4.26 4.90,4.22"/><polygon points="10.45,2.63 10.97,2.05 10.57,1.40 11.33,1.69 11.87,1.13 11.82,1.88 12.57,2.19 11.77,2.37 11.68,3.11 11.25,2.48"/><polygon points="12.58,4.34 13.31,3.99 13.21,3.25 13.79,3.78 14.54,3.46 14.17,4.13 14.72,4.68 13.92,4.57 13.52,5.23 13.38,4.48"/><polygon points="12.62,7.05 13.43,7.01 13.67,6.29 13.97,6.99 14.79,6.98 14.15,7.45 14.42,8.16 13.73,7.75 13.07,8.20 13.28,7.48"/><polygon points="10.54,8.78 11.30,9.02 11.83,8.44 11.81,9.20 12.57,9.48 11.78,9.69 11.73,10.43 11.27,9.82 10.47,10.00 10.97,9.41"/></g></svg>',
   en:'<svg viewBox="0 0 16 11" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" fill="#012169"/><g stroke-linecap="round"><path d="M0 0 L16 11 M16 0 L0 11" stroke="#fff" stroke-width="2.4"/><path d="M0 0 L16 11 M16 0 L0 11" stroke="#C8102E" stroke-width="0.9"/><path d="M8 0 V11 M0 5.5 H16" stroke="#fff" stroke-width="2.8"/><path d="M8 0 V11 M0 5.5 H16" stroke="#C8102E" stroke-width="1.0"/></g></svg>',
   tr:'<svg viewBox="0 0 16 11" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" fill="#E30A17"/><g fill="#fff"><circle cx="6" cy="5.5" r="2.6"/><polygon points="10.20,3.90 10.58,4.98 11.72,5.01 10.81,5.70 11.14,6.79 10.20,6.14 9.26,6.79 9.59,5.70 8.68,5.01 9.82,4.98"/></g><circle cx="6.9" cy="5.5" r="2" fill="#E30A17"/></svg>',
-  ar:'<svg viewBox="0 0 16 11" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" fill="#006C35"/><g fill="#fff"><rect x="3" y="3.2" width="10" height="1.5" rx="0.4"/><path d="M4 8.4 L11.5 3.2 L12.1 3.7 L5 9.1 Z"/><rect x="3.6" y="8.7" width="2.2" height="1.2" rx="0.3"/></g></svg>'
+  ar:'<svg viewBox="0 0 16 11" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" fill="#006C35"/><g fill="#fff"><rect x="3" y="3.2" width="10" height="1.5" rx="0.4"/><path d="M4 8.4 L11.5 3.2 L12.1 3.7 L5 9.1 Z"/><rect x="3.6" y="8.7" width="2.2" height="1.2" rx="0.3"/></g></svg>',
+  ru:'<svg viewBox="0 0 16 11" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" fill="#fff"/><rect y="3.667" width="16" height="3.666" fill="#0039A6"/><rect y="7.333" width="16" height="3.667" fill="#D52B1E"/></svg>'
 };
 function flagSVG(code){ return FLAG_SVG[code] || FLAG_SVG.zh; }
 const LANG_MAP={}; LANGS.forEach(l=>LANG_MAP[l.code]=l);
@@ -4275,7 +4326,11 @@ const EXAM_MIN_GAP=5; // слово нельзя повторить, пока н
 //    затем берётся то слово, которое «отдыхало» дольше всех.
 function examBuildSeq(){
   const sep=examModes();
-  const pool=queueStudy().filter(it=>it.translation);
+  // Пул экзамена — ВСЕ отфильтрованные слова (без учёта SRS-сроков): иначе с активным фильтром
+  // (напр. «уровень 1») экзамен брал только «due сегодня» слова и при их нехватке показывал
+  // пустое окно, хотя фильтр отобрал 18 слов. Явный фильтр «Повторить сегодня (due)» работает
+  // внутри filteredLangItems(). Регрессия 1.9.18 (due стал календарным).
+  const pool=filteredLangItems().filter(it=>it.translation);
   const modeOrder=[];
   if(sep.choice) modeOrder.push('choice');
   if(sep.tf) modeOrder.push('tf');
@@ -4317,7 +4372,7 @@ function startExam(){
   document.getElementById('examEmpty').classList.toggle('hidden', examSeq.length>=4);
   if(examSeq.length<4){
     document.getElementById('examBody').innerHTML='';
-    const have=queueStudy().filter(it=>it.translation).length;
+    const have=filteredLangItems().filter(it=>it.translation).length;
     const need=Math.max(0,4-have);
     document.getElementById('examEmptyCount').textContent='Сейчас слов: '+have+'. Добавьте ещё '+need+' — и можно начинать!';
     updateExamScore();
@@ -6592,7 +6647,8 @@ const GEAR_ICON='<svg viewBox="0 -960 960 960" width="28" height="28" aria-hidde
 // Четыре гаммы (светлая/тёмная/песочная/мятная) на CSS-переменных в head.
 // Выбор хранится в localStorage ('ltTheme') отдельно от settings — не участвует в облачной
 // синхронизации (оформление — личная настройка устройства, а не данные аккаунта).
-const THEME_ORDER=['light','dark','sepia','blue'];
+const THEME_ORDER=['light','dark','sepia','blue','navy','forest','graphite','plum'];
+const DARK_THEMES=['dark','navy','forest','graphite','plum'];
 function applyTheme(t){
   if(THEME_ORDER.indexOf(t)<0) t='light';
   document.documentElement.setAttribute('data-theme', t);
@@ -6600,7 +6656,7 @@ function applyTheme(t){
   const seg=document.getElementById('themeSeg');
   if(seg) seg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===t));
   const sw=document.getElementById('themeSwitch');
-  if(sw) sw.innerHTML = (t==='dark') ? SUN_ICON : MOON_ICON;
+  if(sw) sw.innerHTML = (DARK_THEMES.indexOf(t)>=0) ? SUN_ICON : MOON_ICON;
 }
 const MOON_ICON='<svg viewBox="0 -960 960 960"><path fill="currentColor" stroke="none" d="M560-80q-82 0-155-31.5t-127.5-86Q223-252 191.5-325T160-480.5q0-82.5 31.5-155t86-127Q332-817 405-848.5T560-880q54 0 105 14t95 40q-91 53-145.5 143.5T560-480q0 112 54.5 202.5T760-134q-44 26-95 40T560-80Zm0-80h21q10 0 19-2-57-66-88.5-147.5T480-480q0-89 31.5-170.5T600-798q-9-2-19-2h-21q-133 0-226.5 93.5T240-480q0 133 93.5 226.5T560-160Zm-80-320Z"/></svg>';
 const SUN_ICON='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>';
@@ -6662,35 +6718,44 @@ function renderGlobalAudioSettings(){
   if(!box) return;
   const fn=foreignName();
   const dir=settings.dir||'fr';
-  const dirOpts=[['fr',fn+' - Русский'],['rf','Русский - '+fn],['mix','вперемешку']]
-    .map(o=>'<option value="'+o[0]+'"'+(dir===o[0]?' selected':'')+'>'+o[1]+'</option>').join('');
+  const fFlag=flagSVG(activeLang), rFlag=flagSVG('ru');
   box.innerHTML=`
     <label class="lbl">Направление перевода</label>
-    <select id="globalDirSel" style="width:100%">${dirOpts}</select>
-    <div class="menu-item" style="margin-top:4px">
-      <div class="mi-label">Аудио ${fn}<span class="mi-hint">Озвучка ${fn} текста</span></div>
+    <div class="seg" id="globalDirSeg"></div>
+    <label class="lbl">${fn} голос</label>
+    <div class="voice-row">
+      <select id="globalForeignVoiceSel">${globalVoiceOptions(settings.foreignVoice||'google','foreign')}</select>
       <button class="sn-switch ${settings.foreignAudio!==false?'on':''}" data-global-key="foreignAudio"></button>
     </div>
-    <div class="menu-item" style="display:block; padding:6px 0 10px">
-      <div class="mi-label">Выбрать голос ${fn}<span class="mi-hint">Синтез ${fn} текста</span></div>
-      <select id="globalForeignVoiceSel" style="width:100%;margin-top:6px">${globalVoiceOptions(settings.foreignVoice||'google','foreign')}</select>
-    </div>
-    <div class="menu-item">
-      <div class="mi-label">Аудио Русский<span class="mi-hint">Озвучка перевода</span></div>
+    <label class="lbl">Русский голос</label>
+    <div class="voice-row">
+      <select id="globalRuVoiceSel">${globalVoiceOptions(settings.ruVoice||'google','ru')}</select>
       <button class="sn-switch ${settings.ruAudio!==false?'on':''}" data-global-key="ruAudio"></button>
-    </div>
-    <div class="menu-item" style="display:block; padding:6px 0 10px">
-      <div class="mi-label">Выбрать голос Русский<span class="mi-hint">Синтез русского перевода</span></div>
-      <select id="globalRuVoiceSel" style="width:100%;margin-top:6px">${globalVoiceOptions(settings.ruVoice||'google','ru')}</select>
     </div>`;
-  const dirSel=document.getElementById('globalDirSel');
-  if(dirSel) dirSel.onchange=()=>{
-    settings.dir=dirSel.value; persist();
-    const scr=document.getElementById('scr-study');
-    if(scr && scr.classList.contains('active')) refreshStudyCard();
-    const escr=document.getElementById('scr-exam');
-    if(escr && escr.classList.contains('active')) restartExamSeq();
-  };
+  // Направление — сегмент с флагами (как блок «Язык»)
+  const seg=document.getElementById('globalDirSeg');
+  if(seg){
+    const dirs=[['fr',fFlag,rFlag,fn+' - Русский'],['rf',rFlag,fFlag,'Русский - '+fn],['mix',fFlag,rFlag,'вперемешку']];
+    dirs.forEach(d=>{
+      const b=document.createElement('button');
+      b.type='button';
+      b.dataset.dir=d[0];
+      const fl1=document.createElement('span'); fl1.className='flg'; fl1.innerHTML=d[1];
+      const fl2=document.createElement('span'); fl2.className='flg'; fl2.innerHTML=d[2];
+      const nm=document.createElement('span'); nm.className='nm'; nm.textContent=d[3];
+      b.appendChild(fl1); b.appendChild(fl2); b.appendChild(document.createTextNode(' ')); b.appendChild(nm);
+      if(d[0]===dir) b.classList.add('active');
+      b.onclick=()=>{
+        settings.dir=d[0]; persist();
+        const scr=document.getElementById('scr-study');
+        if(scr && scr.classList.contains('active')) refreshStudyCard();
+        const escr=document.getElementById('scr-exam');
+        if(escr && escr.classList.contains('active')) restartExamSeq();
+        seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.dir===d[0]));
+      };
+      seg.appendChild(b);
+    });
+  }
   const fv=document.getElementById('globalForeignVoiceSel');
   if(fv) fv.onchange=()=>{ settings.foreignVoice=fv.value; persist(); };
   const rv=document.getElementById('globalRuVoiceSel');
