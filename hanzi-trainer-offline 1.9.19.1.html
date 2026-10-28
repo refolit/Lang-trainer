@@ -116,11 +116,10 @@ header.top .sub{display:flex; gap:6px; align-items:center}
 }
 .chip b{color:var(--ink); font-weight:800}
 header.top .ver{font-size:11px; color:var(--mut); font-weight:700; letter-spacing:.2px; white-space:nowrap}
-/* Полоска-таймер режима «Листание» (правки 27.10.26): 3px, движется слева направо за 6 с. */
+/* Полоска-таймер режима «Листание» (правки 27.10.26): 3px, движется слева направо за реальную длительность слова. */
 .browse-bar{height:3px; background:transparent; overflow:hidden; position:relative; display:none}
 .browse-bar.on{display:block}
-.browse-fill{height:100%; width:0%; background:var(--red); border-radius:0 2px 2px 0; transition:width 6s linear}
-.browse-fill.reset{transition:none}
+.browse-fill{height:100%; width:0%; background:var(--red); border-radius:0 2px 2px 0}
 
 /* Screens. Скролл-зона заканчивается НАД нижним меню: сама полоса прокрутки
    не уезжает под панель вкладок (и последний контент тоже). */
@@ -874,7 +873,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   </div>
 </header>
 
-<!-- Полоска-таймер режима «Листание»: 3px, движется слева направо за 6 с на каждое слово. -->
+<!-- Полоска-таймер режима «Листание»: 3px, движется слева направо за реальную длительность слова. -->
 <div class="browse-bar" id="browseBar"><div class="browse-fill" id="browseFill"></div></div>
 
 <main>
@@ -3690,31 +3689,66 @@ function studySpeak(){
 
 // ============================== ЛИСТАНИЕ (правки 27.10.26) ==============================
 // Режим «Листание» в «Учить»: карточки полностью раскрываются и сменяются сами, по кругу,
-// без кликов. На слово: иероглиф → 3с → пиньинь + китайское аудио → 2с → перевод +
-// русское аудио → 1с → следующее слово. Полоска-таймер (3px) под шапкой заполняется
-// слева направо за 6с на каждое слово и сбрасывается с приходом нового иероглифа.
+// без кликов. На слово: иероглиф → 3с → пиньинь + иностранное аудио → (не раньше чем через 2с,
+// но ждём конца аудио) → перевод + русское аудио → (не раньше чем через 1с, ждём конца) →
+// следующее слово. Аудио любой длины всегда проигрывается целиком — переход идёт по событию
+// onDone, а не по жёсткому таймеру. Полоска-таймер (3px) под шапкой заполняется за реальную
+// длительность слова (длину mp3 берём из файла, длину синтеза — оцениваем по тексту).
 let browseOn=false;                 // включено ли «Листание»
 let browseTmo=null, browseGen=0;    // таймер цикла и поколение (для отмены при выключении/уходе)
-const BROWSE_HANZI_MS=3000, BROWSE_PY_MS=2000, BROWSE_TR_MS=1000;  // паузы между фазами
-const BROWSE_BAR_MS=6000;           // полоска заполняется за 6 с на каждое слово
+const BROWSE_HANZI_MS=3000, BROWSE_PY_MS=2000, BROWSE_TR_MS=1000;  // минимальные паузы между фазами
+const BROWSE_BAR_MS=6000;           // полоска по умолчанию (когда длительность не оценили)
 function _browseBarEl(){ return document.getElementById('browseBar'); }
 function _browseFillEl(){ return document.getElementById('browseFill'); }
-// Старт полоски-таймера: мгновенный сброс в 0, затем плавное заполнение до 100% за 6 с.
-function browseBarStart(){
+// Оценка длительности синтеза речи по тексту (мс): иероглиф ~360мс, латиница ~95мс на символ.
+function browseTtsMs(text, tag){
+  const n=String(text||'').trim().length;
+  if(!n) return 0;
+  const zh=/zh|cmn/.test(String(tag||'').toLowerCase());
+  const per=zh?360:95;
+  return Math.max(600, Math.min(20000, 500+n*per));
+}
+// Реальная длительность mp3-файла (мс) — с кэшем, чтобы не перечитывать один и тот же файл.
+const _recDurCache={};
+function browseAudioMs(url){
+  if(!url) return Promise.resolve(0);
+  if(_recDurCache[url]) return Promise.resolve(_recDurCache[url]);
+  return new Promise(res=>{
+    let done=false;
+    const fin=v=>{ if(done) return; done=true; _recDurCache[url]=v; res(v); };
+    try{
+      const a=new Audio();
+      a.preload='metadata';
+      a.onloadedmetadata=()=>fin((a.duration&&isFinite(a.duration))?a.duration*1000:0);
+      a.onerror=()=>fin(0);
+      a.src=url;
+      setTimeout(()=>fin(0), 1200);
+    }catch(e){ fin(0); }
+  });
+}
+// Оценка длительности иностранного аудио (мс): своё mp3 — реальная длина, иначе синтез по тексту.
+async function browseEstimateForeignMs(it){
+  if(settings.foreignAudio===false) return 0;
+  const rec=liveRec(it,'norm');
+  if(rec && rec.url) return await browseAudioMs(rec.url);
+  return browseTtsMs(it.hanzi||'', ttsLang());
+}
+// Старт полоски-таймера: сброс в 0, затем плавное заполнение до 100% за ms (реальная длина слова).
+function browseBarStart(ms){
   const bar=_browseBarEl(), fill=_browseFillEl();
   if(!bar || !fill) return;
+  const d=Math.max(150, ms||BROWSE_BAR_MS);
   bar.classList.add('on');
-  fill.classList.add('reset');
+  fill.style.transition='none';
   fill.style.width='0%';
-  // сбросить transition, чтобы первый кадр стартовал строго с 0 (иначе transition сгладит возврат)
   void fill.offsetWidth;
-  fill.classList.remove('reset');
+  fill.style.transition='width '+d+'ms linear';
   fill.style.width='100%';
 }
 function browseBarStop(){
   const bar=_browseBarEl(), fill=_browseFillEl();
   if(bar) bar.classList.remove('on');
-  if(fill){ fill.style.width='0%'; }
+  if(fill){ fill.style.transition='none'; fill.style.width='0%'; }
 }
 // Показать в карточке только то, что нужно на текущей фазе «Листания», и заполнить поля.
 // Фазы: 0 — только иероглиф; 1 — +пиньинь; 2 — +перевод. Всегда направление fr (иностр → рус).
@@ -3727,39 +3761,62 @@ function browseRender(it, phase){
   applyStudySizes();
 }
 // Иностранное аудио (китайское и т.п.) — как в обычном «Учить», без русского канала.
+// Возвращает промис, разрешающийся, когда аудио реально доиграло (Player.onDone).
+// Player.onDone надёжен для обоих видов треков: у TTS в _one есть страховочный maxSpeechMs,
+// у mp3 — onended/onerror. Поэтому доп. таймаут тут НЕ нужен (он бы обрезал длинные аяты).
 function browsePlayForeign(it){
-  if(settings.foreignAudio===false) return;
-  ensureCardAudio(it, studySpeeds());
-  playItem(it, {mode:'study'});
+  return new Promise(res=>{
+    if(settings.foreignAudio===false){ res(); return; }
+    ensureCardAudio(it, studySpeeds());
+    let settled=false;
+    const fin=()=>{ if(settled) return; settled=true; res(); };
+    Player.onDone=fin;
+    Player.play(tracksFor(it,{mode:'study'}));
+  });
 }
 // Русская озвучка перевода — отдельно, только в «Листании»; уважает тумблер «Русский голос».
 function browsePlayRussian(it){
-  if(settings.ruAudio===false) return;
-  const text=trJoined(it)||'';
-  if(!text) return;
-  const rateMap={slow:0.55, norm:1, fast:1.18};
-  Player.play(russianTracks(it,['norm'],rateMap,{norm:'обычно'},1));
+  return new Promise(res=>{
+    if(settings.ruAudio===false){ res(); return; }
+    const text=trJoined(it)||'';
+    if(!text){ res(); return; }
+    const rateMap={slow:0.55, norm:1, fast:1.18};
+    let settled=false;
+    const fin=()=>{ if(settled) return; settled=true; res(); };
+    Player.onDone=fin;
+    Player.play(russianTracks(it,['norm'],rateMap,{norm:'обычно'},1));
+  });
 }
-// Полный цикл одного слова: 0(иер) → 1(пин+ин.аудио) → 2(перевод+рус.аудио) → следующее.
-function browseStep(it){
+// Пауза (промис): выдерживает ровно ms. Таймер хранится в browseTmo, чтобы сбросить при выходе.
+function browseWait(ms){
+  return new Promise(res=>{ browseTmo=setTimeout(res, ms); });
+}
+// Полный цикл одного слова: 0(иер) → 1(пин+ин.аудио до конца) → 2(перевод+рус.аудио до конца) → следующее.
+// Минимальные паузы (2с пиньинь, 1с перевод) соблюдаются параллельно с ожиданием конца аудио:
+// переход случается, когда истекла пауза И аудио доиграло (что дольше).
+async function browseStep(it){
   const my=browseGen;
   Player.stop();          // чистая тишина на старте нового иероглифа (гасим хвост русской озвучки)
   browseRender(it,0);
-  browseBarStart();
-  browseTmo=setTimeout(()=>{
-    if(browseGen!==my || !browseOn) return;
-    browseRender(it,1);
-    browsePlayForeign(it);
-    browseTmo=setTimeout(()=>{
-      if(browseGen!==my || !browseOn) return;
-      browseRender(it,2);
-      browsePlayRussian(it);
-      browseTmo=setTimeout(()=>{
-        if(browseGen!==my || !browseOn) return;
-        browseNext();
-      }, BROWSE_TR_MS);
-    }, BROWSE_PY_MS);
-  }, BROWSE_HANZI_MS);
+  // сначала подтянуть mp3 (облачные записи приходят с path без локального url) — иначе
+  // оценка длительности не увидит файл и полоска закончится раньше аудио.
+  await ensureCardAudio(it, studySpeeds());
+  // полоска — на реальную длину слова: 3с иероглиф + ин.аудио/2с + рус.аудио/1с
+  const fMs=await browseEstimateForeignMs(it);
+  const ruMs=(settings.ruAudio===false || !(trJoined(it)||'')) ? 0 : browseTtsMs(trJoined(it)||'', 'ru');
+  const total=BROWSE_HANZI_MS + Math.max(BROWSE_PY_MS, fMs) + Math.max(BROWSE_TR_MS, ruMs);
+  browseBarStart(total);
+  // фаза 0 → 1: показать пиньинь и пустить иностранное аудио
+  await browseWait(BROWSE_HANZI_MS);
+  if(browseGen!==my || !browseOn) return;
+  browseRender(it,1);
+  await Promise.all([ browsePlayForeign(it), browseWait(BROWSE_PY_MS) ]);   // ин. аудио до конца + минимум 2с
+  if(browseGen!==my || !browseOn) return;
+  // фаза 1 → 2: показать перевод и пустить русское аудио
+  browseRender(it,2);
+  await Promise.all([ browsePlayRussian(it), browseWait(BROWSE_TR_MS) ]);   // рус. аудио до конца + минимум 1с
+  if(browseGen!==my || !browseOn) return;
+  browseNext();
 }
 // Переход к следующему слову (по кругу): двигаем studyIdx через существующую очередь.
 function browseNext(){
@@ -5546,7 +5603,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.9.19.1','27.10.26','Настройки → карточка «Аудио» (бывш. «Направление и озвучка»): направление перевода — кнопки с флагами (иностр→рус / рус→иностр / вперемешку) вместо выпадашки; «Китайский голос» и «Русский голос» — выпадашка и тумблер вкл/выкл в одну строку, подсказки убраны. У «вперемешку» флаги не показываются. Оформление: 4 новые тёмные темы (синяя тёмная, лесная, графитовая, сливовая). Убран текст «Про установку». Учить/Экзамен: русское аудио больше не звучит ни в каком направлении — только иностранный канал. Учить: новый режим «Листание» — карточки сами сменяются по кругу (иероглиф → 3с → пиньинь + иностранное аудио → 2с → перевод + русское аудио → 1с → следующее слово); полоска-таймер 3px под шапкой заполняется за 6с на каждое слово; кнопки и статус при этом скрыты. Экзамен: исправлена регрессия — при фильтре «уровень 1» (или малом наборе слов) экзамен показывал пустое окно вместо карточек.'],
+  ['1.9.19.1','27.10.26','Настройки → карточка «Аудио» (бывш. «Направление и озвучка»): направление перевода — кнопки с флагами (иностр→рус / рус→иностр / вперемешку) вместо выпадашки; «Китайский голос» и «Русский голос» — выпадашка и тумблер вкл/выкл в одну строку, подсказки убраны. У «вперемешку» флаги не показываются. Оформление: 4 новые тёмные темы (синяя тёмная, лесная, графитовая, сливовая). Убран текст «Про установку». Учить/Экзамен: русское аудио больше не звучит ни в каком направлении — только иностранный канал. Учить: новый режим «Листание» — карточки сами сменяются по кругу (иероглиф → 3с → пиньинь + иностранное аудио → перевод + русское аудио → следующее слово); фазы ждут конца аудио, поэтому длинные записи не обрезаются; полоска-таймер 3px под шапкой заполняется за реальную длительность слова; кнопки и статус при этом скрыты. Экзамен: исправлена регрессия — при фильтре «уровень 1» (или малом наборе слов) экзамен показывал пустое окно вместо карточек.'],
   ['1.9.19','26.10.26','Глобальные «Направление и озвучка» (Ещё → Настройки, вверху): направление перевода (иностр→рус / рус→иностр / вперемешку) стало общим для Учить и Экзамена; два независимых аудио-канала — иностранный (mp3/синтез) и русский (синтез перевода) — звучат подряд в порядке направления, каждый со своим переключателем и выбором голоса (Google + региональные + локальные). Подбор пар меняет столбцы местами по направлению, верно-неверно и выбор ответов задают вопрос с выбранной стороны.'],
   ['1.9.18.2','25.10.26','Экзамен: клик по иероглифу/слову при выключенном аудио теперь проигрывает озвучку один раз (выбор ответов, верно-неверно, тоны); при включённом аудио поведение не изменилось.'],
   ['1.9.18.1','25.10.26','Синхронизация: устранены ложные конфликты на уже синхронизированных карточках — локальная и облачная копии теперь нормализуют поля (addedAt, wrongMonth, wrongDay, wrongStreak) одинаково, поэтому при равных таймстампах сигнатуры больше не расходятся и окно конфликтов не всплывает на старых словах; при ничьей таймстампов по умолчанию остаётся локальная версия (раньше ошибочно побеждало облако).'],
