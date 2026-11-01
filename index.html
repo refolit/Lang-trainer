@@ -5614,7 +5614,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.9.20','01.11.26','Вход переведён с магической ссылки на email + пароль: работает на любом устройстве и в любом браузере (письмо больше не нужно открывать в том же браузере). Окно входа стало двухвкладочным: «Вход» (email + пароль) и «Регистрация» (создать аккаунт). В аккаунте добавлена кнопка «Сменить пароль» — она ставит первый пароль аккаунту, созданному через ссылку, и меняет забытый без письма.'],
+  ['1.9.20','01.11.26','Вход переведён с магической ссылки на email + пароль: работает на любом устройстве и в любом браузере (письмо больше не нужно открывать в том же браузере). Окно входа стало двухвкладочным: «Вход» (email + пароль) и «Регистрация» (создать аккаунт). В аккаунте добавлена кнопка «Сменить пароль». При первом входе по старой ссылке сразу предлагается установить пароль (кнопка «Позже» откладывает).'],
   ['1.9.19.2','29.10.26','Учить → «Листание»: иероглиф больше не «прыгает» — строки пиньиня и перевода резервируют место изначально (visibility вместо display), карточка не смещается по мере появления строк; клик по правому краю экрана во время листания мгновенно переключает на следующий иероглиф.'],
   ['1.9.19.1','27.10.26','Настройки → карточка «Аудио» (бывш. «Направление и озвучка»): направление перевода — кнопки с флагами (иностр→рус / рус→иностр / вперемешку) вместо выпадашки; «Китайский голос» и «Русский голос» — выпадашка и тумблер вкл/выкл в одну строку, подсказки убраны. У «вперемешку» флаги не показываются. Оформление: 4 новые тёмные темы (синяя тёмная, лесная, графитовая, сливовая). Убран текст «Про установку». Учить/Экзамен: русское аудио больше не звучит ни в каком направлении — только иностранный канал. Учить: новый режим «Листание» — карточки сами сменяются по кругу (иероглиф → 3с → пиньинь + иностранное аудио → перевод + русское аудио → следующее слово); фазы ждут конца аудио, поэтому длинные записи не обрезаются; полоска-таймер 3px под шапкой заполняется за реальную длительность слова; кнопки и статус при этом скрыты. Экзамен: исправлена регрессия — при фильтре «уровень 1» (или малом наборе слов) экзамен показывал пустое окно вместо карточек.'],
   ['1.9.19','26.10.26','Глобальные «Направление и озвучка» (Ещё → Настройки, вверху): направление перевода (иностр→рус / рус→иностр / вперемешку) стало общим для Учить и Экзамена; два независимых аудио-канала — иностранный (mp3/синтез) и русский (синтез перевода) — звучат подряд в порядке направления, каждый со своим переключателем и выбором голоса (Google + региональные + локальные). Подбор пар меняет столбцы местами по направлению, верно-неверно и выбор ответов задают вопрос с выбранной стороны.'],
@@ -7824,8 +7824,13 @@ async function doSync(){
   let confProgress=0, confProgressLocal=0, confProgressCloud=0;
   const syncStartedAt=now();
   try{
+    // Живой пользователь текущей сессии, а НЕ кэш: если сессия сменилась (другой аккаунт,
+    // переключение способа входа), устаревший _syncUser дал бы чужой user_id → RLS отклонит
+    // запись с «new row violates row-level security policy». Сверяемся с реальной сессией.
+    const live=await localSessionUser();
+    if(!live) throw new Error('Сначала войдите в аккаунт');
+    _syncUser=live;
     const u=_syncUser;
-    if(!u) throw new Error('Сначала войдите в аккаунт');
     const cloud=await pullCloudRows(u);
     // Фаза 6: локальные mp3 без path выгружаем ДО мержа, чтобы пуш шёл уже со ссылкой на файл.
     // Локальная запись при выгрузке получит path, но НЕ таймстамп — карточка не должна
@@ -8177,6 +8182,7 @@ function openAuthModal(){
           closeModal('modalAuth');
           renderAuth();
           toast('Вы вошли');
+          askNameOnce();
         }else{
           if(/invalid login credentials|invalid_credentials|invalid email|wrong password|password/i.test(errMsg)){
             msg.textContent='Неверный email или пароль.';
@@ -8222,6 +8228,7 @@ function openAuthModal(){
           closeModal('modalAuth');
           renderAuth();
           toast('Аккаунт создан, вы вошли');
+          askNameOnce();
         }else{
           if(/already registered|already been registered|user already exists|email exists|duplicate/i.test(errMsg)){
             msg.textContent='Такой email уже зарегистрирован — войдите на вкладке «Вход».';
@@ -8288,6 +8295,61 @@ function changePasswordModal(){
   send.onclick=submit;
   p2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') submit(); });
 }
+// Спрос имени ровно один раз (по флагу). Вызываем после каждого успешного входа/регистрации.
+function askNameOnce(){
+  if(!settings.userName && !localStorage.getItem('askedName')){
+    localStorage.setItem('askedName','1');
+    maybeAskName();
+  }
+}
+// Предложение установить пароль сразу после первого входа по магической ссылке.
+// С кнопкой «Позже»: пароль можно поставить и вручную позже через «Сменить пароль».
+function maybeSetPassword(){
+  closeAllModals();
+  const m=document.getElementById('modalAuth');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Установите пароль</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
+    <div class="auth-hint" style="margin-top:6px">Ваш аккаунт пока без пароля. Задайте его, чтобы входить с любого устройства по email и паролю. Минимум 6 символов.</div>
+    <input type="password" id="authPass" placeholder="Новый пароль" style="margin-top:10px" autocomplete="new-password">
+    <input type="password" id="authPass2" placeholder="Повторите пароль" style="margin-top:10px" autocomplete="new-password">
+    <div style="display:flex; gap:8px; margin-top:12px">
+      <button class="btn sec" id="passSkip" style="flex:1">Позже</button>
+      <button class="btn" id="passSave" style="flex:1">Сохранить пароль</button>
+    </div>
+    <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
+  </div>`;
+  m.classList.remove('hidden');
+  const p1=document.getElementById('authPass');
+  const p2=document.getElementById('authPass2');
+  const save=document.getElementById('passSave');
+  const skip=document.getElementById('passSkip');
+  const msg=document.getElementById('authMsg');
+  if(p1) setTimeout(()=>p1.focus(),60);
+  const finish=()=>{ closeModal('modalAuth'); askNameOnce(); };
+  skip.onclick=finish;
+  save.onclick=async ()=>{
+    const a=p1.value, b=p2.value;
+    if(!a || a.length<6){ msg.textContent='Пароль должен быть не короче 6 символов.'; return; }
+    if(a!==b){ msg.textContent='Пароли не совпадают.'; return; }
+    const c=sbClient();
+    if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
+    save.disabled=true; save.textContent='Сохраняем…';
+    let res=null;
+    try{ res=await c.auth.updateUser({ password: a }); }
+    catch(e){ res={ error:{ message:e && e.message ? e.message : String(e) } }; }
+    save.disabled=false; save.textContent='Сохранить пароль';
+    const errMsg=res && res.error ? (res.error.message||res.error.msg||'') : '';
+    if(res && !res.error){
+      closeModal('modalAuth');
+      toast('Пароль установлен');
+      askNameOnce();
+    }else{
+      toastShort('Ошибка: '+errMsg);
+      msg.textContent='Ошибка: '+(errMsg||'нет ответа от сервера');
+    }
+  };
+  p2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') save.click(); });
+}
 // Мягкий вопрос имени после первого входа (необязательно, показываем в аккаунте)
 function maybeAskName(){
   const m=document.getElementById('modalAuth');
@@ -8342,6 +8404,12 @@ async function recoverSessionFromUrl(){
   }catch(e){
     // Ошибка перехвата не критична: остаёмся «не вошли», приложение не падает.
   }
+  // Первый вход по магической ссылке: пароля ещё нет. Предлагаем сразу установить его,
+  // чтобы дальше входить по email+паролю с любого устройства (один раз — по флагу).
+  if(got && !localStorage.getItem('passOffered')){
+    localStorage.setItem('passOffered','1');
+    maybeSetPassword();
+  }
   // Вычищаем токен/код из адреса, чтобы они не висели в истории и не обрабатывались повторно.
   if(got){
     try{
@@ -8366,15 +8434,11 @@ function initAuthState(){
   // поэтому не дёргаем renderAuth/refreshSyncUI, иначе при простое всплывает
   // «Изменено: N · не синхронизировано» без причины. Рендерим только на SIGNED_IN/SIGNED_OUT.
   c.auth.onAuthStateChange((event)=>{
-    if(event==='SIGNED_IN'){
-      renderAuth();
-      // Мягкий вопрос имени — один раз, после первого входа/при первом открытии
-      // со входом. Флаг в localStorage, чтобы не спрашивать при каждом запуске.
-      if(!settings.userName && !localStorage.getItem('askedName')){
-        localStorage.setItem('askedName','1');
-        maybeAskName();
-      }
-    }
+    // Мягкий вопрос имени и предложение установить пароль показываем НЕ здесь
+    // (иначе при входе по магической ссылке обе модалки соревнуются за одно окно),
+    // а по месту: в recoverSessionFromUrl (магическая ссылка) и в openAuthModal
+    // (вход/регистрация по паролю).
+    if(event==='SIGNED_IN') renderAuth();
     else if(event==='SIGNED_OUT') renderAuth();
   });
   // Всеядный перехват сессии из URL (implicit #access_token / PKCE ?code=).
