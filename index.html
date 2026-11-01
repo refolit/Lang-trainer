@@ -1259,7 +1259,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.19.2';
+const APP_VERSION='1.9.20';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -5614,6 +5614,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.20','01.11.26','Вход переведён с магической ссылки на email + пароль: работает на любом устройстве и в любом браузере (письмо больше не нужно открывать в том же браузере). В аккаунте добавлена кнопка «Сменить пароль» — она ставит первый пароль аккаунту, созданному через ссылку, и меняет забытый без письма.'],
   ['1.9.19.2','29.10.26','Учить → «Листание»: иероглиф больше не «прыгает» — строки пиньиня и перевода резервируют место изначально (visibility вместо display), карточка не смещается по мере появления строк; клик по правому краю экрана во время листания мгновенно переключает на следующий иероглиф.'],
   ['1.9.19.1','27.10.26','Настройки → карточка «Аудио» (бывш. «Направление и озвучка»): направление перевода — кнопки с флагами (иностр→рус / рус→иностр / вперемешку) вместо выпадашки; «Китайский голос» и «Русский голос» — выпадашка и тумблер вкл/выкл в одну строку, подсказки убраны. У «вперемешку» флаги не показываются. Оформление: 4 новые тёмные темы (синяя тёмная, лесная, графитовая, сливовая). Убран текст «Про установку». Учить/Экзамен: русское аудио больше не звучит ни в каком направлении — только иностранный канал. Учить: новый режим «Листание» — карточки сами сменяются по кругу (иероглиф → 3с → пиньинь + иностранное аудио → перевод + русское аудио → следующее слово); фазы ждут конца аудио, поэтому длинные записи не обрезаются; полоска-таймер 3px под шапкой заполняется за реальную длительность слова; кнопки и статус при этом скрыты. Экзамен: исправлена регрессия — при фильтре «уровень 1» (или малом наборе слов) экзамен показывал пустое окно вместо карточек.'],
   ['1.9.19','26.10.26','Глобальные «Направление и озвучка» (Ещё → Настройки, вверху): направление перевода (иностр→рус / рус→иностр / вперемешку) стало общим для Учить и Экзамена; два независимых аудио-канала — иностранный (mp3/синтез) и русский (синтез перевода) — звучат подряд в порядке направления, каждый со своим переключателем и выбором голоса (Google + региональные + локальные). Подбор пар меняет столбцы местами по направлению, верно-неверно и выбор ответов задают вопрос с выбранной стороны.'],
@@ -7311,7 +7312,6 @@ const SYNC_LANG='zh';                 // метка языка в кэше sync-
 let syncBusy=false;                   // идёт синхронизация (блокирует повторный клик)
 let lastSyncAt=0;                     // момент последней успешной синхронизации
 let _syncUser=null;                   // вошедший пользователь (обновляется в renderAuth)
-let _lastOtpReq=0;                    // момент последней отправки ссылки входа (защитный интервал)
 
 // --- кэш облака после последней синхронизации (для «Изменено: N» и «В сети · синхр.») ---
 let cloudRecs={};                     // id карточки → {u,pu} метки в облаке (все языки)
@@ -8108,14 +8108,16 @@ async function renderAuth(){
     }catch(e){}
     const shown=settings.userName || u.email || '';
     box.innerHTML=`<div class="auth-line"><span class="mail">${escapeHtml(shown)}</span><span class="spacer"></span>
+      <button class="btn sec" style="width:auto; padding:9px 14px" id="btnChangePass">Сменить пароль</button>
       <button class="btn sec" style="width:auto; padding:9px 14px" id="btnSignOut">Выйти</button></div>
       ${settings.userName?`<div class="auth-hint">${escapeHtml(u.email||'')}</div>`:''}
       <div class="auth-hint">Вы вошли. Нажмите «Синхронизировать» в Словаре, чтобы перенести данные в облако.</div>`;
+    document.getElementById('btnChangePass').onclick=changePasswordModal;
     document.getElementById('btnSignOut').onclick=authSignOut;
   }else{
     box.innerHTML=`<div class="auth-line"><span class="auth-hint" style="margin:0">Вы не вошли.</span><span class="spacer"></span>
       <button class="btn" style="width:auto; padding:9px 14px" id="btnOpenAuth">Войти</button></div>
-      <div class="auth-hint">Вход по email: пришлём письмо со ссылкой для входа. Без пароля.</div>`;
+      <div class="auth-hint">Вход по email и паролю.</div>`;
     document.getElementById('btnOpenAuth').onclick=openAuthModal;
   }
   refreshSyncUI();
@@ -8125,72 +8127,48 @@ function openAuthModal(){
   const m=document.getElementById('modalAuth');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Вход по email</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
-    <div class="auth-hint" style="margin-top:6px" id="authHint">Введите email — пришлём на него ссылку для входа. Пароль не нужен.</div>
+    <div class="auth-hint" style="margin-top:6px" id="authHint">Введите email и пароль. Работает на любом устройстве и в любом браузере.</div>
     <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px" inputmode="email" autocomplete="email">
-    <button class="btn" id="authSend" style="margin-top:10px">Отправить ссылку</button>
+    <input type="password" id="authPass" placeholder="Пароль" style="margin-top:10px" autocomplete="current-password">
+    <button class="btn" id="authSend" style="margin-top:10px">Войти</button>
     <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
     <div class="auth-hint" id="authDiag" style="margin-top:6px;font-size:11px;font-family:ui-monospace,monospace;word-break:break-all;opacity:.75"></div>
   </div>`;
   m.classList.remove('hidden');
   const inp=document.getElementById('authEmail');
+  const pass=document.getElementById('authPass');
   const send=document.getElementById('authSend');
   const msg=document.getElementById('authMsg');
-  const hint=document.getElementById('authHint');
   const diag=document.getElementById('authDiag');
   if(inp) setTimeout(()=>inp.focus(),60);
-  // После успешной отправки прячем поля и показываем явный итог: письмо ушло, ждём клик по ссылке.
-  const showSent=(email)=>{
-    const sheet=m.querySelector('.sheet');
-    if(sheet) sheet.innerHTML=`<div class="row"><h2>Проверьте почту</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
-      <div class="auth-hint" style="margin-top:10px;font-size:14px">Мы отправили ссылку для входа на <b>${escapeHtml(email)}</b>.</div>
-      <div class="auth-hint" style="margin-top:6px">Откройте письмо и нажмите в нём ссылку — вы вернётесь в приложение уже вошедшим. Если письма нет, загляните в «Спам».</div>
-      <button class="btn" id="authDone" style="margin-top:14px">Готово</button>`;
-    const done=m.querySelector('#authDone');
-    if(done) done.onclick=()=>closeModal('modalAuth');
-  };
-  send.onclick=async ()=>{
+  const submit=async ()=>{
     const email=inp.value.trim();
+    const password=pass.value;
     if(!email){ msg.textContent='Введите email.'; return; }
-    // Защитный интервал: Supabase не разрешает повторную отправку ссылки чаще, чем раз
-    // в несколько секунд. Не даём слать повторно — иначе сервер вернёт «only request this
-    // after 3 seconds», и приложение покажет ошибку вместо уже ушедшего письма.
-    const wait=Date.now()-_lastOtpReq;
-    if(wait<15000){
-      msg.textContent='Ссылка уже отправляется. Подождите несколько секунд и проверьте почту.';
-      return;
-    }
+    if(!password){ msg.textContent='Введите пароль.'; return; }
     const c=sbClient();
     if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
-    send.disabled=true; send.textContent='Отправляем…';
-    // Диагностика: Supabase отвечает status кодом даже когда письмо реально не доставлено
-    // (лимит, спам-фильтр, неверный redirect). Ловим и показываем честный ответ, чтобы
-    // отличать «просьба ушла, письмо потерялось» от «запрос вообще отклонён».
+    send.disabled=true; send.textContent='Входим…';
     let res=null;
     try{
-      res=await c.auth.signInWithOtp({
-        email,
-        options:{ emailRedirectTo: location.origin + location.pathname }
-      });
+      res=await c.auth.signInWithPassword({ email, password });
     }catch(e){
       res={ error:{ message:e && e.message ? e.message : String(e) } };
     }
-    send.disabled=false; send.textContent='Отправить ссылку';
+    send.disabled=false; send.textContent='Войти';
     const status=res && res.error && res.error.status ? res.error.status : '';
-    const code=res && res.error && res.error.__isAuthError
-      ? (res.error.code||'') : '';
+    const code=res && res.error && res.error.__isAuthError ? (res.error.code||'') : '';
     const errMsg=res && res.error ? (res.error.message||res.error.msg||'') : '';
-    const diagLine=[status?('HTTP '+status):'', code, 'redirect: '+(location.origin + location.pathname)]
-      .filter(Boolean).join(' · ');
+    const diagLine=[status?('HTTP '+status):'', code].filter(Boolean).join(' · ');
     if(diag) diag.textContent=diagLine;
     if(res && !res.error){
-      _lastOtpReq=Date.now();
-      showSent(email);
+      closeModal('modalAuth');
+      renderAuth();
+      toast('Вы вошли');
     }else{
-      // Повторный тап быстрее лимита → почти наверняка ссылка уже ушла. Говорим по-человечески.
-      if(/only request this after|security reason|too many|rate limit/i.test(errMsg)){
-        _lastOtpReq=Date.now();
-        msg.textContent='Ссылка уже отправлена. Проверьте почту (в т.ч. папку «Спам»); повторно запросить можно через минуту.';
-      }else if(/email not confirmed|not allowed|provider|signup is disabled|not enabled/i.test(errMsg)){
+      if(/invalid login credentials|invalid_credentials|invalid email|wrong password|password/i.test(errMsg)){
+        msg.textContent='Неверный email или пароль.';
+      }else if(/email not confirmed|not allowed|provider|signup is disabled|not enabled|user not found/i.test(errMsg)){
         msg.textContent='Провайдер письма отключён: '+errMsg+' — проверьте настройку Auth → Email в Supabase.';
       }else{
         toastShort('Ошибка: '+errMsg);
@@ -8198,6 +8176,55 @@ function openAuthModal(){
       }
     }
   };
+  send.onclick=submit;
+  pass.addEventListener('keydown',(e)=>{ if(e.key==='Enter') submit(); });
+}
+
+// Установка/смена пароля: работает без письма, прямым запросом (пока пользователь вошёл).
+// Ставит первый пароль для аккаунта, созданного через магическую ссылку, и меняет забытый
+// в будущем. Никаких ссылок и PKCE — надёжно с любого устройства.
+function changePasswordModal(){
+  closeAllModals();
+  const m=document.getElementById('modalAuth');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Сменить пароль</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
+    <div class="auth-hint" style="margin-top:6px" id="authHint">Задайте новый пароль. Минимум 6 символов.</div>
+    <input type="password" id="authPass" placeholder="Новый пароль" style="margin-top:10px" autocomplete="new-password">
+    <input type="password" id="authPass2" placeholder="Повторите пароль" style="margin-top:10px" autocomplete="new-password">
+    <button class="btn" id="authSend" style="margin-top:10px">Сохранить пароль</button>
+    <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
+  </div>`;
+  m.classList.remove('hidden');
+  const p1=document.getElementById('authPass');
+  const p2=document.getElementById('authPass2');
+  const send=document.getElementById('authSend');
+  const msg=document.getElementById('authMsg');
+  if(p1) setTimeout(()=>p1.focus(),60);
+  const submit=async ()=>{
+    const a=p1.value, b=p2.value;
+    if(!a || a.length<6){ msg.textContent='Пароль должен быть не короче 6 символов.'; return; }
+    if(a!==b){ msg.textContent='Пароли не совпадают.'; return; }
+    const c=sbClient();
+    if(!c){ msg.textContent='Модуль Supabase недоступен — проверьте интернет.'; return; }
+    send.disabled=true; send.textContent='Сохраняем…';
+    let res=null;
+    try{
+      res=await c.auth.updateUser({ password: a });
+    }catch(e){
+      res={ error:{ message:e && e.message ? e.message : String(e) } };
+    }
+    send.disabled=false; send.textContent='Сохранить пароль';
+    const errMsg=res && res.error ? (res.error.message||res.error.msg||'') : '';
+    if(res && !res.error){
+      closeModal('modalAuth');
+      toast('Пароль сохранён');
+    }else{
+      toastShort('Ошибка: '+errMsg);
+      msg.textContent='Ошибка: '+(errMsg||'нет ответа от сервера');
+    }
+  };
+  send.onclick=submit;
+  p2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') submit(); });
 }
 // Мягкий вопрос имени после первого входа (необязательно, показываем в аккаунте)
 function maybeAskName(){
