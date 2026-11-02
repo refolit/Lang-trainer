@@ -4265,7 +4265,7 @@ function setWriteItemTyping(it, speakNow){
   wireWriteModeBar(area);
   renderWriteList();
   renderTypeCardsHint();
-  if(speakNow!==false && writeAudioOn){ if(it.hanzi) speak(it.hanzi,1); }
+  if(speakNow!==false && writeAudioOn){ if(it.hanzi) speak(it.hanzi,1, foreignVoice()); }
 }
 function renderTypeCard(area){
   const it=writeCurItem;
@@ -4294,7 +4294,7 @@ function checkTyped(inp){
   }else{
     area._err=true;
     area.animate([{opacity:1},{opacity:.7},{opacity:1}],{duration:180});
-    if(writeAudioOn && it.hanzi) speak(it.hanzi,1); // повторяем слово вслух
+    if(writeAudioOn && it.hanzi) speak(it.hanzi,1, foreignVoice()); // повторяем слово вслух
     inp.value='';
     setTimeout(()=>{ try{ inp.focus(); }catch(e){} },0);
   }
@@ -4367,7 +4367,7 @@ function checkWordle(){
     writeGood(it);
   }else{
     area.animate([{opacity:1},{opacity:.7},{opacity:1}],{duration:200});
-    if(writeAudioOn && it.hanzi) speak(it.hanzi,1);
+    if(writeAudioOn && it.hanzi) speak(it.hanzi,1, foreignVoice());
     // показали раскладку на мгновение, затем сброс на пустые ячейки
     const tok=writeToken;
     setTimeout(()=>{
@@ -4452,7 +4452,7 @@ function checkLetters(){
       sl.classList.add(good?'good':'bad');
     });
     area.animate([{opacity:1},{opacity:.7},{opacity:1}],{duration:200});
-    if(writeAudioOn && it.hanzi) speak(it.hanzi,1);
+    if(writeAudioOn && it.hanzi) speak(it.hanzi,1, foreignVoice());
     // подсветили верные/неверные на мгновение → чистый рестарт с перемешанным банком
     const tok=writeToken;
     setTimeout(()=>{ if(writeToken===tok && writeCurItem) setWriteItemTyping(writeCurItem, false); }, 900);
@@ -4514,22 +4514,30 @@ function renderCubesCard(area){
   });
 }
 // Лёгкий «клик» при нажатии кубика (Web Audio, ленивый контекст) + короткая вибрация.
-let _tapCtx=null;
+// Звук в духе клавиатуры iPhone: короткий щелчок из белого шума (полосовой фильтр + быстрое
+// затухание). Верная буква — ярче/выше, неверная — глуше/ниже (слышно ошибку).
+let _tapCtx=null, _tapNoise=null;
 function tapSound(kind){
   try{
     if(!_tapCtx) _tapCtx=new (window.AudioContext||window.webkitAudioContext)();
     const ctx=_tapCtx; if(ctx.state==='suspended') ctx.resume();
     const t=ctx.currentTime;
-    const o=ctx.createOscillator(), g=ctx.createGain();
-    o.type='sine';
-    // верная буква — выше и приятнее; неверная — ниже, но тоже мягко
-    o.frequency.setValueAtTime(kind==='good'?720:330, t);
-    o.frequency.exponentialRampToValueAtTime(kind==='good'?980:260, t+0.09);
+    if(!_tapNoise){
+      // короткий буфер белого шума (0.03 c) — переиспользуем для всех кликов
+      const len=Math.floor(ctx.sampleRate*0.03);
+      _tapNoise=ctx.createBuffer(1, len, ctx.sampleRate);
+      const d=_tapNoise.getChannelData(0);
+      for(let i=0;i<len;i++) d[i]=(Math.random()*2-1);
+    }
+    const src=ctx.createBufferSource(); src.buffer=_tapNoise;
+    const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=1.2;
+    bp.frequency.setValueAtTime(kind==='good'?2600:1300, t);
+    const g=ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.18, t+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t+0.13);
-    o.connect(g); g.connect(ctx.destination);
-    o.start(t); o.stop(t+0.14);
+    g.gain.exponentialRampToValueAtTime(kind==='good'?0.22:0.16, t+0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.028);
+    src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+    src.start(t); src.stop(t+0.03);
   }catch(e){}
 }
 function tapVibrate(){
@@ -4562,7 +4570,7 @@ function cubeTap(bi){
       void btn.offsetWidth;                 // перезапуск анимации
       btn.classList.add('flash');
     }
-    if(writeAudioOn && it.hanzi) speak(it.hanzi,1);
+    if(writeAudioOn && it.hanzi) speak(it.hanzi,1, foreignVoice());
   }
 }
 function paintCubes(area){
