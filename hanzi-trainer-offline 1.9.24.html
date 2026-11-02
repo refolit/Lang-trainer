@@ -13,6 +13,7 @@
 <style>
 :root{
   --bg:#f7f4ef; --card:#ffffff; --ink:#1d1c1a; --mut:#8a847c;
+  --blue:#1565c0;
   --red:#c62828; --red-d:#a32222; --green:#2e7d32; --amber:#f9a825;
   --line:#e8e2d8; --radius:18px;
   --soft:#f0ece4;      /* фон сегментов/микрочипов (нейтральная подложка) */
@@ -26,6 +27,7 @@
 /* Тёмная — ночная палитра (меньше синего): #121110 */
 html[data-theme="dark"]{
   --bg:#171513; --card:#211f1c; --ink:#f2efe9; --mut:#9a9287;
+  --blue:#7db8f2;
   --red:#e05252; --red-d:#b23a3a; --green:#6cae75; --amber:#e6b23a;
   --line:#332f2a; --soft:#2b2824; --soft2:#26231f; --sec-d:#000000;
   --nav-bg:rgba(22,20,18,.96);
@@ -35,6 +37,7 @@ html[data-theme="dark"]{
 /* Песочная — тёплая сепия: #e6d7b8 */
 html[data-theme="sepia"]{
   --bg:#f6efdf; --card:#fffaf0; --ink:#3d3226; --mut:#8a7b63;
+  --blue:#1565c0;
   --red:#b4532e; --red-d:#934227; --green:#5a7230; --amber:#d9962b;
   --line:#eadfc5; --soft:#f0e6cf; --soft2:#e9dec4; --sec-d:#dccfa8;
   --nav-bg:rgba(246,239,223,.96);
@@ -44,6 +47,7 @@ html[data-theme="sepia"]{
 /* Синяя — спокойный голубой свет (заменила мятную): #4b7fbe */
 html[data-theme="blue"]{
   --bg:#eef3f9; --card:#ffffff; --ink:#1c2836; --mut:#64748b;
+  --blue:#1565c0;
   --red:#c62828; --red-d:#a32222; --green:#2e7d32; --amber:#c98a1b;
   --line:#dbe4ef; --soft:#e6edf5; --soft2:#dde6f0; --sec-d:#cdd9e7;
   --nav-bg:rgba(238,243,249,.96);
@@ -53,6 +57,7 @@ html[data-theme="blue"]{
 /* Тёмно-синяя — ночная синяя: #10141f */
 html[data-theme="navy"]{
   --bg:#10141f; --card:#1a2230; --ink:#e8eef5; --mut:#8494a8;
+  --blue:#7db8f2;
   --red:#e05252; --red-d:#b23a3a; --green:#6cae75; --amber:#e6b23a;
   --line:#2a3548; --soft:#1e2736; --soft2:#1a2230; --sec-d:#000000;
   --nav-bg:rgba(16,20,31,.96);
@@ -62,6 +67,7 @@ html[data-theme="navy"]{
 /* Лесная — тёмный лес/олива: #141a14 */
 html[data-theme="forest"]{
   --bg:#141a14; --card:#1d241d; --ink:#e9efe6; --mut:#8fa08a;
+  --blue:#7db8f2;
   --red:#e07a5f; --red-d:#b25a48; --green:#7fb069; --amber:#d9b14c;
   --line:#2a332a; --soft:#232c23; --soft2:#1f281f; --sec-d:#000000;
   --nav-bg:rgba(20,26,20,.96);
@@ -71,6 +77,7 @@ html[data-theme="forest"]{
 /* Графитовая — нейтральный холодный серый: #19191a */
 html[data-theme="graphite"]{
   --bg:#19191a; --card:#242424; --ink:#ececec; --mut:#9a9a9a;
+  --blue:#7db8f2;
   --red:#e05252; --red-d:#b23a3a; --green:#6cae75; --amber:#e6b23a;
   --line:#333333; --soft:#2b2b2b; --soft2:#262626; --sec-d:#000000;
   --nav-bg:rgba(25,25,26,.96);
@@ -80,6 +87,7 @@ html[data-theme="graphite"]{
 /* Сливовая — тёплый фиолетовый: #191322 */
 html[data-theme="plum"]{
   --bg:#191322; --card:#241d33; --ink:#efeaf6; --mut:#9a8fb5;
+  --blue:#7db8f2;
   --red:#e07a8a; --red-d:#b25a6a; --green:#7fa06a; --amber:#d9a94c;
   --line:#332c44; --soft:#2b2438; --soft2:#271f33; --sec-d:#000000;
   --nav-bg:rgba(25,19,34,.96);
@@ -273,7 +281,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .type-word.mid{font-size:22px; letter-spacing:.2px}
 .type-word.sent{font-size:16px; letter-spacing:0; line-height:1.4}
 #writePy.type-py{font-size:17px; margin-top:8px; min-height:1.3em}
-#writeTr.type-tr{font-size:18px; max-width:100%}
+#writeTr.type-tr{font-size:18px; max-width:100%; color:var(--ink)}
 .type-in{width:88%; max-width:340px; padding:12px 14px; font-size:18px; text-align:center; border-radius:12px; border:1.5px solid var(--line); margin-top:12px; background:var(--card); color:var(--ink)}
 .type-btn{margin-top:12px; width:auto; padding:10px 24px}
 /* Переключатель режимов письма (Печать / Побуквенно / Собери из букв) */
@@ -309,16 +317,16 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
    Набранное уезжает влево, активная буква всегда видна; между словами — зазор. */
 .cube-film{display:flex; gap:6px; align-items:center; overflow-x:auto; overflow-y:hidden; padding:8px 6px; margin:10px 0 2px; scrollbar-width:none; -ms-overflow-style:none; scroll-behavior:smooth}
 .cube-film::-webkit-scrollbar{display:none}
-.cube-film .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--ink); transition:background .12s, border-color .12s}
+.cube-film .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .cube-film .fslot.gap{width:14px; border:0; background:transparent}
 .cube-film .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .cube-film .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 /* «Фанфары»: собранная фраза сверху (мелким шрифтом, перенос, видна целиком) + текущий кусок по центру */
-.fanfare-built{width:100%; text-align:center; font-size:16px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; margin:4px 0 14px; min-height:1.4em; color:var(--ink)}
+.fanfare-built{width:100%; text-align:center; font-size:18px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; margin:4px 0 14px; min-height:1.4em; color:var(--blue)}
 .fanfare-built .sep{color:var(--mut); margin:0 4px}
 .fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px}
-.fanfare-chunk .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--ink); transition:background .12s, border-color .12s}
+.fanfare-chunk .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
 .fanfare-chunk .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
 .fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
@@ -4289,6 +4297,9 @@ function setWriteItemTyping(it, speakNow){
   writeToken++;
   const area=document.getElementById('writeArea');
   area.classList.add('type');
+  // языки без кисти: очищаем глобальные блоки пиньиня/перевода, оставшиеся от китайского режима
+  document.getElementById('writePy').textContent='';
+  const wtr=document.getElementById('writeTr'); if(wtr) wtr.textContent='';
   const mode=writeMode();
   if(mode==='cubes') renderCubesCard(area);
   else if(mode==='letters') renderLettersCard(area);
