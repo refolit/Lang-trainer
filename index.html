@@ -4447,9 +4447,18 @@ function renderCubesCard(area){
   const {bank}=cubesBankLetters(it);
   const rtl=langInfo().rtl;
   cubesState={cells, letters, bank, pos:0};
+  // Пробел = перенос строки: каждое слово фразы — на своей строке (слово не разрывается
+  // по буквам). data-li — глобальный индекс буквы, чтобы paintCubes работал по всем строкам.
+  const rows=[]; let word=[];
+  for(let i=0;i<cells.length;i++){
+    const c=cells[i];
+    if(c.gap){ if(word.length){ rows.push(`<div class="wslot-row ${rtl?'rtl':''}">${word.join('')}</div>`); word=[]; } }
+    else word.push(`<div class="wslot" data-li="${letterIndex(cells,i)}"></div>`);
+  }
+  if(word.length) rows.push(`<div class="wslot-row ${rtl?'rtl':''}">${word.join('')}</div>`);
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
-    <div class="wslot-row ${rtl?'rtl':''}" id="wSlotRow">${cells.map((c,i)=>c.gap?'<div class="wslot gap"></div>':`<div class="wslot" data-li="${letterIndex(cells,i)}"></div>`).join('')}</div>
+    <div id="wSlotWrap">${rows.join('')}</div>
     <div class="wbank" id="wBank">${bank.map((l,bi)=>`<button type="button" class="wletter" data-bi="${bi}">${escapeHtml(l)}</button>`).join('')}</div>`);
   paintCubes(area);
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
@@ -4480,12 +4489,12 @@ function cubeTap(bi){
 }
 function paintCubes(area){
   const s=cubesState; if(!s) return;
-  const row=area.querySelector('#wSlotRow'); if(row){
-    row.querySelectorAll('.wslot:not(.gap)').forEach((sl,li)=>{
-      if(li<s.pos){ sl.textContent=s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
-      else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); }
-    });
-  }
+  const wrap=area.querySelector('#wSlotWrap'); if(!wrap) return;
+  wrap.querySelectorAll('.wslot').forEach(sl=>{
+    const li=Number(sl.dataset.li);
+    if(li<s.pos){ sl.textContent=s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
+    else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); }
+  });
 }
 function renderTypeCardsHint(){
   const el=document.getElementById('writeWord');
@@ -4507,6 +4516,8 @@ function renderWriteLabels(){
 }
 function renderWriteList(){
   const el=document.getElementById('writeList'); if(!el) return;
+  // Английский («кубики»): нижний список слов/фраз не показываем — только карточка, буквы и кнопки.
+  if(writeMode()==='cubes'){ el.innerHTML=''; return; }
   // список ВСЕГДА в строгом порядке добавления (П.9), независимо от «Рандом» для прохождения
   const L=writeWordList();
   if(!L.length){ el.innerHTML=''; return; }
