@@ -8803,7 +8803,15 @@ async function boot(){
   await purgeExpiredTrash();   // автоочистка Корзины: удалённое старше 30 дней стираем навсегда
   // Первый вход — сначала выбор языка (модалка); оферта стартового набора придёт
   // ПОСЛЕ выбора (нельзя показывать confirm поверх модалки — он блокирует клики).
-  if(settings.langChosen) maybeOfferSamples(); else offerLangChoice();
+  // Язык спрашиваем ТОЛЬКО на настоящем первом запуске — когда в словаре ещё нет ни
+  // одной карточки. Существующим пользователям (после обновления у них нет флага
+  // langChosen, но слова уже есть) модалку НЕ показываем: ставим флаг и идём дальше.
+  if(!settings.langChosen && items.length===0){
+    offerLangChoice();
+  }else{
+    if(!settings.langChosen){ settings.langChosen=true; persist(); }
+    maybeOfferSamples();
+  }
   refreshSyncUI();
   bindSettings();
   bindThemeControls();
