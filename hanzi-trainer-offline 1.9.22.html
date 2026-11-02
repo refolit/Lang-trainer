@@ -294,6 +294,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .wbank button{min-width:40px; height:44px; padding:0 9px; font-size:20px; font-weight:700; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; text-transform:lowercase}
 .wbank button.used{opacity:.25; pointer-events:none}
 .wbank button.flash{animation:cubeFlash .42s ease}
+.wbank button.press{animation:cubePress .18s ease}
+@keyframes cubePress{0%{transform:scale(1)}40%{transform:scale(.88)}100%{transform:scale(1)}}
 @keyframes cubeFlash{0%{background:var(--red); border-color:var(--red); color:#fff}100%{background:var(--card); border-color:var(--line); color:var(--ink)}}
 .wslot-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:14px 0 4px}
 .wslot-row.rtl{flex-direction:row-reverse}
@@ -4511,20 +4513,50 @@ function renderCubesCard(area){
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
   });
 }
+// Лёгкий «клик» при нажатии кубика (Web Audio, ленивый контекст) + короткая вибрация.
+let _tapCtx=null;
+function tapSound(kind){
+  try{
+    if(!_tapCtx) _tapCtx=new (window.AudioContext||window.webkitAudioContext)();
+    const ctx=_tapCtx; if(ctx.state==='suspended') ctx.resume();
+    const t=ctx.currentTime;
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine';
+    // верная буква — выше и приятнее; неверная — ниже, но тоже мягко
+    o.frequency.setValueAtTime(kind==='good'?720:330, t);
+    o.frequency.exponentialRampToValueAtTime(kind==='good'?980:260, t+0.09);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+0.13);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t+0.14);
+  }catch(e){}
+}
+function tapVibrate(){
+  try{ if(navigator.vibrate) navigator.vibrate(8); }catch(e){}
+}
 function cubeTap(bi){
   const s=cubesState; if(!s) return;
   const area=document.getElementById('writeArea');
   const it=writeCurItem; if(!it) return;
   const letter=s.bank[bi]; if(letter==null) return;
   const li=s.pos;
+  // тактильный отклик кнопки-кубика (нажатие визуально «нажимается»)
+  const btn=area.querySelector(`#wBank .wletter[data-bi="${bi}"]`);
+  if(btn){
+    btn.classList.remove('press');
+    void btn.offsetWidth;
+    btn.classList.add('press');
+  }
   if(letter===s.letters[li]){
     // верная буква — встаёт на место, переход к следующей позиции
     s.pos++;
+    tapSound('good'); tapVibrate();
     paintCubes(area);
     if(s.pos>=s.letters.length){ writeGood(it); }
   }else{
     // неверная — кубик мигает красным и «исчезает» (остаётся в наборе, позиция не меняется)
-    const btn=area.querySelector(`#wBank .wletter[data-bi="${bi}"]`);
+    tapSound('bad'); tapVibrate();
     if(btn){
       btn.classList.remove('flash');
       void btn.offsetWidth;                 // перезапуск анимации
