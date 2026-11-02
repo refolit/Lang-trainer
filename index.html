@@ -417,11 +417,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 #langSeg .nm{white-space:nowrap}
 .cf-apply-row{position:sticky; bottom:-20px; margin:12px -16px -20px; padding:10px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--bg); border-top:1px solid var(--line)}
 /* Выбор языка при первом входе */
-.lang-choice-list{display:flex; flex-direction:column; gap:8px; margin-top:14px}
-.lang-choice{display:flex; align-items:center; gap:12px; padding:12px 14px; border:1.5px solid var(--line); border-radius:14px; background:var(--card); cursor:pointer; font-size:15px; font-weight:600; color:var(--ink)}
+.lang-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px}
+.lang-choice{display:flex; align-items:center; justify-content:center; gap:10px; padding:16px 12px; border:1.5px solid var(--line); border-radius:14px; background:var(--card); cursor:pointer; font-size:16px; font-weight:600; color:var(--ink)}
 .lang-choice .flg{width:26px; height:18px}
-.lang-choice:active{transform:scale(.985)}
-.lang-choice .lc-sub{margin-left:auto; font-size:12px; font-weight:400; color:var(--mut)}
+.lang-choice:active{transform:scale(.97)}
+/* Вторая модалка (Да/Нет) — продолжение первой, тот же дизайн */
+.sample-actions{display:flex; gap:10px; margin-top:18px}
+.sample-actions .btn{flex:1}
 
 /* Экран конфликтов синхронизации (Фаза 8) */
 .muted{font-size:12px; color:var(--mut)}
@@ -1191,6 +1193,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalTrash"></div>
 <div class="modal hidden" id="modalAdmin"></div>
 <div class="modal hidden" id="modalLangChoice"></div>
+<div class="modal hidden" id="modalSampleChoice"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
@@ -7402,44 +7405,58 @@ function sampleData(skipConfirm){
 }
 // Первый вход: спросить, какой язык изучать. Показывается один раз (флаг settings.langChosen).
 // Выбранный язык сразу становится активным (как будто нажали в «Настройки → Язык»).
+// Порядок сетки 2×2: Английский (в.л.), Турецкий (в.п.), Арабский (н.л.), Китайский (н.п.).
+const LANG_CHOICE_ORDER=['en','tr','ar','zh'];
 function offerLangChoice(){
   if(settings.langChosen) return;
   settings.langChosen=true; persist(); // спрашиваем один раз; если закрыли не выбрав — не мешаем снова
   const m=document.getElementById('modalLangChoice');
-  const rows=LANGS.map(l=>{
-    const sub=(SAMPLES[l.code]&&SAMPLES[l.code].length)?('стартовый набор: '+SAMPLES[l.code].length+' сл.'):'';
+  const rows=LANG_CHOICE_ORDER.map(code=>{
+    const l=LANG_MAP[code]; if(!l) return '';
     return `<button type="button" class="lang-choice" data-lang="${l.code}">
       <span class="flg">${flagSVG(l.code)}</span>
       <span>${escapeHtml(l.name)}</span>
-      ${sub?`<span class="lc-sub">${sub}</span>`:''}
     </button>`;
   }).join('');
   m.innerHTML=`<div class="sheet">
-    <div class="row"><h2>Какой язык изучать?</h2></div>
+    <div class="row"><h2>Какой язык вы хотите изучать?</h2></div>
     <div class="muted" style="margin-top:4px">Можно поменять позже в «Ещё → Настройки → Язык».</div>
-    <div class="lang-choice-list">${rows}</div>
+    <div class="lang-grid">${rows}</div>
   </div>`;
   m.classList.remove('hidden');
   m.querySelectorAll('.lang-choice').forEach(b=>{
     b.onclick=async ()=>{
       m.classList.add('hidden');
       await setLang(b.dataset.lang);
+      offerSampleChoice(); // продолжение: предложить стартовый набор для выбранного языка
     };
   });
 }
+// Вторая модалка (продолжение выбора языка): «Добавить стартовый набор слов?» — Да/Нет,
+// в том же дизайне. Только для пустого языка и один раз (settings.samplesOffered).
+function offerSampleChoice(){
+  if(!SAMPLES[activeLang] || !SAMPLES[activeLang].length) return;
+  if(settings.samplesOffered && settings.samplesOffered[activeLang]) return;
+  if(langItems().length) return;
+  if(!settings.samplesOffered) settings.samplesOffered={};
+  settings.samplesOffered[activeLang]=true; persist();
+  const m=document.getElementById('modalSampleChoice');
+  const name=LANG_MAP[activeLang]?LANG_MAP[activeLang].name:langInfo().name;
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Добавить стартовый набор слов для изучения ${escapeHtml(name)}?</h2></div>
+    <div class="sample-actions">
+      <button type="button" class="btn sec" id="sampleYes">Да</button>
+      <button type="button" class="btn sec" id="sampleNo">Нет</button>
+    </div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelector('#sampleYes').onclick=()=>{ m.classList.add('hidden'); sampleData(true); };
+  m.querySelector('#sampleNo').onclick=()=>{ m.classList.add('hidden'); };
+}
 // Разовая оферта на первом входе в пустой язык (boot и setLang): спросить и, если
 // согласились, добавить стартовый набор. Показывается только когда у языка ещё нет слов.
-async function maybeOfferSamples(){
-  const S=SAMPLES[activeLang]||SAMPLES.zh;
-  if(!S || !S.length) return;
-  if(settings.samplesOffered && settings.samplesOffered[activeLang]) return;
-  if(!settings.samplesOffered) settings.samplesOffered={};
-  settings.samplesOffered[activeLang]=true; // спрашиваем один раз на язык (даже если «Нет»)
-  await persist();
-  if(langItems().length || !SAMPLES[activeLang] || !SAMPLES[activeLang].length) return;
-  if(confirm('Добавить стартовый набор слов для '+langInfo().name+'?')){
-    sampleData(true);
-  }
+function maybeOfferSamples(){
+  offerSampleChoice();
 }
 async function wipeAll(){
   if(!confirm('Удалить ВСЕ слова, аудио и статистику? Это необратимо.')) return;
