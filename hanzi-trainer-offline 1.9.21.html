@@ -293,12 +293,16 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .wbank{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:12px 0 6px}
 .wbank button{min-width:44px; height:48px; padding:0 10px; font-size:22px; font-weight:700; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; text-transform:lowercase}
 .wbank button.used{opacity:.25; pointer-events:none}
+.wbank button.flash{animation:cubeFlash .42s ease}
+@keyframes cubeFlash{0%{background:var(--red); border-color:var(--red); color:#fff}100%{background:var(--card); border-color:var(--line); color:var(--ink)}}
 .wslot-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:14px 0 4px}
 .wslot-row.rtl{flex-direction:row-reverse}
 .wslot{width:44px; height:52px; border:2px solid var(--line); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--ink); cursor:pointer}
 .wslot.gap{border:0; background:transparent; width:16px; pointer-events:none}
 .wslot.good{background:var(--green); border-color:var(--green); color:#fff; pointer-events:none}
 .wslot.bad{background:var(--red); border-color:var(--red); color:#fff; pointer-events:none}
+.wslot.cur{animation:slotPulse 1.1s ease-in-out infinite; border-color:var(--red)}
+@keyframes slotPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,0,0)}50%{box-shadow:0 0 0 5px var(--soft2)}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
@@ -1748,7 +1752,7 @@ function toPinyin(s){
 // Английская транскрипция (IPA) — аналог pinyin для английского. Словарь `window.__EN_IPA__`
 // вшит в index.html (UK IPA + US-фолбэк, ~7.7 тыс. частых слов, ~210 КБ) — вычисляется
 // ЛОКАЛЬНО, без сети (как pinyin-pro для китайского). Фраза разбивается по словам, каждое
-// ищется в словаре; известные склеиваются в ОДНУ общую пару скобок через 2 пробела между
+// ищется в словаре; известные склеиваются в ОДНУ общую пару скобок через один пробел между
 // словами; неизвестное слово опускается (пустой остаток можно дописать вручную).
 function enIpaOfWord(w){
   if(!window.__EN_IPA__) return '';
@@ -1769,8 +1773,8 @@ function toEnIpa(s){
     const ipa=enIpaOfWord(w);
     if(ipa) out.push(ipa.replace(/\//g,''));   // срезаем все скобки (у слов с вариантами напр. /ˈeɪ/, /ə/ → ˈeɪ, ə)
   }
-  // одна общая пара скобок вокруг всей фразы, между словами — ровно 2 пробела
-  return out.length ? '/'+out.join('  ')+'/' : '';
+  // одна общая пара скобок вокруг всей фразы, между словами — один обычный пробел
+  return out.length ? '/'+out.join(' ')+'/' : '';
 }
 
 // ============================== TTS ==============================
@@ -4187,7 +4191,8 @@ function renderWriteWord(){
 // Три режима ввода (переключатель вверху карточки): 'type' — целое слово,
 // 'wordle' — побуквенная проверка ячейками, 'letters' — собрать слово из букв.
 function writeTypeSeq(){ return writeSeq.length?writeSeq:writeWordList(); }
-function writeMode(){ const m=settings.writeInput; return (m==='type'||m==='wordle'||m==='letters')?m:'wordle'; }
+// Английский — единственный режим «Собери из кубиков» (переключателя нет); tr/ar — три режима.
+function writeMode(){ if(activeLang==='en') return 'cubes'; const m=settings.writeInput; return (m==='type'||m==='wordle'||m==='letters')?m:'wordle'; }
 function writeTarget(it){ return typeNormalize((it||writeCurItem||{}).hanzi); }
 // Раскладка ячеек: пробел → разрыв (тонкий), пунктуация/апостроф/дефис — пропускаются
 // без ячейки (don't → d-o-n-t, ice-cream → i-c-e-c-r-e-a-m), остальное → буквенные ячейки.
@@ -4204,6 +4209,7 @@ function writeCells(it){
 // Индекс буквы (не разрыва) в cells[0..cellPos] — для data-li в ячейках.
 function letterIndex(cells, cellPos){ let li=-1; for(let i=0;i<=cellPos;i++){ if(!cells[i].gap) li++; } return li; }
 function writeModeBar(){
+  if(writeMode()==='cubes') return ''; // английский: один режим, переключателя нет
   const m=writeMode();
   const btn=(k,label)=>`<button type="button" class="${k===m?'on':''}" data-wmode="${k}">${label}</button>`;
   return `<div class="wmode">${btn('type','⌨️ Печать')}${btn('wordle','🟩 Побуквенно')}${btn('letters','🔤 Собери из букв')}</div>`;
@@ -4229,7 +4235,8 @@ function setWriteItemTyping(it, speakNow){
   const area=document.getElementById('writeArea');
   area.classList.add('type');
   const mode=writeMode();
-  if(mode==='letters') renderLettersCard(area);
+  if(mode==='cubes') renderCubesCard(area);
+  else if(mode==='letters') renderLettersCard(area);
   else if(mode==='wordle') renderWordleCard(area);
   else renderTypeCard(area);
   wireWriteModeBar(area);
@@ -4426,6 +4433,71 @@ function checkLetters(){
     // подсветили верные/неверные на мгновение → чистый рестарт с перемешанным банком
     const tok=writeToken;
     setTimeout(()=>{ if(writeToken===tok && writeCurItem) setWriteItemTyping(writeCurItem, false); }, 900);
+  }
+}
+// ---------- Собери слово из кубиков (английский) ----------
+// Кубики = уникальные буквы слова + 10 случайных разных букв (не из слова, без повторов).
+// Буквы многоразовые. Набор строго по позициям: пока текущая буква не встанет верно,
+// к следующей позиции не перейти. Неверная — кубик мигает красным и возвращается в набор.
+let cubesState=null;
+const CUBES_EXTRA=10;
+function cubesBankLetters(it){
+  const t=writeTarget(it);                     // буквы слова (без пунктуации/пробелов)
+  const need=writeCells(it).letters;           // уникальные буквы, сохраняя первое появление
+  const uniq=[];
+  for(const ch of need) if(!uniq.includes(ch)) uniq.push(ch);
+  // 10 случайных букв, отличных друг от друга и от букв слова
+  const alpha='abcdefghijklmnopqrstuvwxyz'.split('');
+  const pool=alpha.filter(c=>!uniq.includes(c));
+  shuffle(pool);
+  const extra=pool.slice(0, CUBES_EXTRA);
+  const bank=shuffle([...uniq, ...extra]);
+  return {uniq, extra, bank};
+}
+function renderCubesCard(area){
+  const it=writeCurItem;
+  const {cells, letters}=writeCells(it);
+  const {bank}=cubesBankLetters(it);
+  const rtl=langInfo().rtl;
+  cubesState={cells, letters, bank, pos:0};
+  area.innerHTML=writeCardWrap(`
+    <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
+    <div class="wslot-row ${rtl?'rtl':''}" id="wSlotRow">${cells.map((c,i)=>c.gap?'<div class="wslot gap"></div>':`<div class="wslot" data-li="${letterIndex(cells,i)}"></div>`).join('')}</div>
+    <div class="wbank" id="wBank">${bank.map((l,bi)=>`<button type="button" class="wletter" data-bi="${bi}">${escapeHtml(l)}</button>`).join('')}</div>`);
+  paintCubes(area);
+  area.querySelectorAll('#wBank .wletter').forEach(btn=>{
+    btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
+  });
+}
+function cubeTap(bi){
+  const s=cubesState; if(!s) return;
+  const area=document.getElementById('writeArea');
+  const it=writeCurItem; if(!it) return;
+  const letter=s.bank[bi]; if(letter==null) return;
+  const li=s.pos;
+  if(letter===s.letters[li]){
+    // верная буква — встаёт на место, переход к следующей позиции
+    s.pos++;
+    paintCubes(area);
+    if(s.pos>=s.letters.length){ writeGood(it); }
+  }else{
+    // неверная — кубик мигает красным и «исчезает» (остаётся в наборе, позиция не меняется)
+    const btn=area.querySelector(`#wBank .wletter[data-bi="${bi}"]`);
+    if(btn){
+      btn.classList.remove('flash');
+      void btn.offsetWidth;                 // перезапуск анимации
+      btn.classList.add('flash');
+    }
+    if(writeAudioOn && it.hanzi) speak(it.hanzi,1);
+  }
+}
+function paintCubes(area){
+  const s=cubesState; if(!s) return;
+  const row=area.querySelector('#wSlotRow'); if(row){
+    row.querySelectorAll('.wslot:not(.gap)').forEach((sl,li)=>{
+      if(li<s.pos){ sl.textContent=s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
+      else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); }
+    });
   }
 }
 function renderTypeCardsHint(){
