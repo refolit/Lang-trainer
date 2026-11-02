@@ -319,20 +319,21 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .cube-film::-webkit-scrollbar{display:none}
 .cube-film .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .cube-film .fslot.gap{width:14px; border:0; background:transparent}
-.cube-film .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
+.cube-film .fslot.good{color:var(--blue)}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .cube-film .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 /* «Фанфары»: собранная фраза сверху (мелким шрифтом, перенос, видна целиком) + текущий кусок по центру */
 .fanfare-built{width:100%; text-align:center; font-size:18px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; margin:4px 0 14px; min-height:1.4em; color:var(--blue)}
-.fanfare-built .sep{color:var(--mut); margin:0 4px}
+.fanfare-built span{display:inline-block}
+.fanfare-built span.rise{animation:fanfareRise .22s ease}
+@keyframes fanfareRise{0%{transform:translateY(18px); opacity:0}100%{transform:translateY(0); opacity:1}}
 .fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px}
 .fanfare-chunk .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
-.fanfare-chunk .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
+.fanfare-chunk .fslot.good{color:var(--blue)}
 .fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .fanfare-chunk .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
-.fanfare-ghost{color:var(--mut); font-size:14px}
-.fanfare-built.done{animation:fanfareDone .5s ease; font-size:20px; font-weight:800; color:var(--green)}
+.fanfare-built.done{animation:fanfareDone .5s ease; font-size:20px; font-weight:800; color:var(--red)}
 @keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
@@ -746,7 +747,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .cube-order .seg.sm button{flex:1 1 auto; white-space:nowrap; padding:6px 10px}
 .cube-order #cubeLayoutSeg{margin-top:6px}
 .cube-order #cubeLayoutSeg button{background:var(--soft); color:var(--mut)}
-.cube-order #cubeLayoutSeg button.active{background:var(--red); color:#fff; border-color:var(--red)}
+.cube-order #cubeLayoutSeg button.active{background:var(--card); color:var(--ink); box-shadow:0 1px 2px rgba(0,0,0,.1)}
 .write-bottom{display:flex; align-items:center; gap:10px; margin:10px auto 0; width:100%; max-width:620px}
 .write-bottom .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; min-height:44px}
 .write-bottom #writePrev{flex-grow:1}
@@ -1350,7 +1351,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.24';
+const APP_VERSION='1.9.25';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4590,18 +4591,16 @@ function loadFanfareChunk(area){
   s.letters=letters; s.cells=cells; s.pos=0;
   s.bank=cubesBankForLetters(letters);
   const it=s.it;
-  const builtHtml=s.built.map((w,i)=>`<span>${escapeHtml(w)}</span>${i<s.built.length-1?'<span class="sep">·</span>':''}`).join('');
+  const builtHtml=s.built.map((w,i)=>`<span class="${i===s.built.length-1?'rise':''}">${escapeHtml(w)}</span>`).join(' ');
   const rtl=langInfo().rtl;
   const chunkHtml=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
     : c.punct
       ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
       : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
-  const remaining=(s.chunks.length-1)-s.chunkIdx;
-  const ghost=(remaining>0)?`<span class="fanfare-ghost">(ещё ${remaining} кус.)</span>`:'';
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
-    <div class="fanfare-built" id="fanfareBuilt">${builtHtml}${builtHtml?' ':''}${ghost}</div>
+    <div class="fanfare-built" id="fanfareBuilt">${builtHtml}</div>
     <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
     <div class="wbank" id="wBank">${s.bank.map((l,bi)=>`<button type="button" class="wletter" data-bi="${bi}">${escapeHtml(l)}</button>`).join('')}</div>`);
   paintFanfare(area);
@@ -4628,16 +4627,19 @@ function fanfareGood(){
   s.built.push(words.join(' '));
   const area=document.getElementById('writeArea');
   if(s.chunkIdx>=s.chunks.length-1){
-    // Вся фраза собрана: показать её целиком ещё 1 секунду (фокус на ней), затем переход.
+    // Вся фраза собрана: показать её целиком красным ещё 2 секунды, затем переход.
     paintFanfare(area);
     const builtEl=area.querySelector('#fanfareBuilt');
-    if(builtEl){ builtEl.classList.add('done'); }
+    if(builtEl){
+      builtEl.innerHTML=s.built.map((w,i)=>`<span class="${i===s.built.length-1?'rise':''}">${escapeHtml(w)}</span>`).join(' ');
+      builtEl.classList.add('done');
+    }
     // блокируем ввод на время показа, чтобы случайные клавиши не «доиграли»
     const tok=writeToken;
     cubesState=null;
     setTimeout(()=>{
       if(writeToken===tok && writeCurItem) writeGood(it);
-    }, 1000);
+    }, 2000);
     return;
   }
   s.chunkIdx++;
@@ -6215,6 +6217,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.25','03.11.26','Фанфары: набранный кусок анимированно поднимается вверх и встаёт на строку под переводом (слова через пробел, без точек-разделителей и подписи «(ещё N кус.)»). В конце вся фраза показывается красным и держится 2 секунды. Заполненные кубики остаются белыми (буква синяя), активная кнопка «Фанфары»/«Кинолента» — белая, как «Вразброс».'],
   ['1.9.24','03.11.26','Письмо (английский): два режима кубиков — «Кинолента» (прежний, по умолчанию) и «Фанфары» (фраза набирается по кускам, собранные слова уходят на строку вверх и к концу видна вся фраза по центру). Куски делятся по числу символов (короткие слова вместе, длинные — по 1–2).'],
   ['1.9.23','02.11.26','Письмо (английский): набор букв с клавиатуры равнозначен кликам по кубикам.'],
   ['1.9.22','02.11.26','Письмо (английский): переключатель порядка кубиков над кнопкой «Назад» — «Вразброс» (рандом, по умолчанию), «Гласные вначале» (a e i o u + y, затем согласные) и «По алфавиту». Выбор сохраняется. Длинные фразы переносятся по границам слов (каждое слово на своей строке), нижний список слов убран, починена прокрутка на телефоне.'],
