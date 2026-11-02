@@ -8771,8 +8771,9 @@ async function boot(){
   renderLangSeg();
   await persist();
   await purgeExpiredTrash();   // автоочистка Корзины: удалённое старше 30 дней стираем навсегда
-  offerLangChoice();   // первый вход — предложить выбрать изучаемый язык
-  maybeOfferSamples();
+  // Первый вход — сначала выбор языка (модалка); оферта стартового набора придёт
+  // ПОСЛЕ выбора (нельзя показывать confirm поверх модалки — он блокирует клики).
+  if(settings.langChosen) maybeOfferSamples(); else offerLangChoice();
   refreshSyncUI();
   bindSettings();
   bindThemeControls();
