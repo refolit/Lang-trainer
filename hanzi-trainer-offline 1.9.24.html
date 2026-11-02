@@ -313,6 +313,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .cube-film .fslot.gap{width:14px; border:0; background:transparent}
 .cube-film .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
+.cube-film .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 /* «Фанфары»: собранная фраза сверху (мелким шрифтом, перенос, видна целиком) + текущий кусок по центру */
 .fanfare-built{width:100%; text-align:center; font-size:16px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; margin:4px 0 14px; min-height:1.4em; color:var(--ink)}
 .fanfare-built .sep{color:var(--mut); margin:0 4px}
@@ -321,7 +322,10 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
 .fanfare-chunk .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
 .fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
+.fanfare-chunk .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 .fanfare-ghost{color:var(--mut); font-size:14px}
+.fanfare-built.done{animation:fanfareDone .5s ease; font-size:20px; font-weight:800; color:var(--green)}
+@keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
@@ -4246,8 +4250,19 @@ function writeCells(it){
   }
   return {cells, letters};
 }
-// Индекс буквы (не разрыва) в cells[0..cellPos] — для data-li в ячейках.
-function letterIndex(cells, cellPos){ let li=-1; for(let i=0;i<=cellPos;i++){ if(!cells[i].gap) li++; } return li; }
+// Вариант для «кубиков» (Кинолента/Фанфары): знаки препинания НЕ набираются, но появляются
+// на своих местах автоматически (фиксированная ячейка punct). Пробел — зазор. Буквы — в letters.
+function writeCellsCubes(it){
+  const t=writeTarget(it); const cells=[]; const letters=[];
+  for(const ch of t){
+    if(ch===' '){ cells.push({gap:true}); }
+    else if(WRITE_SKIP.has(ch)){ cells.push({gap:false, punct:ch}); }
+    else { cells.push({gap:false, ch}); letters.push(ch); }
+  }
+  return {cells, letters};
+}
+// Индекс буквы (не разрыва и не знака) в cells[0..cellPos] — для data-li в ячейках.
+function letterIndex(cells, cellPos){ let li=-1; for(let i=0;i<=cellPos;i++){ const c=cells[i]; if(!c.gap && !c.punct) li++; } return li; }
 function writeModeBar(){
   if(writeMode()==='cubes') return ''; // английский: один режим, переключателя нет
   const m=writeMode();
@@ -4535,15 +4550,17 @@ function cubesBankLetters(it){
 function renderCubesCard(area){
   if(cubeLayout()==='fanfare'){ renderFanfareCard(area); return; }
   const it=writeCurItem;
-  const {cells, letters}=writeCells(it);
+  const {cells, letters}=writeCellsCubes(it);
   const {bank}=cubesBankLetters(it);
   const rtl=langInfo().rtl;
   cubesState={layout:'film', cells, letters, bank, pos:0};
-  // «Киноплёнка»: одна горизонтальная лента ячеек; пробел = зазор между словами.
-  // data-li — глобальный индекс буквы (gap без data-li). rtl — справа налево.
+  // «Киноплёнка»: одна горизонтальная лента ячеек; пробел = зазор, знак = авто-ячейка.
+  // data-li — глобальный индекс буквы (gap/punct без data-li). rtl — справа налево.
   const film=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
-    : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
+    : c.punct
+      ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
+      : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
     <div class="cube-film ${rtl?'rtl':''}" id="cubeFilm">${film}</div>
@@ -4552,6 +4569,7 @@ function renderCubesCard(area){
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
   });
+  focusCubeArea();
 }
 // ---------- «Фанфары»: набираем по кускам, собранное уезжает на строку вверх ----------
 function renderFanfareCard(area){
@@ -4569,8 +4587,8 @@ function loadFanfareChunk(area){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
   const words=s.chunks[s.chunkIdx]||[];
   const text=words.join(' ');
-  // буквы текущего куска без пробелов (для набора), cells — с пробелами (для отрисовки)
-  const {cells, letters}=writeCells({hanzi:text});
+  // буквы текущего куска без пробелов (для набора), cells — с пробелами/знаками (для отрисовки)
+  const {cells, letters}=writeCellsCubes({hanzi:text});
   s.letters=letters; s.cells=cells; s.pos=0;
   s.bank=cubesBankForLetters(letters);
   const it=s.it;
@@ -4578,7 +4596,9 @@ function loadFanfareChunk(area){
   const rtl=langInfo().rtl;
   const chunkHtml=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
-    : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
+    : c.punct
+      ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
+      : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
   const remaining=(s.chunks.length-1)-s.chunkIdx;
   const ghost=(remaining>0)?`<span class="fanfare-ghost">(ещё ${remaining} кус.)</span>`:'';
   area.innerHTML=writeCardWrap(`
@@ -4590,6 +4610,7 @@ function loadFanfareChunk(area){
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
   });
+  focusCubeArea();
 }
 function paintFanfare(area){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
@@ -4607,13 +4628,22 @@ function fanfareGood(){
   const it=s.it;
   const words=s.chunks[s.chunkIdx]||[];
   s.built.push(words.join(' '));
+  const area=document.getElementById('writeArea');
   if(s.chunkIdx>=s.chunks.length-1){
-    // вся фраза собрана
-    writeGood(it);
+    // Вся фраза собрана: показать её целиком ещё 1 секунду (фокус на ней), затем переход.
+    paintFanfare(area);
+    const builtEl=area.querySelector('#fanfareBuilt');
+    if(builtEl){ builtEl.classList.add('done'); }
+    // блокируем ввод на время показа, чтобы случайные клавиши не «доиграли»
+    const tok=writeToken;
+    cubesState=null;
+    setTimeout(()=>{
+      if(writeToken===tok && writeCurItem) writeGood(it);
+    }, 1000);
     return;
   }
   s.chunkIdx++;
-  loadFanfareChunk(document.getElementById('writeArea'));
+  loadFanfareChunk(area);
 }
 // Лёгкий «клик» при нажатии кубика (Web Audio, ленивый контекст) + короткая вибрация.
 // Звук в духе клавиатуры iPhone: короткий щелчок из белого шума (полосовой фильтр + быстрое
@@ -4702,6 +4732,9 @@ document.addEventListener('keydown', e=>{
   if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable)) return;
   if(!document.getElementById('scr-write').classList.contains('active')) return;
   if(activeLang!=='en') return;
+  // Пробел/Enter в режиме кубиков ничего не должны делать (пробел — это автозазор между
+  // словами): иначе они «нажимают» сфокусированную кнопку (Назад/Вперёд/кубик).
+  if(e.key===' '||e.key==='Spacebar'||e.key==='Enter'){ e.preventDefault(); return; }
   if(!cubesState) return;
   const k=e.key;
   if(k.length!==1 || !/[a-z]/i.test(k)) return;
@@ -4710,6 +4743,13 @@ document.addEventListener('keydown', e=>{
   e.preventDefault();
   cubeTap(bi);
 });
+// Фокус всегда на области кубиков (не на кнопке) — пробел/Enter не «залипают» на кнопках.
+function focusCubeArea(){
+  const area=document.getElementById('writeArea');
+  if(!area) return;
+  if(!area.hasAttribute('tabindex')) area.setAttribute('tabindex','-1');
+  try{ area.focus({preventScroll:true}); }catch(e){ try{ area.focus(); }catch(e2){} }
+}
 function updateCubeOrderBar(){
   const bar=document.getElementById('cubeOrderBar'); if(!bar) return;
   // переключатель порядка кубиков и режима (кинолента/фанфары) — только для английского
