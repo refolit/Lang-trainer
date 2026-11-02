@@ -416,6 +416,12 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .flg svg{display:block; width:100%; height:100%}
 #langSeg .nm{white-space:nowrap}
 .cf-apply-row{position:sticky; bottom:-20px; margin:12px -16px -20px; padding:10px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--bg); border-top:1px solid var(--line)}
+/* Выбор языка при первом входе */
+.lang-choice-list{display:flex; flex-direction:column; gap:8px; margin-top:14px}
+.lang-choice{display:flex; align-items:center; gap:12px; padding:12px 14px; border:1.5px solid var(--line); border-radius:14px; background:var(--card); cursor:pointer; font-size:15px; font-weight:600; color:var(--ink)}
+.lang-choice .flg{width:26px; height:18px}
+.lang-choice:active{transform:scale(.985)}
+.lang-choice .lc-sub{margin-left:auto; font-size:12px; font-weight:400; color:var(--mut)}
 
 /* Экран конфликтов синхронизации (Фаза 8) */
 .muted{font-size:12px; color:var(--mut)}
@@ -1184,6 +1190,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalSyncConflicts"></div>
 <div class="modal hidden" id="modalTrash"></div>
 <div class="modal hidden" id="modalAdmin"></div>
+<div class="modal hidden" id="modalLangChoice"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
@@ -7393,6 +7400,33 @@ function sampleData(skipConfirm){
   }
   persist().then(()=>{ renderDict(); updateChips(); toast('Примеры добавлены'); });
 }
+// Первый вход: спросить, какой язык изучать. Показывается один раз (флаг settings.langChosen).
+// Выбранный язык сразу становится активным (как будто нажали в «Настройки → Язык»).
+function offerLangChoice(){
+  if(settings.langChosen) return;
+  settings.langChosen=true; persist(); // спрашиваем один раз; если закрыли не выбрав — не мешаем снова
+  const m=document.getElementById('modalLangChoice');
+  const rows=LANGS.map(l=>{
+    const sub=(SAMPLES[l.code]&&SAMPLES[l.code].length)?('стартовый набор: '+SAMPLES[l.code].length+' сл.'):'';
+    return `<button type="button" class="lang-choice" data-lang="${l.code}">
+      <span class="flg">${flagSVG(l.code)}</span>
+      <span>${escapeHtml(l.name)}</span>
+      ${sub?`<span class="lc-sub">${sub}</span>`:''}
+    </button>`;
+  }).join('');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Какой язык изучать?</h2></div>
+    <div class="muted" style="margin-top:4px">Можно поменять позже в «Ещё → Настройки → Язык».</div>
+    <div class="lang-choice-list">${rows}</div>
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelectorAll('.lang-choice').forEach(b=>{
+    b.onclick=async ()=>{
+      m.classList.add('hidden');
+      await setLang(b.dataset.lang);
+    };
+  });
+}
 // Разовая оферта на первом входе в пустой язык (boot и setLang): спросить и, если
 // согласились, добавить стартовый набор. Показывается только когда у языка ещё нет слов.
 async function maybeOfferSamples(){
@@ -8684,7 +8718,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',dir:'fr',foreignAudio:true,foreignVoice:'',ruAudio:true,ruVoice:'',sessN:0,activeLang:'zh'}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',dir:'fr',foreignAudio:true,foreignVoice:'',ruAudio:true,ruVoice:'',sessN:0,activeLang:'zh',langChosen:false}, ...((await DB.get(SET))||{})};
   // Миграция 1.10.0: направление и голос «Учить» переехали в глобальные dir/foreignVoice.
   if(settings.dir==null){ settings.dir=settings.studyDir||'fr'; }
   if(settings.foreignVoice==null){ settings.foreignVoice=settings.studyVoice||''; }
@@ -8737,6 +8771,7 @@ async function boot(){
   renderLangSeg();
   await persist();
   await purgeExpiredTrash();   // автоочистка Корзины: удалённое старше 30 дней стираем навсегда
+  offerLangChoice();   // первый вход — предложить выбрать изучаемый язык
   maybeOfferSamples();
   refreshSyncUI();
   bindSettings();
