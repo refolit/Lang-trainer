@@ -710,6 +710,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .mode-top .study-gear.light:hover{background:var(--soft)}
 /* Письмо: строка «◀ Назад» / «Вперёд ▶» и шестерёнка теперь ВНИЗУ, над нижним меню
    (как статус-строка «Учить»); вверху остаётся только кликабельная подсказка-иероглиф. */
+.cube-order{width:100%; max-width:620px; margin:8px auto 0}
+.cube-order .seg.sm{flex-wrap:wrap}
+.cube-order .seg.sm button{flex:1 1 auto; white-space:nowrap; padding:6px 10px}
 .write-bottom{display:flex; align-items:center; gap:10px; margin:10px auto 0; width:100%; max-width:620px}
 .write-bottom .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; min-height:44px}
 .write-bottom #writePrev{flex-grow:1}
@@ -981,6 +984,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div id="writeArea"></div>
       <div class="bigpy" id="writePy"></div>
       <div id="writeTr"></div>
+    </div>
+    <div class="cube-order hidden" id="cubeOrderBar">
+      <div class="seg sm" id="cubeOrderSeg">
+        <button data-v="shuffle" class="active">Вразброс</button>
+        <button data-v="vowels">Гласные вначале</button>
+        <button data-v="alpha">По алфавиту</button>
+      </div>
     </div>
     <div class="write-bottom">
       <span class="flt-mode-badge hidden" id="writeFltBadge"></span>
@@ -1272,6 +1282,7 @@ let settings = {
   hint:2, voiceURI:'', studyVoice:'', mulH:1, mulP:1, mulT:1,
   writeOrder:'rand', writeHint:'on', writeHintSize:1, writeNavSize:1,   // П.6/8/9 «22.26»: Рандом и подсказка вкл по умолчанию
   writeInput:'wordle',                                                   // режим письма для языков без кисти: type|wordle|letters
+  cubeOrder:'shuffle',                                                   // порядок кубиков (en): shuffle|vowels|alpha
   dir:'fr', foreignAudio:true, foreignVoice:'', ruAudio:true, ruVoice:''
 };
 let stats = { streak:0, lastDay:'', activity:{} };
@@ -1300,7 +1311,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.21';
+const APP_VERSION='1.9.22';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1366,6 +1377,7 @@ async function setLang(lang){
   if('speechSynthesis' in window) loadVoices(); // заново подбираем голоса под язык
   await persist();
   refreshAll();
+  updateCubeOrderBar(); // язык сменился → показать/скрыть переключатель порядка кубиков
   renderGlobalAudioSettings(); // язык сменился → перерисовать названия/варианты голосов
   maybeOfferSamples();
   // в фоне: сохраняем выбор языка в профиль (не блокируем интерфейс)
@@ -4128,6 +4140,7 @@ function startWrite(focusIt){
   Player.stop();
   enterSession();
   loadWritePrefs(); applyWriteToggles();
+  updateCubeOrderBar();
   const all=writableItems();
   if(!all.length){
     document.getElementById('writeWord').innerHTML='';
@@ -4428,6 +4441,8 @@ function checkLetters(){
 // к следующей позиции не перейти. Неверная — кубик мигает красным и возвращается в набор.
 let cubesState=null;
 const CUBES_EXTRA=10;
+const CUBES_VOWELS=new Set(['a','e','i','o','u','y']);
+function cubeOrder(){ const o=settings.cubeOrder; return (o==='vowels'||o==='alpha')?o:'shuffle'; }
 function cubesBankLetters(it){
   const t=writeTarget(it);                     // буквы слова (без пунктуации/пробелов)
   const need=writeCells(it).letters;           // уникальные буквы, сохраняя первое появление
@@ -4438,7 +4453,21 @@ function cubesBankLetters(it){
   const pool=alpha.filter(c=>!uniq.includes(c));
   shuffle(pool);
   const extra=pool.slice(0, CUBES_EXTRA);
-  const bank=shuffle([...uniq, ...extra]);
+  const all=[...uniq, ...extra];
+  // Порядок кубиков: shuffle — рандом; vowels — гласные (a e i o u + y) вначале, потом согласные
+  // (внутри групп — рандом); alpha — строгий алфавитный порядок.
+  const order=cubeOrder();
+  let bank;
+  if(order==='vowels'){
+    const v=all.filter(c=>CUBES_VOWELS.has(c));
+    const c=all.filter(c=>!CUBES_VOWELS.has(c));
+    shuffle(v); shuffle(c);
+    bank=[...v, ...c];
+  }else if(order==='alpha'){
+    bank=all.slice().sort();
+  }else{
+    bank=shuffle(all.slice());
+  }
   return {uniq, extra, bank};
 }
 function renderCubesCard(area){
@@ -4495,6 +4524,24 @@ function paintCubes(area){
     if(li<s.pos){ sl.textContent=s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
     else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); }
   });
+}
+function updateCubeOrderBar(){
+  const bar=document.getElementById('cubeOrderBar'); if(!bar) return;
+  // переключатель порядка кубиков — только для английского (режим «кубики»)
+  if(activeLang==='en'){
+    bar.classList.remove('hidden');
+    const seg=document.getElementById('cubeOrderSeg');
+    seg.querySelectorAll('button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.v===cubeOrder());
+      b.onclick=()=>{
+        seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+        settings.cubeOrder=b.dataset.v; persist();
+        if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false); // перерисовать кубики в новом порядке
+      };
+    });
+  }else{
+    bar.classList.add('hidden');
+  }
 }
 function renderTypeCardsHint(){
   const el=document.getElementById('writeWord');
@@ -5936,6 +5983,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.22','02.11.26','Письмо (английский): переключатель порядка кубиков над кнопкой «Назад» — «Вразброс» (рандом, по умолчанию), «Гласные вначале» (a e i o u + y, затем согласные) и «По алфавиту». Выбор сохраняется. Длинные фразы переносятся по границам слов (каждое слово на своей строке), нижний список слов убран, починена прокрутка на телефоне.'],
   ['1.9.21','02.11.26','Письмо для языков без иероглифов (en/tr/ar): три режима с переключателем вверху карточки — «⌨️ Печать» (целое слово), «🟩 Побуквенно» (ячейки как в Wordle: зелёная — буква на месте, жёлтая — есть в слове, серая — нет) и «🔤 Собери из букв» (перемешанный банк букв, тап ставит букву в свободный слот, тап по слоту возвращает, «⌫» убирает последнюю; автопроверка при заполнении). Выбор сохраняется. Английская транскрипция пересобрана на полный словарь en_UK (~65 тыс. словоформ) — длинные фразы больше не обрезаются (каждому слову — своя транскрипция).'],
   ['1.9.20','01.11.26','Вход переведён с магической ссылки на email + пароль: работает на любом устройстве и в любом браузере (письмо больше не нужно открывать в том же браузере). Окно входа стало двухвкладочным: «Вход» (email + пароль) и «Регистрация» (создать аккаунт). В аккаунте добавлена кнопка «Сменить пароль». При первом входе по старой ссылке сразу предлагается установить пароль (кнопка «Позже» откладывает).'],
   ['1.9.19.2','29.10.26','Учить → «Листание»: иероглиф больше не «прыгает» — строки пиньиня и перевода резервируют место изначально (visibility вместо display), карточка не смещается по мере появления строк; клик по правому краю экрана во время листания мгновенно переключает на следующий иероглиф.'],
