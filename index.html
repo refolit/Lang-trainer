@@ -320,6 +320,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .dc-cols{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; align-items:baseline; min-width:0}
 .dc{min-width:0; overflow-wrap:anywhere}
 .dc.zh{font-family:var(--font-cjk); font-size:24px; font-weight:600}
+/* Языки без иероглифов (en/tr/ar): первый столбик тем же шрифтом, что перевод (3-й столбик) */
+.dc.zh.nonzh{font-family:inherit; font-size:14px; font-weight:700}
 .dc.py{color:#1565c0; font-size:14px; font-weight:700; white-space:pre-wrap}
 html[data-theme="dark"] .dc.py{color:#7db8f2}
 html[data-theme="navy"] .dc.py{color:#7db8f2}
@@ -1728,7 +1730,13 @@ function toPinyin(s){
 function enIpaOfWord(w){
   if(!window.__EN_IPA__) return '';
   const key=String(w||'').toLowerCase().replace(/[^a-z'-]/g,'');
-  return (key && window.__EN_IPA__[key]) || '';
+  const raw=(key && window.__EN_IPA__[key]) || '';
+  if(!raw) return '';
+  // у части слов в словаре несколько произношений через запятую/«;»/«|»
+  // (напр. the → /ðə, ði/): берём только первое — обычному пользователю
+  // не нужны оба варианта, они выглядят как ошибка.
+  const first=String(raw).split(/[,;|]/)[0].trim();
+  return first;
 }
 function toEnIpa(s){
   if(!window.__EN_IPA__) return '';
@@ -2658,7 +2666,7 @@ function renderDict(){
     return `<div class="card item-line" data-id="${it.id}">
       <div class="dict-card">
         <div class="dc-cols">
-          <div class="dc zh">${escapeHtml(it.hanzi)}</div>
+          <div class="dc zh ${hasStrokes()?'':'nonzh'}">${escapeHtml(it.hanzi)}</div>
           <div class="dc py">${escapeHtml(pinyinOf(it)||'')}</div>
           <div class="dc tr">${escapeHtml(trJoined(it)||'')}</div>
         </div>
@@ -2727,7 +2735,7 @@ function askDeleteCard(id){
     <div class="row"><h2>В корзину</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalDelete')">✕</button></div>
     <div style="margin-top:8px;font-size:15px;font-weight:600;color:var(--ink)">Убрать это слово в Корзину?<br><span style="font-weight:400;color:var(--mut)">Слово можно восстановить или удалить навсегда из Корзины.</span></div>
     <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px">
-      <div class="dc zh" style="font-size:22px">${escapeHtml(it.hanzi)}</div>
+      <div class="dc zh ${hasStrokes()?'':'nonzh'}" style="font-size:22px">${escapeHtml(it.hanzi)}</div>
       ${pinyinOf(it)?`<div class="dc py">${escapeHtml(pinyinOf(it))}</div>`:''}
       <div class="dc tr" style="text-align:left">${escapeHtml(trJoined(it)||'')}</div>
     </div>
@@ -2812,7 +2820,7 @@ function renderTrash(){
     ${list.length?`<div class="trash-list">${list.map(it=>`
       <div class="trash-row" data-id="${it.id}">
         <div class="trash-info">
-          <div class="dc zh">${escapeHtml(it.hanzi)}</div>
+          <div class="dc zh ${hasStrokes()?'':'nonzh'}">${escapeHtml(it.hanzi)}</div>
           ${pinyinOf(it)?`<div class="dc py">${escapeHtml(pinyinOf(it))}</div>`:''}
           <div class="dc tr" style="text-align:left">${escapeHtml(trJoined(it)||'')}</div>
           <div class="muted" style="font-size:12px">Удалено ${fmt(it.deleted_at)}</div>
