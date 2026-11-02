@@ -313,6 +313,15 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .cube-film .fslot.gap{width:14px; border:0; background:transparent}
 .cube-film .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
+/* «Фанфары»: собранная фраза сверху (мелким шрифтом, перенос, видна целиком) + текущий кусок по центру */
+.fanfare-built{width:100%; text-align:center; font-size:16px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; margin:4px 0 14px; min-height:1.4em; color:var(--ink)}
+.fanfare-built .sep{color:var(--mut); margin:0 4px}
+.fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px}
+.fanfare-chunk .fslot{flex:0 0 auto; width:34px; height:38px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; text-transform:lowercase; background:var(--card); color:var(--ink); transition:background .12s, border-color .12s}
+.fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
+.fanfare-chunk .fslot.good{background:var(--green); border-color:var(--green); color:#fff}
+.fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
+.fanfare-ghost{color:var(--mut); font-size:14px}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
@@ -723,6 +732,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .cube-order{width:100%; max-width:620px; margin:8px auto 0}
 .cube-order .seg.sm{flex-wrap:wrap}
 .cube-order .seg.sm button{flex:1 1 auto; white-space:nowrap; padding:6px 10px}
+.cube-order #cubeLayoutSeg{margin-top:6px}
+.cube-order #cubeLayoutSeg button{background:var(--soft); color:var(--mut)}
+.cube-order #cubeLayoutSeg button.active{background:var(--red); color:#fff; border-color:var(--red)}
 .write-bottom{display:flex; align-items:center; gap:10px; margin:10px auto 0; width:100%; max-width:620px}
 .write-bottom .btn{flex:1 1 0; min-width:0; padding-left:8px; padding-right:8px; min-height:44px}
 .write-bottom #writePrev{flex-grow:1}
@@ -1000,6 +1012,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <button data-v="shuffle" class="active">Вразброс</button>
         <button data-v="vowels">Гласные вначале</button>
         <button data-v="alpha">По алфавиту</button>
+      </div>
+      <div class="seg sm" id="cubeLayoutSeg">
+        <button data-v="film" class="active">Кинолента</button>
+        <button data-v="fanfare">Фанфары</button>
       </div>
     </div>
     <div class="write-bottom">
@@ -1293,6 +1309,7 @@ let settings = {
   writeOrder:'rand', writeHint:'on', writeHintSize:1, writeNavSize:1,   // П.6/8/9 «22.26»: Рандом и подсказка вкл по умолчанию
   writeInput:'wordle',                                                   // режим письма для языков без кисти: type|wordle|letters
   cubeOrder:'shuffle',                                                   // порядок кубиков (en): shuffle|vowels|alpha
+  cubeLayout:'film',                                                     // режим кубиков (en): film|fanfare
   dir:'fr', foreignAudio:true, foreignVoice:'', ruAudio:true, ruVoice:''
 };
 let stats = { streak:0, lastDay:'', activity:{} };
@@ -1321,7 +1338,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.23';
+const APP_VERSION='1.9.24';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4453,19 +4470,33 @@ let cubesState=null;
 const CUBES_EXTRA=10;
 const CUBES_VOWELS=new Set(['a','e','i','o','u','y']);
 function cubeOrder(){ const o=settings.cubeOrder; return (o==='vowels'||o==='alpha')?o:'shuffle'; }
-function cubesBankLetters(it){
-  const t=writeTarget(it);                     // буквы слова (без пунктуации/пробелов)
-  const need=writeCells(it).letters;           // уникальные буквы, сохраняя первое появление
+// Режим кубиков (en): 'film' — кинолента (по умолчанию), 'fanfare' — фанфары (фраза уезжает наверх).
+function cubeLayout(){ const l=settings.cubeLayout; return (l==='fanfare')?'fanfare':'film'; }
+// Делим фразу на куски по числу символов: короткие слова (артикли/предлоги) идут вместе,
+// длинные — по 1–2 на кусок. Каждый кусок — массив слов.
+function splitFanfareChunks(it){
+  const words=writeTarget(it).split(/\s+/).filter(Boolean);
+  if(!words.length) return [[]];
+  const chunks=[]; let cur=[], curLen=0;
+  const isShort=w=>w.length<=3;                    // артикли/предлоги (a, an, the, of, to, in…)
+  for(const w of words){
+    // новую группу начинаем, если: уже 2 слова, или (короткое слово после длинного и уже есть что-то)
+    // — эвристика: длинное слово = свой кусок; короткие группируются, пока суммарно не слишком длинно.
+    if(cur.length && (cur.length>=2 || !isShort(w) || curLen+w.length>24)){ chunks.push(cur); cur=[]; curLen=0; }
+    cur.push(w); curLen+=w.length+1;
+  }
+  if(cur.length) chunks.push(cur);
+  return chunks;
+}
+function cubesBankForLetters(letters){
+  // общий банк кубиков для набора букв (уникальные + 10 случайных) — используется и в фанфарах
   const uniq=[];
-  for(const ch of need) if(!uniq.includes(ch)) uniq.push(ch);
-  // 10 случайных букв, отличных друг от друга и от букв слова
+  for(const ch of letters) if(!uniq.includes(ch)) uniq.push(ch);
   const alpha='abcdefghijklmnopqrstuvwxyz'.split('');
   const pool=alpha.filter(c=>!uniq.includes(c));
   shuffle(pool);
   const extra=pool.slice(0, CUBES_EXTRA);
   const all=[...uniq, ...extra];
-  // Порядок кубиков: shuffle — рандом; vowels — гласные (a e i o u + y) вначале, потом согласные
-  // (внутри групп — рандом); alpha — строгий алфавитный порядок.
   const order=cubeOrder();
   let bank;
   if(order==='vowels'){
@@ -4478,14 +4509,23 @@ function cubesBankLetters(it){
   }else{
     bank=shuffle(all.slice());
   }
-  return {uniq, extra, bank};
+  return bank;
+}
+function cubesBankLetters(it){
+  // банк кубиков для целой фразы (кино-лента) — уникальные буквы слова + 10 случайных
+  const need=writeCells(it).letters;
+  const bank=cubesBankForLetters(need);
+  const uniq=[];
+  for(const ch of need) if(!uniq.includes(ch)) uniq.push(ch);
+  return {uniq, extra:bank.filter(l=>!uniq.includes(l)), bank};
 }
 function renderCubesCard(area){
+  if(cubeLayout()==='fanfare'){ renderFanfareCard(area); return; }
   const it=writeCurItem;
   const {cells, letters}=writeCells(it);
   const {bank}=cubesBankLetters(it);
   const rtl=langInfo().rtl;
-  cubesState={cells, letters, bank, pos:0};
+  cubesState={layout:'film', cells, letters, bank, pos:0};
   // «Киноплёнка»: одна горизонтальная лента ячеек; пробел = зазор между словами.
   // data-li — глобальный индекс буквы (gap без data-li). rtl — справа налево.
   const film=cells.map((c,i)=> c.gap
@@ -4499,6 +4539,68 @@ function renderCubesCard(area){
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
   });
+}
+// ---------- «Фанфары»: набираем по кускам, собранное уезжает на строку вверх ----------
+function renderFanfareCard(area){
+  const it=writeCurItem;
+  const chunks=splitFanfareChunks(it);
+  // начальное состояние: куски-группы слов, индекс текущего куска, набор букв текущего куска
+  cubesState={
+    layout:'fanfare', it, chunks, chunkIdx:0,
+    // built — массив уже набранных кусков (строками), для верхней строки
+    built:[], letters:[], bank:[], pos:0
+  };
+  loadFanfareChunk(area);
+}
+function loadFanfareChunk(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const words=s.chunks[s.chunkIdx]||[];
+  const text=words.join(' ');
+  // буквы текущего куска без пробелов (для набора), cells — с пробелами (для отрисовки)
+  const {cells, letters}=writeCells({hanzi:text});
+  s.letters=letters; s.cells=cells; s.pos=0;
+  s.bank=cubesBankForLetters(letters);
+  const it=s.it;
+  const builtHtml=s.built.map((w,i)=>`<span>${escapeHtml(w)}</span>${i<s.built.length-1?'<span class="sep">·</span>':''}`).join('');
+  const rtl=langInfo().rtl;
+  const chunkHtml=cells.map((c,i)=> c.gap
+    ? `<div class="fslot gap"></div>`
+    : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
+  const remaining=(s.chunks.length-1)-s.chunkIdx;
+  const ghost=(remaining>0)?`<span class="fanfare-ghost">(ещё ${remaining} кус.)</span>`:'';
+  area.innerHTML=writeCardWrap(`
+    <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
+    <div class="fanfare-built" id="fanfareBuilt">${builtHtml}${builtHtml?' ':''}${ghost}</div>
+    <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
+    <div class="wbank" id="wBank">${s.bank.map((l,bi)=>`<button type="button" class="wletter" data-bi="${bi}">${escapeHtml(l)}</button>`).join('')}</div>`);
+  paintFanfare(area);
+  area.querySelectorAll('#wBank .wletter').forEach(btn=>{
+    btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
+  });
+}
+function paintFanfare(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const chunk=area.querySelector('#fanfareChunk'); if(!chunk) return;
+  let curEl=null;
+  chunk.querySelectorAll('.fslot').forEach(sl=>{
+    const li=Number(sl.dataset.li);
+    if(li<s.pos){ sl.textContent=s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
+    else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); if(li===s.pos) curEl=sl; }
+  });
+}
+// Кусок набран целиком → уходит наверх; если это последний — зачёт фразы.
+function fanfareGood(){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const it=s.it;
+  const words=s.chunks[s.chunkIdx]||[];
+  s.built.push(words.join(' '));
+  if(s.chunkIdx>=s.chunks.length-1){
+    // вся фраза собрана
+    writeGood(it);
+    return;
+  }
+  s.chunkIdx++;
+  loadFanfareChunk(document.getElementById('writeArea'));
 }
 // Лёгкий «клик» при нажатии кубика (Web Audio, ленивый контекст) + короткая вибрация.
 // Звук в духе клавиатуры iPhone: короткий щелчок из белого шума (полосовой фильтр + быстрое
@@ -4547,8 +4649,10 @@ function cubeTap(bi){
     // верная буква — встаёт на место, переход к следующей позиции
     s.pos++;
     tapSound('good'); tapVibrate();
-    paintCubes(area);
-    if(s.pos>=s.letters.length){ writeGood(it); }
+    if(s.layout==='fanfare') paintFanfare(area); else paintCubes(area);
+    if(s.pos>=s.letters.length){
+      if(s.layout==='fanfare'){ fanfareGood(); } else { writeGood(it); }
+    }
   }else{
     // неверная — кубик мигает красным и «исчезает» (остаётся в наборе, позиция не меняется)
     tapSound('bad'); tapVibrate();
@@ -4562,6 +4666,7 @@ function cubeTap(bi){
 }
 function paintCubes(area){
   const s=cubesState; if(!s) return;
+  if(s.layout==='fanfare'){ paintFanfare(area); return; }
   const film=area.querySelector('#cubeFilm'); if(!film) return;
   let curEl=null;
   film.querySelectorAll('.fslot').forEach(sl=>{
@@ -4594,7 +4699,7 @@ document.addEventListener('keydown', e=>{
 });
 function updateCubeOrderBar(){
   const bar=document.getElementById('cubeOrderBar'); if(!bar) return;
-  // переключатель порядка кубиков — только для английского (режим «кубики»)
+  // переключатель порядка кубиков и режима (кинолента/фанфары) — только для английского
   if(activeLang==='en'){
     bar.classList.remove('hidden');
     const seg=document.getElementById('cubeOrderSeg');
@@ -4604,6 +4709,15 @@ function updateCubeOrderBar(){
         seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
         settings.cubeOrder=b.dataset.v; persist();
         if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false); // перерисовать кубики в новом порядке
+      };
+    });
+    const lseg=document.getElementById('cubeLayoutSeg');
+    lseg.querySelectorAll('button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.v===cubeLayout());
+      b.onclick=()=>{
+        lseg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+        settings.cubeLayout=b.dataset.v; persist();
+        if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false); // перерисовать кубики в новом режиме
       };
     });
   }else{
@@ -6050,6 +6164,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.24','03.11.26','Письмо (английский): два режима кубиков — «Кинолента» (прежний, по умолчанию) и «Фанфары» (фраза набирается по кускам, собранные слова уходят на строку вверх и к концу видна вся фраза по центру). Куски делятся по числу символов (короткие слова вместе, длинные — по 1–2).'],
   ['1.9.23','02.11.26','Письмо (английский): набор букв с клавиатуры равнозначен кликам по кубикам.'],
   ['1.9.22','02.11.26','Письмо (английский): переключатель порядка кубиков над кнопкой «Назад» — «Вразброс» (рандом, по умолчанию), «Гласные вначале» (a e i o u + y, затем согласные) и «По алфавиту». Выбор сохраняется. Длинные фразы переносятся по границам слов (каждое слово на своей строке), нижний список слов убран, починена прокрутка на телефоне.'],
   ['1.9.21','02.11.26','Письмо для языков без иероглифов (en/tr/ar): три режима с переключателем вверху карточки — «⌨️ Печать» (целое слово), «🟩 Побуквенно» (ячейки как в Wordle: зелёная — буква на месте, жёлтая — есть в слове, серая — нет) и «🔤 Собери из букв» (перемешанный банк букв, тап ставит букву в свободный слот, тап по слоту возвращает, «⌫» убирает последнюю; автопроверка при заполнении). Выбор сохраняется. Английская транскрипция пересобрана на полный словарь en_UK (~65 тыс. словоформ) — длинные фразы больше не обрезаются (каждому слову — своя транскрипция).'],
