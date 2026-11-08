@@ -1351,7 +1351,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.25';
+const APP_VERSION='1.9.26';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3469,7 +3469,7 @@ function openStudySettings(){
 // ползунок размера: 50–200%, шаг 10; живёт в модалке и меняет mul* через applySizes()
 function studySizeSliderHTML(skey){
   const cur=Math.round((settings[skey]||1)*100);
-  return `<div class="sn-slider"><input type="range" min="50" max="200" step="10" value="${cur}" data-size-key="${skey}"><span class="sn-slider-val" data-val-key="${skey}">${cur}%</span></div>`;
+  return `<div class="sn-slider"><input type="range" min="50" max="250" step="10" value="${cur}" data-size-key="${skey}"><span class="sn-slider-val" data-val-key="${skey}">${cur}%</span></div>`;
 }
 function renderStudySettings(){
   const m=document.getElementById('modalStudySettings');
@@ -3516,17 +3516,17 @@ function shuffle(a){
 function studyPool(opt){
   opt=opt||{};
   const all=filteredLangItems().filter(it=>it.translation && (!opt.seenSet || !opt.seenSet.has(it.id)));
-  const seen=it=>(it.lastSeen||it.nextDue||0);
   let due=all.filter(isDue);
   if(opt.ahead && !due.length && all.length){
     let horizon=Infinity;
     for(const it of all){ const nd=it.nextDue||0; if(nd>now() && nd<horizon) horizon=nd; }
     if(horizon!==Infinity) due=all.filter(it=>(it.nextDue||0)<=horizon);
   }
-  return [].concat(
-    due.filter(it=>it.starred).sort((a,b)=>seen(a)-seen(b)),
-    due.filter(it=>!it.starred).sort((a,b)=>seen(a)-seen(b))
-  );
+  // звёзды и обычные — отдельными группами; внутри каждой порядок случайный (правки 1.9.26)
+  const starred=due.filter(it=>it.starred);
+  const rest=due.filter(it=>!it.starred);
+  shuffle(starred); shuffle(rest);
+  return [].concat(starred, rest);
 }
 function queueStudy(opt){
   const due=studyPool(opt);
@@ -3624,8 +3624,9 @@ const STUDY_HZ_MOBILE=100, STUDY_HZ_DESKTOP=91;
 const STUDY_PY_MOBILE=38, STUDY_PY_DESKTOP=35;
 const STUDY_TR_MOBILE=27, STUDY_TR_DESKTOP=21;
 const STUDY_HZ_EN_DESKTOP=64, STUDY_TR_EN_DESKTOP=25; // английский на десктопе: слово/перевод меньше
-const STUDY_HZ_RF_MOBILE=64, STUDY_HZ_RF_DESKTOP=52;  // «Русский→Кит.»: русский в центре (rf)
-const STUDY_TR_RF_MOBILE=40, STUDY_TR_RF_DESKTOP=36;  // «Русский→Кит.»: иероглиф в поле «Перевод» (rf)
+const STUDY_HZ_RF_MOBILE=33, STUDY_HZ_RF_DESKTOP=27;  // «Русский→Кит.»: русский в центре (rf)
+const STUDY_PY_RF_MOBILE=34, STUDY_PY_RF_DESKTOP=29;  // «Русский→Кит.»: пиньинь
+const STUDY_TR_RF_MOBILE=55, STUDY_TR_RF_DESKTOP=39;  // «Русский→Кит.»: иероглиф в поле «Перевод» (rf)
 const STUDY_SENT_RATIO=1;          // предложение: тот же размер, что стандарт
 const STUDY_SENT_BREAK=5;         // порог: 1..4 иероглифа — стандарт, 5+ — предложение
 const STUDY_SENT_MIN=0.52;        // предложение: нижняя граница масштаба (не сжимаем в ноль)
@@ -3657,7 +3658,7 @@ function studyFonts(chars, mult, rf){
   const hzMul = rf ? mulT : mulH;
   const trMul = rf ? mulH : mulT;
   const hz=hzBase*STUDY_SENT_RATIO*hzMul*cur;
-  const py=(desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE)*mulP*Math.min(1, cur*1.05);
+  const py=(rf ? (desktop?STUDY_PY_RF_DESKTOP:STUDY_PY_RF_MOBILE) : (desktop?STUDY_PY_DESKTOP:STUDY_PY_MOBILE))*mulP*Math.min(1, cur*1.05);
   const tr=trBase*trMul*Math.min(1, cur*1.05);
   return {desktop, sent, hz, py, tr, cur};
 }
@@ -3683,7 +3684,7 @@ function applyStudySizes(){
 function examMult(){ return { h:settings.examMulH||1, p:settings.examMulP||1, t:settings.examMulT||1 }; }
 // Единый размер текста вопроса в «Экзамене» — тот же, что в «Учить» (иер/пин/пер), но со своими множителями.
 function eqSizesStyle(hanzi, opts){
-  const f=studyFonts(Array.from((hanzi||'')).length, examMult());
+  const f=studyFonts(Array.from((hanzi||'')).length, examMult(), examCurDir==='rf');
   const o=opts||{};
   const lines=[];
   if(o.word){
@@ -5144,23 +5145,20 @@ function examPickTr(it){
 }
 function examChoiceN(){ return examSettings.choiceN||8; }
 function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, match:!!examSettings.match, write:!!examSettings.write}; }
-const EXAM_MIN_GAP=5; // слово нельзя повторить, пока не прошло 5 других заданий
+const EXAM_MIN_GAP=5;      // слово нельзя повторить, пока не прошло 5 других заданий
+const EXAM_WORD_LIMIT=20;  // максимум слов в одной сессии экзамена (каждое — во всех включённых режимах)
 
-// Поточное формирование заданий экзамена. Для каждого слова из очереди — по одному
-// заданию на включённый подрежим (Выбор ответов / Верно-неверно), подрежимы чередуются.
-// Правила выбора слова в каждом новом задании:
-// 1) слово не повторяется дважды подряд (ни внутри подрежима, ни при переходе);
-// 2) слово не возвращается, пока не прошло минимум 5 ДРУГИХ заданий (фильтр поверх
-//    стратегии: если слово подходит по приоритету раньше — пропускается, берётся следующее);
-// 3) если слов меньше 5 — отступ «по возможности»: сначала исключаются недавние повторы,
-//    затем берётся то слово, которое «отдыхало» дольше всех.
+// Поточное формирование заданий экзамена. Пул — слова с НАСТУПИВШИМ сроком (due) и не выученные
+// (коробки 1–4); звёзды всегда в пуле. Выученные (коробка 5) в экзамен не попадают.
+// Правила (стратегия «SRS по коробкам», 1.9.26):
+// 1) до EXAM_WORD_LIMIT слов на сессию; каждое слово — во ВСЕХ включённых подрежимах;
+// 2) новые слова — не больше SRS_NEW_PER_SESS за сессию;
+// 3) порядок случайный с приоритетом низким коробкам (коробка 1 чаще коробки 4);
+// 4) слово не повторяется, пока не прошло EXAM_MIN_GAP других заданий.
 function examBuildSeq(){
   const sep=examModes();
-  // Пул экзамена — ВСЕ отфильтрованные слова (без учёта SRS-сроков): иначе с активным фильтром
-  // (напр. «уровень 1») экзамен брал только «due сегодня» слова и при их нехватке показывал
-  // пустое окно, хотя фильтр отобрал 18 слов. Явный фильтр «Повторить сегодня (due)» работает
-  // внутри filteredLangItems(). Регрессия 1.9.18 (due стал календарным).
-  const pool=filteredLangItems().filter(it=>it.translation);
+  // Пул экзамена: due-слова коробок 1–4 + звёзды (даже если не due). Выученные исключены.
+  const all=filteredLangItems().filter(it=>it.translation && !isLearned(it));
   const modeOrder=[];
   if(sep.choice) modeOrder.push('choice');
   if(sep.tf) modeOrder.push('tf');
@@ -5170,26 +5168,52 @@ function examBuildSeq(){
   if(sep.match) modeOrder.push('match');
   // письмо: одно слово на задание; участвует в ротации только если есть что писать
   if(sep.write && examWritePool().length) modeOrder.push('write');
-  if(!modeOrder.length || !pool.length) return [];
-  const total=pool.length*modeOrder.length;
+  if(!modeOrder.length) return [];
+  // due: звёзды всегда, остальные — по сроку; новое слово (nextDue=0) всегда due.
+  let due=all.filter(it=>it.starred || (it.nextDue||0)<=now());
+  // при активном фильтре (напр. «уровень 1») due может оказаться пустым, хотя фильтр отобрал
+  // слова — тогда не показываем пустое окно, а берём все отфильтрованные невыученные слова.
+  if(!due.length && all.length) due=all;
+  // лимит новых за сессию
+  const newW=due.filter(isNewWord);
+  shuffle(newW);
+  const newSlice=newW.slice(0, SRS_NEW_PER_SESS);
+  const oldW=due.filter(it=>!isNewWord(it));
+  // рандом с приоритетом низким коробкам: чем меньше коробка, тем выше вес при выборе.
+  shuffle(oldW);
+  const weight=it=>{ const b=normBox(it); return 5-b; };  // коробка 1→4, коробка 4→1
+  const pickWeighted=(arr)=>{
+    let sum=0; for(const it of arr) sum+=weight(it);
+    let r=Math.random()*sum;
+    for(const it of arr){ r-=weight(it); if(r<=0) return it; }
+    return arr[arr.length-1];
+  };
+  // итоговый список слов сессии: новые первыми (перемешанные), затем старые по весу коробок
+  const words=[];
+  while(newSlice.length) words.push(newSlice.shift());
+  while(oldW.length && words.length<EXAM_WORD_LIMIT){
+    const it=pickWeighted(oldW);
+    oldW.splice(oldW.indexOf(it),1);
+    words.push(it);
+  }
+  while(newSlice.length && words.length<EXAM_WORD_LIMIT) words.push(newSlice.shift());
+  if(!words.length) return [];
+  // Последовательность заданий: каждое слово — во всех включённых режимах. Режимы слова идут
+  // в случайном порядке, а сами слова чередуются по раундам (round-robin), чтобы одно слово
+  // не показывалось подряд и соблюдался отступ EXAM_MIN_GAP.
   const seq=[];
-  const last={}; // id -> индекс задания, где слово показывалось в последний раз
-  for(let t=0;t<total;t++){
-    const mode=modeOrder[t%modeOrder.length];
-    let pick=null, bestScore=-Infinity;
-    for(let p=0;p<pool.length;p++){
-      const cand=pool[p];
-      const lastT=last[cand.id];
-      const never=lastT===undefined;
-      const gap=never?Infinity:(t-lastT-1);          // сколько заданий прошло после последнего показа
-      const eligible=never || gap>=EXAM_MIN_GAP;
-      const rest=never?(1000000-p):(t-lastT);        // отдохнул дольше = раньше в очереди
-      const score=(eligible?1000000000:0)+rest;
-      if(score>bestScore){ bestScore=score; pick=cand; }
+  const remaining=words.map(w=>({it:w, modes:modeOrder.slice()}));
+  // раунд: проходим слова по кругу; каждое слово отдаёт один случайный режим из своих оставшихся
+  while(true){
+    let progressed=false;
+    for(const rec of remaining){
+      if(!rec.modes.length) continue;
+      const mi=Math.floor(Math.random()*rec.modes.length);
+      const mode=rec.modes.splice(mi,1)[0];
+      seq.push({it:rec.it, mode});
+      progressed=true;
     }
-    if(!pick) break;
-    last[pick.id]=t;
-    seq.push({it:pick, mode});
+    if(!progressed) break;
   }
   return seq;
 }
@@ -5324,7 +5348,7 @@ function toggleExamAllTr(){
 // Ползунок размера текста в настройках экзамена: 50–200 %, шаг 10 (отдельный от «Учить»).
 function examSizeSliderHTML(skey, label){
   const cur=Math.round((settings[skey]||1)*100);
-  return `<div class="sn-slider"><span class="sn-slider-lab">${escapeHtml(label)}</span><input type="range" min="50" max="200" step="10" value="${cur}" data-exam-size="${skey}"><span class="sn-slider-val" data-exam-size-val="${skey}">${cur}%</span></div>`;
+  return `<div class="sn-slider"><span class="sn-slider-lab">${escapeHtml(label)}</span><input type="range" min="50" max="250" step="10" value="${cur}" data-exam-size="${skey}"><span class="sn-slider-val" data-exam-size-val="${skey}">${cur}%</span></div>`;
 }
 // Мгновенно применяет размеры текста к текущему вопросу экзамена (не трогает озвучку).
 function applyExamSizes(){
@@ -5332,7 +5356,7 @@ function applyExamSizes(){
   const py=document.querySelector('#examBody .exam-py');
   const tr=document.querySelector('#examBody .eq-tr');
   const hanzi=(w&&w.textContent)||'';
-  const f=studyFonts(Array.from(hanzi).length, examMult());
+  const f=studyFonts(Array.from(hanzi).length, examMult(), examCurDir==='rf');
   if(w){
     w.style.fontSize=f.hz.toFixed(1)+'px';
     w.style.lineHeight=f.sent?'1.3':'1.2';
@@ -6217,6 +6241,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.26','08.11.26','Экзамен: новая стратегия выбора слов «по коробкам» — выученные (коробка 5) больше не попадают, пул это due-слова коробок 1–4 + звёзды, до 20 слов на сессию (каждое — во всех включённых режимах), новых не больше 10, порядок случайный с приоритетом низким коробкам. Учить: порядок слов теперь перемешивается. Размеры «Русский→Китайский»: русский 27/33, пиньинь 29/34, иероглиф 39/55 (ноут/моб). Ползунки размера (Учить и Экзамен) расширены до 250%. Клик по иероглифу в «Учить» проигрывает аудио. Исправлен баг: в экзамене в направлении «рус→кит» слайдеры «Иероглиф» и «Перевод» были перепутаны.'],
   ['1.9.25','03.11.26','Фанфары: набранный кусок анимированно поднимается вверх и встаёт на строку под переводом (слова через пробел, без точек-разделителей и подписи «(ещё N кус.)»). В конце вся фраза показывается красным и держится 2 секунды. Заполненные кубики остаются белыми (буква синяя), активная кнопка «Фанфары»/«Кинолента» — белая, как «Вразброс».'],
   ['1.9.24','03.11.26','Письмо (английский): два режима кубиков — «Кинолента» (прежний, по умолчанию) и «Фанфары» (фраза набирается по кускам, собранные слова уходят на строку вверх и к концу видна вся фраза по центру). Куски делятся по числу символов (короткие слова вместе, длинные — по 1–2).'],
   ['1.9.23','02.11.26','Письмо (английский): набор букв с клавиатуры равнозначен кликам по кубикам.'],
@@ -7865,6 +7890,7 @@ document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
 document.getElementById('studySpeakBtn').onclick=studySpeak;
+document.getElementById('studyHanzi').onclick=studySpeak;
 document.getElementById('studyBrowseBtn').onclick=toggleBrowse;
 document.getElementById('studyTTBack').onclick=()=>studyTransportSeek(-STUDY_SEEK_STEP);
 document.getElementById('studyTTPlay').onclick=studyTransportToggle;
@@ -8687,18 +8713,6 @@ async function doSync(){
       conflictProgress:confProgress, conflictProgressLocal:confProgressLocal, conflictProgressCloud:confProgressCloud
     });
     syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
-    // ДИАГНОСТИКА (временная): если после синка что-то всё ещё «грязное» — распечатать источник.
-    const _dn=dirtyCount();
-    if(_dn>0){
-      console.warn('[sync-diag] осталось грязных: '+_dn);
-      for(const it of items){
-        const c=cloudRecs[it.id];
-        if(c===undefined) console.warn('[sync-diag] card нет в cloudRecs:', it.lang, JSON.stringify(it.hanzi), 'u='+it.updated_at, 'pu='+it.prog_at);
-        else if((it.updated_at||0)>(c.u||0) || (it.prog_at||0)>(c.pu||0)) console.warn('[sync-diag] card новее:', it.lang, JSON.stringify(it.hanzi), 'loc='+it.updated_at+'/'+it.prog_at, 'cloud='+c.u+'/'+c.pu);
-      }
-      if((settings.updated_at||0)>cloudSettingsU) console.warn('[sync-diag] settings новее: loc='+settings.updated_at+' cloud='+cloudSettingsU);
-      for(const lg of Object.keys(statsByLang)) if((statsByLang[lg].updated_at||0)>cloudStatsUOf(lg)) console.warn('[sync-diag] stats['+lg+'] новее: loc='+statsByLang[lg].updated_at+' cloud='+cloudStatsUOf(lg));
-    }
     // П.13: если вкладка «Синхронизация» открыта — сразу обновляем её журнал после успешного синка
     if(moreTab==='sync') renderSyncPanel();
   }catch(e){
