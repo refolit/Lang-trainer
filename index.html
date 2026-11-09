@@ -1356,7 +1356,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.28';
+const APP_VERSION='1.9.29';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -5180,6 +5180,20 @@ function examPickTr(it){
 }
 function examChoiceN(){ return examSettings.choiceN||8; }
 function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, match:!!examSettings.match, write:!!examSettings.write}; }
+// Группа длины иероглифа: 1 / 2 / 3–4 / 5+ (предложение). По ней подбираем дистракторы,
+// чтобы нельзя было угадать ответ «по размеру»: и в выборе ответов, и в верно-неверно.
+function examHzLenBucket(n){ return n<=1?1:(n===2?2:(n<=4?3:4)); }
+// Китайский: пул слов языка, отсортированный для правдоподобного дистрактора —
+// сначала той же группы длины, что у `target` (число иероглифов), дальше ближайшие по длине.
+function examHzDistractors(target, excludeId){
+  const tlen=Array.from(target).length, tb=examHzLenBucket(tlen);
+  const pool=langItems().filter(x=>x.id!==excludeId && trList(x).length && x.hanzi);
+  const same=[], rest=[];
+  for(const x of pool){ (examHzLenBucket(Array.from(x.hanzi).length)===tb ? same : rest).push(x); }
+  shuffle(same);
+  rest.sort((a,b)=>Math.abs(Array.from(a.hanzi).length-tlen)-Math.abs(Array.from(b.hanzi).length-tlen));
+  return same.concat(rest);
+}
 const EXAM_MIN_GAP=5;      // слово нельзя повторить, пока не прошло 5 других заданий
 const EXAM_WORD_LIMIT=20;  // максимум слов в одной сессии экзамена (каждое — во всех включённых режимах)
 
@@ -5693,8 +5707,17 @@ function renderExamTF(q){
   let back=rf ? it.hanzi : examPickTr(it);
   if(!showOk){
     // Неверная пара подбирается с ОБРАТНОЙ стороны: в fr — другой перевод, в rf — другой иероглиф.
-    const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>rf?x.hanzi:examPickTr(x));
-    if(others.length) back=others[Math.floor(Math.random()*others.length)];
+    // Китайский: дистрактор той же длины иероглифа, что у правильного (сложнее угадать «по размеру»);
+    // остальные языки — случайно, как раньше. Одинаковый с правильным ответ не показываем.
+    let pick;
+    if(activeLang==='zh'){
+      const ordered=examHzDistractors(it.hanzi, it.id);
+      pick=ordered.map(x=>rf?x.hanzi:examPickTr(x)).find(v=>v && v!==back);
+    }else{
+      const others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>rf?x.hanzi:examPickTr(x));
+      pick=others.find(v=>v && v!==back) || others[Math.floor(Math.random()*others.length)];
+    }
+    if(pick) back=pick;
   }
   const py=it.pinyin||pinyinOf(it)||'';
   const body=document.getElementById('examBody');
@@ -5761,15 +5784,21 @@ function renderExamChoice(q){
     let correct, others, isRight;
     if(rf){
       correct=it.hanzi;
-      others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>x.hanzi);
+      if(activeLang==='zh'){
+        // Дистракторы той же группы длины, что и ответ (угадывать сложнее); не хватает — ближайшие по длине.
+        others=examHzDistractors(it.hanzi, it.id).map(x=>x.hanzi);
+      }else{
+        others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>x.hanzi);
+        shuffle(others);
+      }
       isRight=(o)=>o===it.hanzi;
     }else{
       correct=examPickTr(it);
       others=langItems().filter(x=>x.id!==it.id&&trList(x).length).map(x=>examPickTr(x));
+      shuffle(others);
       isRight=(o)=>trList(it).includes(o);
     }
     const opts=[correct];
-    shuffle(others);
     for(const o of others){
       if(opts.length>=N) break;
       if(opts.includes(o) || trList(it).includes(o)) continue;
@@ -6280,6 +6309,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.29','10.11.26','Экзамен «Верно-неверно» (китайский): неверная пара подбирается по числу иероглифов — тот же класс длины, что у правильного слова (1 / 2 / 3–4 / 5+), не хватает — ближайшие по длине. Работает в обоих направлениях: «рус→кит» подбирает иероглиф, «кит→рус» — перевод слова той же длины. Выбор ответов переведён на общие хелперы той же логики.'],
   ['1.9.28','09.11.26','Экзамен «Выбор ответов» в направлении «рус→кит»: варианты-иероглифы теперь крупные (32px тел / 38px ноут, длинная фраза 22/26px) со CJK-шрифтом — размер по роли варианта. Переводы (кит→рус) и слова en/tr/ar не изменились (14/19px).'],
   ['1.9.27','08.11.26','Китайский «Учить»/«Экзамен»: размеры карточки теперь по роли текста, единые на всех устройствах — иероглиф 80px, пиньинь 30px, перевод 30px (на 100%). Длинные фразы сжимают только иероглиф (до ~50px), пиньинь и перевод не сжимаются и переносятся. Исправлен баг «вперемешку»: направление карточки запоминается и больше не меняется при «Назад/Вперёд».'],
   ['1.9.26','08.11.26','Экзамен: новая стратегия выбора слов «по коробкам» — выученные (коробка 5) больше не попадают, пул это due-слова коробок 1–4 + звёзды, до 20 слов на сессию (каждое — во всех включённых режимах), новых не больше 10, порядок случайный с приоритетом низким коробкам. Учить: порядок слов теперь перемешивается. Размеры «Русский→Китайский»: русский 27/33, пиньинь 29/34, иероглиф 39/55 (ноут/моб). Ползунки размера (Учить и Экзамен) расширены до 250%. Клик по иероглифу в «Учить» проигрывает аудио. Исправлен баг: в экзамене в направлении «рус→кит» слайдеры «Иероглиф» и «Перевод» были перепутаны.'],
