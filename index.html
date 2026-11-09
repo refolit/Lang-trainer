@@ -901,6 +901,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
 .exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
 .exam-opt{font-size:14px; padding:12px 8px; min-height:70px; word-break:break-word}
+/* Вариант-иероглиф (китайский, направление рус→кит): крупный CJK-шрифт; длинная фраза сжимается */
+.exam-opt.hz{font-family:var(--font-cjk); font-size:32px; line-height:1.3; padding:14px 10px; min-height:80px}
+.exam-opt.hz.sent{font-size:22px; line-height:1.4}
 
 .match-col{display:grid; grid-template-rows:repeat(5, minmax(72px, 1fr)); gap:10px; align-content:stretch}
 .match-pair{font-family:var(--font-cjk); font-size:22px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word; overflow-wrap:anywhere}
@@ -915,6 +918,8 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 @media (min-width:1024px){
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
   .exam-opt{font-size:19px; padding:18px 14px; min-height:91px; word-break:break-word}
+  .exam-opt.hz{font-size:38px; line-height:1.3; padding:16px 14px; min-height:96px}
+  .exam-opt.hz.sent{font-size:26px; line-height:1.4}
   .match-pair{font-size:26px; line-height:1.3}
   .match-pair.sent{font-size:19px; line-height:1.35}
   .match-pair.match-txt{font-size:20px; line-height:1.35}
@@ -1351,7 +1356,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.27';
+const APP_VERSION='1.9.28';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -5776,7 +5781,9 @@ function renderExamChoice(q){
     box.innerHTML='';
     opts.forEach(o=>{
       const b=document.createElement('button');
-      b.className='btn sec exam-opt';
+      // вариант-иероглиф (китайский, направление рус→кит) — крупный шрифт CJK, свой размер
+      const isHz = rf && activeLang==='zh';
+      b.className='btn sec exam-opt' + (isHz ? ' hz' : '') + (isHz && Array.from(o).length>=5 ? ' sent' : '');
       const t=document.createElement('span');
       t.className='opt-txt';
       t.textContent=o;
@@ -6273,6 +6280,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.9.28','09.11.26','Экзамен «Выбор ответов» в направлении «рус→кит»: варианты-иероглифы теперь крупные (32px тел / 38px ноут, длинная фраза 22/26px) со CJK-шрифтом — размер по роли варианта. Переводы (кит→рус) и слова en/tr/ar не изменились (14/19px).'],
   ['1.9.27','08.11.26','Китайский «Учить»/«Экзамен»: размеры карточки теперь по роли текста, единые на всех устройствах — иероглиф 80px, пиньинь 30px, перевод 30px (на 100%). Длинные фразы сжимают только иероглиф (до ~50px), пиньинь и перевод не сжимаются и переносятся. Исправлен баг «вперемешку»: направление карточки запоминается и больше не меняется при «Назад/Вперёд».'],
   ['1.9.26','08.11.26','Экзамен: новая стратегия выбора слов «по коробкам» — выученные (коробка 5) больше не попадают, пул это due-слова коробок 1–4 + звёзды, до 20 слов на сессию (каждое — во всех включённых режимах), новых не больше 10, порядок случайный с приоритетом низким коробкам. Учить: порядок слов теперь перемешивается. Размеры «Русский→Китайский»: русский 27/33, пиньинь 29/34, иероглиф 39/55 (ноут/моб). Ползунки размера (Учить и Экзамен) расширены до 250%. Клик по иероглифу в «Учить» проигрывает аудио. Исправлен баг: в экзамене в направлении «рус→кит» слайдеры «Иероглиф» и «Перевод» были перепутаны.'],
   ['1.9.25','03.11.26','Фанфары: набранный кусок анимированно поднимается вверх и встаёт на строку под переводом (слова через пробел, без точек-разделителей и подписи «(ещё N кус.)»). В конце вся фраза показывается красным и держится 2 секунды. Заполненные кубики остаются белыми (буква синяя), активная кнопка «Фанфары»/«Кинолента» — белая, как «Вразброс».'],
