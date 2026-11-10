@@ -2977,8 +2977,17 @@ function openItemModal(id){
   const m=document.getElementById('modalItem');
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>${title}</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalItem')">✕</button></div>
-    <label class="lbl">${hasStrokes()?'Китайский текст':'Слово'}</label>
-    <input type="text" class="${hasStrokes()?'zh':''}" id="fHanzi" dir="${langInfo().rtl?'rtl':'auto'}" value="${escapeHtml(it.hanzi)}" placeholder="${hasStrokes()?'你好':'hello'}">
+    ${(isNewItem && activeLang==='ar') ? `
+      <div class="row" style="gap:10px; align-items:flex-end">
+        <div style="flex:1 1 auto; min-width:0">
+          <label class="lbl">Слово</label>
+          <input type="text" id="fHanzi" dir="rtl" value="${escapeHtml(it.hanzi)}" placeholder="مرحبا" style="width:100%">
+        </div>
+        <button type="button" class="btn sec" id="btnBatchInCard" style="width:auto; flex:0 0 auto; white-space:nowrap">Добавить списком</button>
+      </div>`
+    : `
+      <label class="lbl">${hasStrokes()?'Китайский текст':'Слово'}</label>
+      <input type="text" class="${hasStrokes()?'zh':''}" id="fHanzi" dir="${langInfo().rtl?'rtl':'auto'}" value="${escapeHtml(it.hanzi)}" placeholder="${hasStrokes()?'你好':'hello'}">`}
     ${hasStrokes()?`<label class="lbl">Пиньинь</label>
     <input type="text" id="fPinyin" value="${escapeHtml(it.pinyin||'')}" placeholder="nǐ hǎo">`
     :(activeLang==='en'?`<label class="lbl">Транскрипция</label>
@@ -3004,6 +3013,8 @@ function openItemModal(id){
   </div>`;
   m.classList.remove('hidden');
   m.querySelector('#btnSaveModal').onclick=saveItem;
+  const bBatch=m.querySelector('#btnBatchInCard');
+  if(bBatch) bBatch.onclick=()=>openBatch();
   const delBtn=m.querySelector('#btnDelModal');
   if(delBtn) delBtn.onclick=()=>{ const id=editingItem.id; closeModal('modalItem'); askDeleteCard(id); };
   renderTrFields();
@@ -8020,6 +8031,14 @@ async function wipeAll(){
 // ============================== REFRESH ==============================
 async function refreshAll(){
   renderDict(); renderMore(); updateChips(); renderVersion(); refreshModeFilterBadges();
+  renderToolbar();
+}
+// Состав кнопок словаря зависит от языка: «Молитвы» — только в арабском,
+// «Список» — во всех языках кроме арабского (там он перенесён в карточку добавления слова).
+function renderToolbar(){
+  const isAr = activeLang==='ar';
+  document.getElementById('btnPrayers').style.display = isAr ? '' : 'none';
+  document.getElementById('btnBatch').style.display = isAr ? 'none' : '';
 }
 // ============================== NAV ==============================
 document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.scr));
