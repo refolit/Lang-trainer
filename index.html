@@ -443,6 +443,12 @@ input[type=text],input[type=email],input[type=password],textarea,select{
 }
 input[type=text].zh{font-family:var(--font-cjk); font-size:22px}
 textarea{min-height:110px; resize:vertical; line-height:1.5}
+/* Поле пароля с кнопкой-глазком (показать/скрыть пароль) */
+.pass-wrap{position:relative}
+.pass-wrap input{padding-right:44px}
+.pass-eye{position:absolute; top:50%; right:4px; transform:translateY(-50%); width:36px; height:36px; border:0; background:none; cursor:pointer; color:var(--mut); display:flex; align-items:center; justify-content:center; border-radius:8px; padding:0}
+.pass-eye:hover{color:var(--ink)}
+.pass-eye svg{width:20px; height:20px; display:block; fill:currentColor}
 label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; font-weight:600}
 .seg{display:flex; background:var(--soft); border-radius:12px; padding:3px; gap:3px}
 .seg button{flex:1; border:0; background:none; padding:8px; border-radius:9px; font-size:13px; color:var(--mut); font-weight:600}
@@ -974,6 +980,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       </div>
       <div class="btn-row" style="margin-bottom:10px">
         <button class="btn sec" id="btnAdd">＋ Слово</button>
+        <button class="btn sec" id="btnPrayers">Молитвы</button>
         <button class="btn sec" id="btnBatch">Список</button>
         <button class="btn sec" id="btnTrash">Корзина</button>
       </div>
@@ -1252,6 +1259,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 <div class="modal hidden" id="modalAdmin"></div>
 <div class="modal hidden" id="modalLangChoice"></div>
 <div class="modal hidden" id="modalSampleChoice"></div>
+<div class="modal hidden" id="modalPrayers"></div>
 <div class="toast" id="toast"></div>
 <input type="file" id="fileImport" accept=".json,application/json" class="hidden">
 <input type="file" id="fileAudio" accept="audio/*" multiple class="hidden">
@@ -1356,7 +1364,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.9.29';
+const APP_VERSION='1.10.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -6309,6 +6317,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.10.0','10.11.26','Новая библиотека молитв: в Словаре кнопка «Молитвы» открывает готовые наборы для активного языка (сейчас — арабский, «Дуа Кунут», 15 строк) и добавляет их в вашу базу по клику. Ничего не удаляет, уже добавленные строки пропускаются (по тексту); каждой молитве ставится своя метка для фильтра. Во всех полях пароля (вход, регистрация, смена/установка пароля) добавлена кнопка-глазок «показать/скрыть пароль».'],
   ['1.9.29','10.11.26','Экзамен «Верно-неверно» (китайский): неверная пара подбирается по числу иероглифов — тот же класс длины, что у правильного слова (1 / 2 / 3–4 / 5+), не хватает — ближайшие по длине. Работает в обоих направлениях: «рус→кит» подбирает иероглиф, «кит→рус» — перевод слова той же длины. Выбор ответов переведён на общие хелперы той же логики.'],
   ['1.9.28','09.11.26','Экзамен «Выбор ответов» в направлении «рус→кит»: варианты-иероглифы теперь крупные (32px тел / 38px ноут, длинная фраза 22/26px) со CJK-шрифтом — размер по роли варианта. Переводы (кит→рус) и слова en/tr/ar не изменились (14/19px).'],
   ['1.9.27','08.11.26','Китайский «Учить»/«Экзамен»: размеры карточки теперь по роли текста, единые на всех устройствах — иероглиф 80px, пиньинь 30px, перевод 30px (на 100%). Длинные фразы сжимают только иероглиф (до ~50px), пиньинь и перевод не сжимаются и переносятся. Исправлен баг «вперемешку»: направление карточки запоминается и больше не меняется при «Назад/Вперёд».'],
@@ -7857,6 +7866,84 @@ const SAMPLES={
     ['sentence','اسمي آنا','','Меня зовут Анна']
   ]
 };
+
+// ============================== PRAYERS (библиотека молитв) ==============================
+// Готовые наборы карточек (молитвы), которые пользователь добавляет в свою базу по клику.
+// Ничего не удаляют — только ДОПИСЫВАЮТ недостающие строки (дубли по тексту пропускаются).
+// Сейчас — арабский, «Дуа Кунут» (15 строк). mp3 добавим позже отдельным полем (recordings).
+const PRAYERS=[
+  {
+    name:'Дуа Кунут',
+    tag:'дуа кунут',
+    lang:'ar',
+    cards:[
+      ['اَللَّهُمَّ تَقَبَّلْ مِنَّا صَلَاتَنَا وَقِيَامَنَا وَقِرَأَتَنَا','1)О Аллах, прими от нас молитву нашу, стояние наше пред Тобой, и чтение Корана'],
+      ['وَرُكُوعَنَا وَسُجُودَنَا وَقُعُودَنَا','2)и поясной поклон, и земной поклон, и сидение пред Тобой'],
+      ['وَتَسْبِيحَنَا وَتَهْلِيلَنَا وَتَخَشُّعَنَا وَتَضَرُّعَنَا','3)и восхваление Тебя, и признание Тебя Единственным, и смирение наше, и почтение наше'],
+      ['اَللَّهُمَّ تَمِّمْ تَقْصِيرَنَا وَتَقَبَّلْ تَمَامَنَا','4)О Аллах, восполни наши упущения в молитве, прими наши правильные действия'],
+      ['وَاسْتَجِبْ دُعَائَنَا وَاغْفِرْ أَحْيَائَنَا','5)ответь на наши мольбы, прости грехи живым'],
+      ['وَارْحَمْ مَوْتَانَا يَا مَوْلَانَا','6)и смилостивись над покойными, о наш Покровитель'],
+      ['اَللَّهُمَّ احْفَظْنَا يَا فَيَّاضُ مِنْ جَمِيعِ الْبَلَايَا وَالْأَمْرَاضِ','7)О Аллах, о Щедрейший, убереги нас от всех бед и болезней'],
+      ['اَللَّهُمَّ تَقَبَّلْ مِنَّا هَذِهِ الصَّلَاةُ','8)О Аллах, прими от нас молитвы'],
+      ['اَلْفَرْضَ مَعَ السُّنَّةِ مَعَ جَمِيعِ نُقْصَانَاتِهَا','9)фарз и сунны, со всеми нашими упущениями'],
+      ['بِفَضْلِكَ وَكَرَمِكَ','10)по милости и щедрости Твоей'],
+      ['وَلَا تَضْرِبْ بِهَا وُجُوهَنَا','11)но не бросай молитвы наши нам в лицо'],
+      ['يَا إِلَهَ الْعَالَمِينَ وَيَا خَيْرَ النَّاصِرِينَ','12)о Господь миров, о лучший из Помощников'],
+      ['تَوَفَّنَا مُسْلِيمِينَ وَ اَلْحِقْنَا بِالصَّالِحِينَ','13)Упокой нас мусульманами, и присоедини к числу праведников'],
+      ['وَصَلَّى اللهُ تَعَالَى عَلَى خَيْرِ خَلْقِهِ مُحَمَّدٍ','14)Да благословит Аллах Всевышний лучшее из своих творений Мухаммада'],
+      ['وَعَلَى آلِهِ وَأَصْحَابِهِ أَجْمَعِينَ','15)его родных и всех его сподвижников']
+    ]
+  }
+];
+// Создаёт карточку молитвы с той же структурой, что и обычная карточка. lang берётся из
+// набора (молитвы привязаны к языку), tag — имя набора (для фильтра «по названию молитвы»).
+function prayerItem(hanzi, tr, lang, tag){
+  const it={id:uid(),kind:'word',hanzi,pinyin:'',translation:tr,note:'',tag,starred:false,recordings:[],box:1,dueSess:0,newDone:0,nsGood:0,nsStreak:0,nsSess:0,nsDoneSess:null,boxStreak:0,lastSeen:0,nextDue:0,correct:0,wrong:0,correctStreak:0,correctStreakDays:0,lastCorrectDay:'',learnedOn:'',addedOn:dayStr(),addedAt:newAddedAt(),lang,updated_at:now(),prog_at:now()};
+  assignStableId(it);
+  return it;
+}
+// Добавляет молитву в базу пользователя: только недостающие строки (дубли по тексту
+// «язык|слово» пропускаются), ничего не удаляет. Возвращает {added, skipped}.
+function addPrayer(p){
+  const existing=new Set(items.filter(it=>!it.deleted_at && String(it.hanzi||'').trim()).map(dupKeyOfLang));
+  let added=0, skipped=0;
+  for(const [hanzi,tr] of p.cards){
+    const it=prayerItem(hanzi, tr, p.lang, p.tag);
+    if(existing.has(dupKeyOfLang(it))){ skipped++; continue; }
+    existing.add(dupKeyOfLang(it));
+    items.push(it);
+    added++;
+  }
+  return {added, skipped};
+}
+// Открывает список молитв для активного языка (модалка). Язык без молитв — подсказка.
+function openPrayersModal(){
+  closeAllModals();
+  const list=PRAYERS.filter(p=>p.lang===activeLang);
+  const m=document.getElementById('modalPrayers');
+  m.innerHTML=`<div class="sheet">
+    <div class="row"><h2>Молитвы</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalPrayers')">✕</button></div>
+    <div class="auth-hint" style="margin-top:6px">Готовые наборы для изучения ${escapeHtml(foreignName())}. Добавляются к вашим словам, уже добавленные строки пропускаются.</div>
+    ${list.length?list.map((p,i)=>`
+      <div class="conflict-card" style="display:flex; align-items:center; gap:10px">
+        <div style="flex:1 1 auto; min-width:0">
+          <div style="font-weight:600">${escapeHtml(p.name)}</div>
+          <div class="muted">${p.cards.length} строк · метка «${escapeHtml(p.tag)}»</div>
+        </div>
+        <button type="button" class="btn sec" style="width:auto; flex:0 0 auto" data-prayer="${i}">Добавить</button>
+      </div>`).join(''):'<div class="auth-hint">Для этого языка молитв пока нет.</div>'}
+  </div>`;
+  m.classList.remove('hidden');
+  m.querySelectorAll('[data-prayer]').forEach(b=>{
+    b.onclick=()=>{
+      const p=list[+b.dataset.prayer];
+      const {added, skipped}=addPrayer(p);
+      persist().then(()=>{ renderDict(); updateChips(); refreshModeFilterBadges(); });
+      toast(skipped>0 ? (`Добавлено строк: ${added}, пропущено (уже были): ${skipped}`) : (`Добавлено строк: ${added}`));
+      closeModal('modalPrayers');
+    };
+  });
+}
 function sampleData(skipConfirm){
   // примеры добавляются для АКТИВНОГО языка; предупреждаем только если в нём уже есть карточки
   if(!skipConfirm && langItems().length && !confirm('Добавить примеры к уже существующим словам?')) return;
@@ -7940,6 +8027,7 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>go(b.datas
 
 // ============================== TOOLBAR BIND ==============================
 document.getElementById('btnAdd').onclick=()=>openItemModal(null);
+document.getElementById('btnPrayers').onclick=openPrayersModal;
 document.getElementById('btnBatch').onclick=openBatch;
 document.getElementById('btnTrash').onclick=openTrash;
 document.getElementById('btnSync').onclick=doSync;
@@ -8826,6 +8914,32 @@ async function localSessionUser(){
     return data && data.session && data.session.user ? data.session.user : null;
   }catch(e){ return null; }
 }
+// Кнопка-глазок «показать/скрыть пароль»: иконки Material (глаз / перечёркнутый глаз).
+const EYE_ON='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 3.7 7.6 2 12c1.7 4.4 5 7.5 10 7.5s8.3-3.1 10-7.5c-1.7-4.4-5-7.5-10-7.5zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>';
+const EYE_OFF='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5C7 4.5 3.7 7.6 2 12c1.7 4.4 5 7.5 10 7.5s8.3-3.1 10-7.5c-1.7-4.4-5-7.5-10-7.5zM4.2 4.2l15.6 15.6"/></svg>';
+// HTML поля пароля с глазком (margin-top задаётся на обёртке).
+function passInput(id, placeholder, autocomplete){
+  return `<div class="pass-wrap" style="margin-top:10px">
+    <input type="password" id="${id}" placeholder="${escapeHtml(placeholder)}" autocomplete="${autocomplete}">
+    <button type="button" class="pass-eye" data-pass="${id}" aria-label="Показать пароль" tabindex="-1">${EYE_OFF}</button>
+  </div>`;
+}
+// Навешивает переключение видимости на все глазки внутри root.
+function wirePassEyes(root){
+  if(!root) return;
+  root.querySelectorAll('.pass-eye').forEach(btn=>{
+    btn.onclick=()=>{
+      const inp=document.getElementById(btn.dataset.pass); if(!inp) return;
+      const show=inp.type==='password';
+      inp.type=show?'text':'password';
+      btn.innerHTML=show?EYE_ON:EYE_OFF;
+      btn.setAttribute('aria-label', show?'Скрыть пароль':'Показать пароль');
+      inp.focus();
+      try{ inp.setSelectionRange(inp.value.length, inp.value.length); }catch(e){}
+    };
+  });
+}
+
 async function renderAuth(){
   const box=document.getElementById('authBox'); if(!box) return;
   if(SB_OFFLINE){
@@ -8890,8 +9004,9 @@ function openAuthModal(){
       body.innerHTML=`
         <div class="auth-hint" style="margin-top:6px">Введите email и пароль. Работает на любом устройстве и в любом браузере.</div>
         <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px" inputmode="email" autocomplete="email">
-        <input type="password" id="authPass" placeholder="Пароль" style="margin-top:10px" autocomplete="current-password">
+        ${passInput('authPass','Пароль','current-password')}
         <button class="btn" id="authSend" style="margin-top:10px">Войти</button>`;
+      wirePassEyes(body);
       const inp=document.getElementById('authEmail');
       const pass=document.getElementById('authPass');
       const send=document.getElementById('authSend');
@@ -8935,9 +9050,10 @@ function openAuthModal(){
       body.innerHTML=`
         <div class="auth-hint" style="margin-top:6px">Создайте аккаунт: email и пароль (минимум 6 символов).</div>
         <input type="email" id="authEmail" placeholder="you@example.com" style="margin-top:10px" inputmode="email" autocomplete="email">
-        <input type="password" id="authPass" placeholder="Пароль" style="margin-top:10px" autocomplete="new-password">
-        <input type="password" id="authPass2" placeholder="Повторите пароль" style="margin-top:10px" autocomplete="new-password">
+        ${passInput('authPass','Пароль','new-password')}
+        ${passInput('authPass2','Повторите пароль','new-password')}
         <button class="btn" id="authSend" style="margin-top:10px">Создать аккаунт</button>`;
+      wirePassEyes(body);
       const inp=document.getElementById('authEmail');
       const pass=document.getElementById('authPass');
       const pass2=document.getElementById('authPass2');
@@ -8993,12 +9109,13 @@ function changePasswordModal(){
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Сменить пароль</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
     <div class="auth-hint" style="margin-top:6px" id="authHint">Задайте новый пароль. Минимум 6 символов.</div>
-    <input type="password" id="authPass" placeholder="Новый пароль" style="margin-top:10px" autocomplete="new-password">
-    <input type="password" id="authPass2" placeholder="Повторите пароль" style="margin-top:10px" autocomplete="new-password">
+    ${passInput('authPass','Новый пароль','new-password')}
+    ${passInput('authPass2','Повторите пароль','new-password')}
     <button class="btn" id="authSend" style="margin-top:10px">Сохранить пароль</button>
     <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
   </div>`;
   m.classList.remove('hidden');
+  wirePassEyes(m);
   const p1=document.getElementById('authPass');
   const p2=document.getElementById('authPass2');
   const send=document.getElementById('authSend');
@@ -9045,8 +9162,8 @@ function maybeSetPassword(){
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Установите пароль</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalAuth')">✕</button></div>
     <div class="auth-hint" style="margin-top:6px">Ваш аккаунт пока без пароля. Задайте его, чтобы входить с любого устройства по email и паролю. Минимум 6 символов.</div>
-    <input type="password" id="authPass" placeholder="Новый пароль" style="margin-top:10px" autocomplete="new-password">
-    <input type="password" id="authPass2" placeholder="Повторите пароль" style="margin-top:10px" autocomplete="new-password">
+    ${passInput('authPass','Новый пароль','new-password')}
+    ${passInput('authPass2','Повторите пароль','new-password')}
     <div style="display:flex; gap:8px; margin-top:12px">
       <button class="btn sec" id="passSkip" style="flex:1">Позже</button>
       <button class="btn" id="passSave" style="flex:1">Сохранить пароль</button>
@@ -9054,6 +9171,7 @@ function maybeSetPassword(){
     <div class="auth-hint" id="authMsg" style="margin-top:8px"></div>
   </div>`;
   m.classList.remove('hidden');
+  wirePassEyes(m);
   const p1=document.getElementById('authPass');
   const p2=document.getElementById('authPass2');
   const save=document.getElementById('passSave');
