@@ -407,7 +407,7 @@ html[data-theme="plum"] .dc.py{color:#c7aef0}
 /* Арабский «Учить»: три кнопки управления аудио (⏪ перемотка назад / ▶ плей-пауза / ⏩ вперёд).
    Показываются только для арабского (класс .on). Все три одинаковые: 44px, скруглённый
    прямоугольник, нейтральный фон — центральная плей/пауза не выделяется и не наезжает на «Писать это». */
-.study-transport{display:none; justify-content:center; align-items:center; gap:12px; margin:12px 0 0; padding:0}
+.study-transport{display:none; justify-content:center; align-items:center; gap:12px; margin:7px 0 5px; padding:0}
 .study-transport.on{display:flex}
 .study-tt-btn{
   width:44px; height:44px; border-radius:12px; border:0; cursor:pointer; padding:0;
@@ -1364,7 +1364,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.10.0';
+const APP_VERSION='1.10.1';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2100,9 +2100,22 @@ const Player={
   currentTrack(){
     return (this.cur && this.cur instanceof Audio && this.cur.src) ? this.cur : null;
   },
+  // Следим за реальным состоянием mp3 (играет/пауза/закончился) и обновляем кнопку
+  // плей/паузы в арабском «Учить». События вешаются на сам элемент, поэтому значок
+  // переключается и тогда, когда трек доиграл сам (onDone у карточки при этом мог
+  // уже не сработать из-за сброса studyGen — раньше кнопка застревала в «играет»).
+  _watchState(a){
+    if(!a) return;
+    const notify=()=>{ try{ updateStudyTransport(); }catch(e){} };
+    a.addEventListener('play', notify);
+    a.addEventListener('pause', notify);
+    a.addEventListener('ended', notify);
+    a.addEventListener('playing', notify);
+  },
   _releaseTrack(){
     const c=this.cur; this.cur=null;
     try{ c.pause(); c.onended=c.onerror=null; }catch(e){}
+    try{ updateStudyTransport(); }catch(e){}   // звук снят — кнопка плей/паузы возвращается в ▶
   },
   _one(t,my){
     return new Promise(res=>{
@@ -2150,6 +2163,7 @@ const Player={
             this.cur=a;
             a.onended=finish; a.onerror=finish;
             a.onplaying=()=>{ this.onTrackStart&&this.onTrackStart(a); };
+            this._watchState(a);
             tmo=setTimeout(finish, Math.min(90000, 3000+String(t.text||'').length*450));
             try{ a.play().catch(finish); }catch(e){ finish(); }
           }
@@ -2162,6 +2176,7 @@ const Player={
         this.cur=a;
         a.onended=finish; a.onerror=finish;
         a.onplaying=()=>{ this.onTrackStart&&this.onTrackStart(a); };
+        this._watchState(a);
         // Без страховочного таймаута: mp3 может быть длинным (арабские аяты) — конец ловим
         // по onended, сбой — по onerror. Иначе длинный файл обрывался на 90-й секунде.
         a.play().catch(finish);
@@ -3443,22 +3458,26 @@ let studyCurDir='fr';
 let studyDirMap=new Map();   // id слова → направление (fr/rf): в mix запоминается при первом показе
 // Аудио в «Учить» — только иностранный канал (русский убран из Учить/Экзамен, правки 27.10.26).
 function studyAudioOn(){ return settings.foreignAudio!==false; }
-// Порядок полей в модалке «Настройки режима Изучение»: Иероглиф, Пиньинь, Перевод, Подряд.
-// Для арабского и турецкого: «Иероглиф» → «Иностр. текст», строка «Пиньинь» скрыта (нет пиньиня).
-const STUDY_KEYS=[
-  ['studyHanzi','Иероглиф','размер шрифта','mulH'],
-  ['studyPy','Пиньинь','размер шрифта','mulP'],
-  ['studyTr','Перевод','размер шрифта','mulT'],
-  ['studySeq','Подряд','слова в порядке создания: старые → новые (игнорирует SRS)', null],
-];
-function studyKeysForLang(){
-  const keys=STUDY_KEYS.map(k=>k.slice());
-  if(activeLang==='ar'||activeLang==='tr'){
-    if(keys[1]) keys[1][1]='Иностр. текст'; // подпись строки «Иероглиф» меняется только для ar/tr
-    keys.splice(2,1);                        // убрать «Пиньинь» целиком (в ar/tr нет пиньиня)
-  }else if(activeLang==='en'){
-    if(keys[2]) keys[2][1]='Транскрипция';   // для английского строка транскрипции называется иначе
+// Подписи ползунков размера — по РОЛИ текста и языку. Роль 'h' всегда связана с mulH,
+// 'p' — с mulP, 't' — с mulT (см. studyFonts). Транскрипция есть только у zh (пиньинь) и en (IPA),
+// поэтому строка «Пиньинь/Транскрипция» есть только у них.
+function studySizeLabel(role){
+  if(role==='h'){
+    if(activeLang==='ar') return 'Арабский текст';
+    if(activeLang==='tr') return 'Турецкий текст';
+    if(activeLang==='en') return 'Английский текст';
+    return 'Иероглиф';
   }
+  if(role==='p') return activeLang==='zh' ? 'Пиньинь' : 'Транскрипция';
+  return 'Перевод';
+}
+function hasTranscriptRow(){ return activeLang==='zh' || activeLang==='en'; }
+// Порядок полей в модалке «Настройки режима Изучение»: <иностр. текст>, <транскрипция>, Перевод, Подряд.
+function studyKeysForLang(){
+  const keys=[['studyHanzi', studySizeLabel('h'), 'размер шрифта', 'mulH']];
+  if(hasTranscriptRow()) keys.push(['studyPy', studySizeLabel('p'), 'размер шрифта', 'mulP']);
+  keys.push(['studyTr', studySizeLabel('t'), 'размер шрифта', 'mulT']);
+  keys.push(['studySeq','Подряд','Переход к следующей фразе', null]);
   return keys;
 }
 // Видимость строк «Учить» по смыслу: тумблер «Иероглиф» управляет иероглифом, «Перевод» — русским.
@@ -3777,8 +3796,8 @@ function studyPlayLoop(it){
   const step=()=>{
     if(!it) return;
     playItem(it, { onDone: ()=>{
+      updateStudyTransport();                            // аят доиграл — значок ▶ (до раннего выхода ниже)
       if(studyGen!==my) return;                          // действие пользователя или уход с карточки
-      updateStudyTransport();                            // аят доиграл — вернуть значок ▶
       const scr=document.getElementById('scr-study');
       if(!scr || !scr.classList.contains('active')) return;
       const cur=studyQueue[studyIdx];
@@ -5489,9 +5508,9 @@ function renderExamSettings(){
       </div>
       <div class="menu-item" style="display:block">
         <div class="mi-label">Размер текста<span class="mi-hint">Отдельно от «Учить»: размер иероглифа / пиньиня / перевода в заданиях</span></div>
-        ${examSizeSliderHTML('examMulH','Иероглиф')}
-        ${examSizeSliderHTML('examMulP','Пиньинь')}
-        ${examSizeSliderHTML('examMulT','Перевод')}
+        ${examSizeSliderHTML('examMulH', studySizeLabel('h'))}
+        ${hasTranscriptRow()?examSizeSliderHTML('examMulP', studySizeLabel('p')):''}
+        ${examSizeSliderHTML('examMulT', studySizeLabel('t'))}
       </div>
       <div class="menu-item">
         <div class="mi-label">Все переводы<span class="mi-hint">Использовать альтернативные переводы в заданиях</span></div>
@@ -6328,6 +6347,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.10.1','11.11.26','Арабский «Учить»: кнопка плей/пауза в ряду управления аудио теперь честно переключается по состоянию записи — доиграло, и она возвращается в «плей» (раньше после любого касания экрана застревала в «сейчас играет»). Ряд из трёх кнопок поднят и больше не прилипает к «Писать это». Настройки размера текста приведены в порядок во ВСЕХ языках: ползунки подписаны по языку (Иероглиф/Пиньинь для китайского, Английский текст/Транскрипция, Турецкий текст, Арабский текст) и каждый реально меняет свой текст — в турецком и арабском ползунок иностранного текста раньше управлял несуществующим пиньинем и не работал, а ползунка перевода не было; то же исправлено в настройках экзамена. Строка «Подряд» поясняется как «Переход к следующей фразе».'],
   ['1.10.0','10.11.26','Новая библиотека молитв: в Словаре кнопка «Молитвы» открывает готовые наборы для активного языка (сейчас — арабский, «Дуа Кунут», 15 строк) и добавляет их в вашу базу по клику. Ничего не удаляет, уже добавленные строки пропускаются (по тексту); каждой молитве ставится своя метка для фильтра. Во всех полях пароля (вход, регистрация, смена/установка пароля) добавлена кнопка-глазок «показать/скрыть пароль».'],
   ['1.9.29','10.11.26','Экзамен «Верно-неверно» (китайский): неверная пара подбирается по числу иероглифов — тот же класс длины, что у правильного слова (1 / 2 / 3–4 / 5+), не хватает — ближайшие по длине. Работает в обоих направлениях: «рус→кит» подбирает иероглиф, «кит→рус» — перевод слова той же длины. Выбор ответов переведён на общие хелперы той же логики.'],
   ['1.9.28','09.11.26','Экзамен «Выбор ответов» в направлении «рус→кит»: варианты-иероглифы теперь крупные (32px тел / 38px ноут, длинная фраза 22/26px) со CJK-шрифтом — размер по роли варианта. Переводы (кит→рус) и слова en/tr/ar не изменились (14/19px).'],
