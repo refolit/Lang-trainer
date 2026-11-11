@@ -873,7 +873,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .tone-hanzi .tc.cur{color:#fff; background:var(--red); box-shadow:0 1px 6px rgba(198,40,40,.4)}
 /* Пиньинь под своим иероглифом: открытый — тёмный жирный, ещё не открытый — точка-плейсхолдер
    (держит высоту строки, чтобы колонки не «прыгали» при открытии). */
-.tone-cell .tp{font-size:16px; color:var(--ink); font-weight:600; letter-spacing:.03em; min-height:1.4em; text-align:center; line-height:1.4em}
+.tone-cell .tp{font-size:24px; color:var(--ink); font-weight:600; letter-spacing:.03em; min-height:1.4em; text-align:center; line-height:1.4em}
 .tone-cell .tp.off{color:transparent}
 .tone-tr{font-size:18px; color:var(--ink); text-align:center; min-height:1.4em; margin-top:10px; font-weight:600}
 .tone-btns{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:10px}
@@ -1242,7 +1242,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 
 <nav class="tabs">
   <button data-scr="scr-dict" class="active"><span class="ic">📚</span>Словарь</button>
-  <button data-scr="scr-study"><span class="ic">🎴</span>Учить</button>
+  <button data-scr="scr-study"><span class="ic">🎴</span>Изучение</button>
   <button data-scr="scr-write"><span class="ic">✍️</span>Письмо</button>
   <button data-scr="scr-exam"><span class="ic">📝</span>Экзамен</button>
   <button data-scr="scr-more"><span class="ic">⚙️</span>Ещё</button>
@@ -1364,7 +1364,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.10.1';
+const APP_VERSION='1.10.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2085,6 +2085,7 @@ const Player={
         this.cur=null;
         announce('');
         this.onDone&&this.onDone();
+        updateStudyTransport();                        // синтез доиграл — кнопка ▶ возвращается в «плей»
       }
     }
   },
@@ -2146,7 +2147,7 @@ const Player={
               if((speechSynthesis.speaking || speechSynthesis.pending) && tries++<25){
                 setTimeout(goSpeak, 40);          // двигатель ещё занят — пробуем позже
               }else{
-                try{ speechSynthesis.speak(u); }catch(e){ finish(); }
+                try{ speechSynthesis.speak(u); updateStudyTransport(); }catch(e){ finish(); }
               }
             };
             setTimeout(goSpeak, 20);
@@ -3846,6 +3847,19 @@ function studySpeak(){
   if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='🔊';
   playItem(it,{mode:'study'});   // одно проговаривание обычной скорости, без автоповтора
 }
+// Клик по центральному блоку карточки (иероглиф/пиньинь/перевод/пустое место): одно проигрывание
+// во всех языках. Повторный клик — ещё раз. В «Листании» клик по центру перезапускает текущее
+// слово с начала; правую треть экрана обрабатывает отдельно bindBrowseSkip (следующее слово).
+function studyCardClick(e){
+  const scr=document.getElementById('scr-study');
+  if(!scr || !scr.classList.contains('active')) return;
+  if(browseOn){
+    if(e && e.clientX!=null && e.clientX >= window.innerWidth*0.7) return; // правая треть — browseSkip
+    browseReplayCurrent();
+    return;
+  }
+  studySpeak();
+}
 
 // ============================== ЛИСТАНИЕ (правки 27.10.26) ==============================
 // Режим «Листание» в «Учить»: карточки полностью раскрываются и сменяются сами, по кругу,
@@ -3997,6 +4011,14 @@ function browseSkip(){
   Player.stop();
   browseNext();
 }
+// Клик по центру карточки в «Листании»: перезапустить ТЕКУЩЕЕ слово с начала (не сдвигая очередь).
+function browseReplayCurrent(){
+  if(!browseOn) return;
+  const it=studyQueue[studyIdx]; if(!it) return;
+  browseGen++;
+  if(browseTmo){ clearTimeout(browseTmo); browseTmo=null; }
+  browseStep(it);
+}
 // Включить/выключить «Листание» кнопкой.
 function toggleBrowse(){
   if(browseOn){ browseOff(); } else { browseStart(); }
@@ -4073,8 +4095,9 @@ function updateStudyTransport(){
   el.classList.toggle('on', activeLang==='ar');
   if(activeLang!=='ar') return;
   const a=Player.currentTrack();
+  const playing = a ? !a.paused : Player.busy;   // mp3 — по состоянию трека; синтез (без Audio) — по признаку «идёт»
   const playBtn=_studyPlayBtn();
-  if(playBtn) playBtn.innerHTML = (a && !a.paused)
+  if(playBtn) playBtn.innerHTML = playing
     ? '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M360-320h80v-320h-80v320Zm160 0h80v-320h-80v320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>'  // pause_circle
     : '<svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m380-300 280-180-280-180v360ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>';                  // play_circle
 }
@@ -5428,6 +5451,21 @@ async function examSpeakOnce(it){
     Player.play(tracksFor(it,{mode:'exam',dir:examCurDir,reps:1}), {gap:0, onDone:res});
   });
 }
+// Клик по центральному блоку вопроса в экзамене («Верно-неверно», «Тоны», «Выбор ответов»):
+// одно проигрывание, повторный клик — ещё раз. Кнопки ответов/варианты/тона и поля ввода не трогаем.
+function examBodyClick(e){
+  const scr=document.getElementById('scr-exam');
+  if(!scr || !scr.classList.contains('active')) return;
+  const t=e && e.target;
+  if(t && t.closest && t.closest('button, input, textarea, select, .exam-opts, .tone-btns, .btn-col')) return;
+  const q=examSeq[examIdx];
+  if(!q || !q.it) return;
+  if(!['tf','choice','tone'].includes(q.mode)) return;
+  examTouch();
+  examRepeatGen++;                                   // гасим автоповтор — дальше одно проигрывание
+  if(examRepeatTmo){ clearTimeout(examRepeatTmo); examRepeatTmo=null; }
+  examSpeakOnce(q.it);
+}
 function toggleExamAllTr(){
   examAllTr=!examAllTr;
   settings.examAllTr=examAllTr; persist();
@@ -5507,7 +5545,7 @@ function renderExamSettings(){
         <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
       </div>
       <div class="menu-item" style="display:block">
-        <div class="mi-label">Размер текста<span class="mi-hint">Отдельно от «Учить»: размер иероглифа / пиньиня / перевода в заданиях</span></div>
+        <div class="mi-label">Размер текста<span class="mi-hint">Отдельно от режима «Изучение»: размер иероглифа / пиньиня / перевода в заданиях</span></div>
         ${examSizeSliderHTML('examMulH', studySizeLabel('h'))}
         ${hasTranscriptRow()?examSizeSliderHTML('examMulP', studySizeLabel('p')):''}
         ${examSizeSliderHTML('examMulT', studySizeLabel('t'))}
@@ -5777,10 +5815,7 @@ function renderExamTF(q){
     if(taskOk){ examCorrect(it); examFinish(1); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
-  // клик по слову: при выключенном аудио — проиграть один раз (каждый клик = одно проигрывание);
-  // при включённом аудио — без изменений (повтор идёт штатно).
-  const w=document.querySelector('#examBody .exam-q .eq-word');
-  if(w) w.onclick=()=>{ examTouch(); if(!examAudioOn()) examSpeakOnce(it); };
+  // клик по слову/центру вопроса — единый обработчик examBodyClick (одно проигрывание).
   // «Постепенно» (Верно-неверно): иероглиф → (x) → пиньинь → (x) → перевод → (x) → аудио.
   // Аудио при включённом «Постепенно» звучит только ПОСЛЕ раскрытия перевода (не сразу).
   if(examGradual && examGradualDelay>0){
@@ -5815,9 +5850,7 @@ function renderExamChoice(q){
     <div class="exam-q" style="width:100%">
       <div id="examOpts" class="exam-opts"></div>
     </div>`;
-  // клик по слову в вопросе — при включённом аудио повторить, при выключенном — проиграть один раз.
-  const w=document.getElementById('eqWord');
-  if(w) w.onclick=()=>{ examTouch(); if(examAudioOn()) startExamRepeat(it); else examSpeakOnce(it); };
+  // клик по слову/центру вопроса — единый обработчик examBodyClick (одно проигрывание).
   function drawOpts(N){
     let correct, others, isRight;
     if(rf){
@@ -5940,12 +5973,7 @@ function drawTone(){
       </div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
-  // клик по иероглифу: при выключенном аудио — проиграть слово один раз (каждый клик = одно проигрывание);
-  // при включённом аудио — без изменений (повтор идёт штатно).
-  body.querySelectorAll('.tone-hanzi .tc').forEach(c=>c.onclick=()=>{
-    examTouch();
-    if(!examAudioOn() && examCurrentIt) examSpeakOnce(examCurrentIt);
-  });
+  // клик по иероглифу/центру вопроса — единый обработчик examBodyClick (одно проигрывание).
 }
 function tonePick(n, btn){
   examTouch();
@@ -5967,10 +5995,10 @@ function tonePick(n, btn){
         if(toneError){ examMistakeSoft(examCurrentIt); }  // была ошибка → −1
         else { examCorrect(examCurrentIt); }              // без ошибок → +1
         // пиньинь последнего иероглифа уже открыт (drawTone выше); показываем перевод
-        // на 1 секунду, затем переходим к следующему слову
+        // на 2 секунды, затем переходим к следующему слову
         const tr=document.getElementById('toneTr');
         if(tr){ tr.textContent=trJoined(examCurrentIt); tr.hidden=false; }
-        setTimeout(examFinish, 1000, 1);
+        setTimeout(examFinish, 2000, 1);
         return;
       }
       // следующая группа — через короткую паузу, чтобы успеть увидеть открывшийся пиньинь.
@@ -6322,7 +6350,7 @@ function showExamResult(){
       <div class="lbl" style="color:var(--mut)">правильно · ${pct}%</div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn" id="examRetake">🔁 Начать экзамен заново</button>
-        <button class="btn sec" id="examReview">📖 Перейти в режим «Учить»</button>
+        <button class="btn sec" id="examReview">📖 Перейти в режим «Изучение»</button>
       </div>
       <button class="btn ghost" style="margin-top:6px" onclick="go('scr-more')">К статистике</button>
     </div>
@@ -6347,6 +6375,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.10.2','11.11.26','Режим «Учить» переименован в «Изучение» (вкладка в меню, кнопка перехода после экзамена, подпись в настройках экзамена). В «Изучении» клик по любому месту центрального блока карточки проигрывает аудио один раз (во всех языках), повторный клик — ещё раз; в «Листании» клик по центру перезапускает текущее слово, правая треть экрана — следующее слово. Кнопка ▶ (арабский) теперь честно показывает «сейчас играет» и возвращается в «плей» и при синтезе речи, а не только при mp3. В экзамене («Верно-неверно», «Тоны», «Выбор ответов») клик по центру вопроса проигрывает аудио один раз. «Тоны»: пиньинь под иероглифами крупнее (16→24px), перевод после угаданной фразы показывается на секунду дольше (2 с).'],
   ['1.10.1','11.11.26','Арабский «Учить»: кнопка плей/пауза в ряду управления аудио теперь честно переключается по состоянию записи — доиграло, и она возвращается в «плей» (раньше после любого касания экрана застревала в «сейчас играет»). Ряд из трёх кнопок поднят и больше не прилипает к «Писать это». Настройки размера текста приведены в порядок во ВСЕХ языках: ползунки подписаны по языку (Иероглиф/Пиньинь для китайского, Английский текст/Транскрипция, Турецкий текст, Арабский текст) и каждый реально меняет свой текст — в турецком и арабском ползунок иностранного текста раньше управлял несуществующим пиньинем и не работал, а ползунка перевода не было; то же исправлено в настройках экзамена. Строка «Подряд» поясняется как «Переход к следующей фразе».'],
   ['1.10.0','10.11.26','Новая библиотека молитв: в Словаре кнопка «Молитвы» открывает готовые наборы для активного языка (сейчас — арабский, «Дуа Кунут», 15 строк) и добавляет их в вашу базу по клику. Ничего не удаляет, уже добавленные строки пропускаются (по тексту); каждой молитве ставится своя метка для фильтра. Во всех полях пароля (вход, регистрация, смена/установка пароля) добавлена кнопка-глазок «показать/скрыть пароль».'],
   ['1.9.29','10.11.26','Экзамен «Верно-неверно» (китайский): неверная пара подбирается по числу иероглифов — тот же класс длины, что у правильного слова (1 / 2 / 3–4 / 5+), не хватает — ближайшие по длине. Работает в обоих направлениях: «рус→кит» подбирает иероглиф, «кит→рус» — перевод слова той же длины. Выбор ответов переведён на общие хелперы той же логики.'],
@@ -8088,7 +8117,7 @@ document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
 document.getElementById('studySpeakBtn').onclick=studySpeak;
-document.getElementById('studyHanzi').onclick=studySpeak;
+document.getElementById('studyCardArea').onclick=studyCardClick;
 document.getElementById('studyBrowseBtn').onclick=toggleBrowse;
 document.getElementById('studyTTBack').onclick=()=>studyTransportSeek(-STUDY_SEEK_STEP);
 document.getElementById('studyTTPlay').onclick=studyTransportToggle;
@@ -8097,6 +8126,7 @@ document.getElementById('writePrev').onclick=writePrev;
 document.getElementById('writeNext').onclick=writeNext;
 document.getElementById('writeSettingsBtn').onclick=openWriteSettings;
 document.getElementById('examSettingsBtn').onclick=openExamSettings;
+document.getElementById('examBody').onclick=examBodyClick;
 document.getElementById('btnTagsManage').onclick=openTagsModal;
 document.getElementById('btnExport').onclick=doExport;
 document.getElementById('btnImport').onclick=()=>document.getElementById('fileImport').click();
