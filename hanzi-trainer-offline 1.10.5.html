@@ -818,6 +818,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .voice-row{display:flex; align-items:center; gap:10px}
 .voice-row select{flex:1 1 auto; min-width:0}
 .voice-row .sn-switch{flex:0 0 auto}
+/* Кнопка ▶ прослушать голос рядом с селектором (в глобальных настройках озвучки) */
+.voice-play{flex:0 0 auto; width:38px; height:38px; border:0; border-radius:10px; background:var(--red); color:#fff; font-size:15px; line-height:1; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 3px 0 var(--red-d); cursor:pointer; touch-action:manipulation}
+.voice-play:active{transform:translateY(2px); box-shadow:0 1px 0 var(--red-d)}
 #globalDirSeg{flex-wrap:wrap}
 #globalDirSeg .nm{white-space:nowrap}
 #themeSeg{flex-wrap:wrap}
@@ -1903,6 +1906,15 @@ const GOOGLE_VOICES={
 // Русские названия языков (для подписей «Направление перевода» в глобальных настройках).
 const LANG_RU={zh:'Китайский',en:'Английский',tr:'Турецкий',ar:'Арабский'};
 function foreignName(){ return LANG_RU[activeLang]||langInfo().name; }
+// Фразы для предпрослушки голоса (кнопка ▶ рядом с селектором): «Спасибо, что выбрали
+// наше приложение. Рекомендуйте его своим друзьям» на каждом языке.
+const VOICE_SAMPLE={
+  ru:'Спасибо, что выбрали наше приложение. Рекомендуйте его своим друзьям.',
+  zh:'谢谢您选择我们的应用，请推荐给您的朋友。',
+  en:'Thank you for choosing our app. Please recommend it to your friends.',
+  tr:'Uygulamamızı seçtiğiniz için teşekkürler. Arkadaşlarınıza tavsiye edin.',
+  ar:'شكرًا لاختيارك تطبيقنا. يرجى التوصية به لأصدقائك.'
+};
 // «google» / «» → авто-тег; «g:zh-TW» → конкретный региональный тег; иначе локальный voiceURI.
 function googleTag(v){
   if(v && v.indexOf('g:')===0) return v.slice(2);
@@ -6402,7 +6414,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.10.5','14.11.26','Фильтр «Без предложений»: новая галочка в окне фильтра отсеивает карточки-предложения во всех режимах и при экспорте. Предложение определяется по явной метке «предложение» или по переводу с заглавной буквы из нескольких слов. В режиме «Листание» перевод показывается минимум 3 секунды (или до конца озвучки).'],
+  ['1.10.5','14.11.26','Фильтр «Без предложений»: новая галочка в окне фильтра отсеивает карточки-предложения во всех режимах и при экспорте. Предложение определяется по явной метке «предложение» или по переводу с заглавной буквы из нескольких слов. В режиме «Листание» перевод показывается минимум 3 секунды (или до конца озвучки). В настройках озвучки рядом с выбором голоса — кнопка ▶ прослушать: произносит фразу-образец выбранным голосом.'],
   ['1.10.4','12.11.26','В списке молитв — три отдельные кнопки: «＋ Текст» (только строки), «＋ Аудио» (подключить mp3) и «Удалить» (мягко, в Корзину), чтобы после изучения молитвы можно было освободить место на устройстве. Под именем молитвы — её реальный размер аудио, считается автоматически (округляется до десятых).'],
   ['1.10.3','11.11.26','Библиотека молитв: при добавлении «Дуа Кунут» теперь подключаются и 15 mp3 (озвучка каждой строки) — аудио встроено прямо в приложение и работает офлайн у любого, кто добавил молитву. Строки молитвы сохраняют свою последовательность (1→15): добавлен порядковый номер seq, который переживает импорт бэкапа и синхронизацию — карточки молитвы больше не перемешиваются на новом устройстве.'],
   ['1.10.2','11.11.26','Режим «Учить» переименован в «Изучение» (вкладка в меню, кнопка перехода после экзамена, подпись в настройках экзамена). В «Изучении» клик по любому месту центрального блока карточки проигрывает аудио один раз (во всех языках), повторный клик — ещё раз; в «Листании» клик по центру перезапускает текущее слово, правая треть экрана — следующее слово. Кнопка ▶ (арабский) теперь честно показывает «сейчас играет» и возвращается в «плей» и при синтезе речи, а не только при mp3. В экзамене («Верно-неверно», «Тоны», «Выбор ответов») клик по центру вопроса проигрывает аудио один раз. «Тоны»: пиньинь под иероглифами крупнее (16→24px), перевод после угаданной фразы показывается на секунду дольше (2 с).'],
@@ -7758,11 +7770,13 @@ function renderGlobalAudioSettings(){
     <label class="lbl">${fn} голос</label>
     <div class="voice-row">
       <select id="globalForeignVoiceSel">${globalVoiceOptions(settings.foreignVoice||'google','foreign')}</select>
+      <button class="voice-play" data-voice-play="foreign" title="Прослушать" aria-label="Прослушать голос">▶</button>
       <button class="sn-switch ${settings.foreignAudio!==false?'on':''}" data-global-key="foreignAudio"></button>
     </div>
     <label class="lbl">Русский голос</label>
     <div class="voice-row">
       <select id="globalRuVoiceSel">${globalVoiceOptions(settings.ruVoice||'google','ru')}</select>
+      <button class="voice-play" data-voice-play="ru" title="Прослушать" aria-label="Прослушать голос">▶</button>
       <button class="sn-switch ${settings.ruAudio!==false?'on':''}" data-global-key="ruAudio"></button>
     </div>`;
   // Направление — сегмент с флагами (как блок «Язык»); у «вперемешку» флагов нет.
@@ -7793,6 +7807,17 @@ function renderGlobalAudioSettings(){
   if(fv) fv.onchange=()=>{ settings.foreignVoice=fv.value; persist(); };
   const rv=document.getElementById('globalRuVoiceSel');
   if(rv) rv.onchange=()=>{ settings.ruVoice=rv.value; persist(); };
+  // ▶ прослушать голос: произносит фразу-образец тем голосом, что выбран в селекторе.
+  box.querySelectorAll('[data-voice-play]').forEach(b=>{
+    b.onclick=()=>{
+      const kind=b.dataset.voicePlay;
+      if(kind==='ru'){
+        Player.play([{kind:'tts', text:VOICE_SAMPLE.ru, rate:1, reps:1, label:'', voice:ruVoice(), lang:'ru'}]);
+      }else{
+        Player.play([{kind:'tts', text:VOICE_SAMPLE[activeLang]||VOICE_SAMPLE.zh, rate:1, reps:1, label:'', voice:foreignVoice()}]);
+      }
+    };
+  });
   box.querySelectorAll('[data-global-key]').forEach(b=>{
     b.onclick=()=>{
       const k=b.dataset.globalKey;
