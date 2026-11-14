@@ -1367,7 +1367,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.10.4';
+const APP_VERSION='1.10.5';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2447,10 +2447,10 @@ function updateDictFilterChips(){
 }
 // ====== Окно «Фильтр» (уровни + метки + «повторить сейчас» + доп. фильтры) ======
 // flt = {lvls:Set<1..5>, tags:Set<string>, due:bool, thisMonth:bool, lastMonth:bool,
-//        star:bool, learned:bool, addedRecent:bool, oftenWrong:bool}
-let flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false};
-function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due || flt.thisMonth || flt.lastMonth || flt.star || flt.learned || flt.addedRecent || flt.oftenWrong; }
-function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0) + (flt.thisMonth?1:0) + (flt.lastMonth?1:0) + (flt.star?1:0) + (flt.learned?1:0) + (flt.addedRecent?1:0) + (flt.oftenWrong?1:0); }
+//        star:bool, learned:bool, addedRecent:bool, oftenWrong:bool, noSent:bool}
+let flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false, noSent:false};
+function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due || flt.thisMonth || flt.lastMonth || flt.star || flt.learned || flt.addedRecent || flt.oftenWrong || flt.noSent; }
+function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0) + (flt.thisMonth?1:0) + (flt.lastMonth?1:0) + (flt.star?1:0) + (flt.learned?1:0) + (flt.addedRecent?1:0) + (flt.oftenWrong?1:0) + (flt.noSent?1:0); }
 // «Добавлено недавно» (как в статистике): последняя партия карточек за 7 дней — самая свежая дата addedOn за неделю.
 function addedRecentCutoff(){
   let last='';
@@ -2484,6 +2484,7 @@ function passesFilterTmp(it, f){
   if(f.learned && !isLearned(it)) return false;
   if(f.addedRecent && !isAddedRecently(it, addedRecentCutoff())) return false;
   if(f.oftenWrong && !isOftenWrong(it)) return false;
+  if(f.noSent && isSentenceItem(it)) return false;
   return true;
 }
 // отсчёт «ошибки за последний месяц»: скользящие 30 дней. wrongMonth — число ошибок,
@@ -2513,6 +2514,7 @@ function passesFilter(it){
   if(flt.learned && !isLearned(it)) return false;
   if(flt.addedRecent && !isAddedRecently(it, addedRecentCutoff())) return false;
   if(flt.oftenWrong && !isOftenWrong(it)) return false;
+  if(flt.noSent && isSentenceItem(it)) return false;
   return true;
 }
 // Все карточки языка с учётом активных фильтров словаря (расширенный фильтр + кнопки
@@ -2589,7 +2591,7 @@ function openFilterModal(){
   const m=document.getElementById('modalFilter');
   const tags=allTags();
   // tmp — рабочая копия фильтра в окне; в flt она попадает только по «Применить».
-  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due, thisMonth:flt.thisMonth, lastMonth:flt.lastMonth, star:flt.star, learned:flt.learned, addedRecent:flt.addedRecent, oftenWrong:flt.oftenWrong};
+  const tmp={lvls:new Set(flt.lvls), tags:new Set(flt.tags), due:flt.due, thisMonth:flt.thisMonth, lastMonth:flt.lastMonth, star:flt.star, learned:flt.learned, addedRecent:flt.addedRecent, oftenWrong:flt.oftenWrong, noSent:flt.noSent};
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Фильтр</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalFilter')">✕</button></div>
     <div class="flt-count" id="fltCount">Выбрано слов: 0</div>
@@ -2613,13 +2615,14 @@ function openFilterModal(){
       <button class="flt-chip ${tmp.star?'on':''}" data-flt-star="1">★ Избранное</button>
       <button class="flt-chip ${tmp.learned?'on':''}" data-flt-learned="1">Выучено</button>
       <button class="flt-chip ${tmp.oftenWrong?'on':''}" data-flt-wrong="1">Часто ошибаюсь</button>
+      <button class="flt-chip ${tmp.noSent?'on':''}" data-flt-nosent="1">Без предложений</button>
     </div>
+    <div class="auth-hint" style="margin:0">«Без предложений» скрывает карточки-предложения в режимах и при экспорте.</div>
     <div class="export-row" style="margin-top:14px">
       <button class="btn sec" id="fltExport">Экспорт слов</button>
       <div class="chk-row">
         <label class="chk"><input type="checkbox" id="fltChkPinyin"> пиньинь</label>
         <label class="chk"><input type="checkbox" id="fltChkTr"> перевод</label>
-        <label class="chk"><input type="checkbox" id="fltChkNosent" checked> без предложений</label>
       </div>
     </div>
     <div class="btn-row" style="margin-top:14px">
@@ -2631,7 +2634,7 @@ function openFilterModal(){
   // живой счётчик «Выбрано слов»: 0, пока ничего не выбрано; иначе — сколько слов попадает
   // под выбранные чипы (пересчитывается по рабочей копии при каждом клике).
   const exportListBase=langItems().slice().sort((a,b)=>((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||'')));
-  const tmpActiveF=f=> f.lvls.size>0 || f.tags.size>0 || f.due || f.thisMonth || f.lastMonth || f.star || f.learned || f.addedRecent || f.oftenWrong;
+  const tmpActiveF=f=> f.lvls.size>0 || f.tags.size>0 || f.due || f.thisMonth || f.lastMonth || f.star || f.learned || f.addedRecent || f.oftenWrong || f.noSent;
   function tmpCount(){
     const n=tmpActiveF(tmp) ? exportListBase.filter(it=>passesFilterTmp(it, tmp)).length : 0;
     document.getElementById('fltCount').textContent='Выбрано слов: '+n;
@@ -2646,14 +2649,15 @@ function openFilterModal(){
   m.querySelector('[data-flt-star]').onclick=e=>{ tmp.star=!tmp.star; e.currentTarget.classList.toggle('on', tmp.star); tmpCount(); };
   m.querySelector('[data-flt-learned]').onclick=e=>{ tmp.learned=!tmp.learned; e.currentTarget.classList.toggle('on', tmp.learned); tmpCount(); };
   m.querySelector('[data-flt-wrong]').onclick=e=>{ tmp.oftenWrong=!tmp.oftenWrong; e.currentTarget.classList.toggle('on', tmp.oftenWrong); tmpCount(); };
+  m.querySelector('[data-flt-nosent]').onclick=e=>{ tmp.noSent=!tmp.noSent; e.currentTarget.classList.toggle('on', tmp.noSent); tmpCount(); };
   m.querySelector('#fltExport').onclick=()=>exportWords(tmp);
   m.querySelector('#fltReset').onclick=()=>{
-    flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false};
+    flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false, noSent:false};
     renderDict(); updateFilterBadge(); refreshModeFilterBadges();
     closeModal('modalFilter');
   };
   m.querySelector('#fltApply').onclick=()=>{
-    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due, thisMonth:tmp.thisMonth, lastMonth:tmp.lastMonth, star:tmp.star, learned:tmp.learned, addedRecent:tmp.addedRecent, oftenWrong:tmp.oftenWrong};
+    flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due, thisMonth:tmp.thisMonth, lastMonth:tmp.lastMonth, star:tmp.star, learned:tmp.learned, addedRecent:tmp.addedRecent, oftenWrong:tmp.oftenWrong, noSent:tmp.noSent};
     renderDict(); updateFilterBadge(); refreshModeFilterBadges();
     closeModal('modalFilter');
   };
@@ -2661,15 +2665,14 @@ function openFilterModal(){
 }
 function toggleSet(set, v){ if(set.has(v)) set.delete(v); else set.add(v); }
 // Экспорт выбранного в окне фильтра в txt: одна строка — одно слово, строго в порядке добавления
-// (новые сверху). Пустой выбор = вся колода языка. «без предложений» по умолчанию включена.
+// (новые сверху). Пустой выбор = вся колода языка. «Без предложений» слушается общего флага
+// фильтра (passesFilterTmp отсеивает предложения, когда noSent включён).
 function exportWords(f){
   const includePy=!!document.getElementById('fltChkPinyin')?.checked;
   const includeTr=!!document.getElementById('fltChkTr')?.checked;
-  const noSent=!!document.getElementById('fltChkNosent')?.checked;
   const list=langItems().slice().sort((a,b)=>((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||'')));
   const lines=[];
   for(const it of list){
-    if(noSent && String(it.kind||'word')==='sent') continue;
     if(f && !passesFilterTmp(it, f)) continue;
     const hanzi=String(it.hanzi||'').trim(); if(!hanzi) continue;
     const py=(it.pinyin&&String(it.pinyin).trim())||(hasStrokes()?toPinyin(hanzi):(langOf(it)==='en'?toEnIpa(hanzi):''));
@@ -6177,12 +6180,15 @@ function matchDeck(){
   const rest=filteredLangItems().filter(it=>it.translation&&!it.starred);
   return shuffle(star).concat(shuffle(rest));
 }
-// «Предложение» для группировки Подбора: явно помечено kind='sent'/'sentence'
-// ИЛИ длина ≥5 символов без пробелов (та же граница, что визуальный класс .sent в eqWordClass).
+// «Предложение»: явно помечено kind='sent'/'sentence', ИЛИ зарезервированной меткой
+// «предложение», ИЛИ перевод начинается с заглавной буквы и состоит из нескольких слов
+// (содержит пробел). Длина иероглифов больше НЕ признак — она ловит фразы вроде «健康的生活».
 function isSentenceItem(it){
   const k=String(it.kind||'word');
   if(k==='sent'||k==='sentence') return true;
-  return (String(it.hanzi||'').replace(/\s+/g,'').length)>=5;
+  if(String(it.tag||'').trim().toLowerCase()==='предложение') return true;
+  const tr=String(it.translation||'').trim();
+  return /^\p{Lu}/u.test(tr) && /\s/.test(tr);
 }
 function matchDraw(arr, n){
   const out=[]; const seen=new Set();
@@ -6383,6 +6389,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.10.5','14.11.26','Фильтр «Без предложений»: новая галочка в окне фильтра отсеивает карточки-предложения во всех режимах и при экспорте. Предложение определяется по явной метке «предложение» или по переводу с заглавной буквы из нескольких слов.'],
   ['1.10.4','12.11.26','В списке молитв — три отдельные кнопки: «＋ Текст» (только строки), «＋ Аудио» (подключить mp3) и «Удалить» (мягко, в Корзину), чтобы после изучения молитвы можно было освободить место на устройстве. Под именем молитвы — её реальный размер аудио, считается автоматически (округляется до десятых).'],
   ['1.10.3','11.11.26','Библиотека молитв: при добавлении «Дуа Кунут» теперь подключаются и 15 mp3 (озвучка каждой строки) — аудио встроено прямо в приложение и работает офлайн у любого, кто добавил молитву. Строки молитвы сохраняют свою последовательность (1→15): добавлен порядковый номер seq, который переживает импорт бэкапа и синхронизацию — карточки молитвы больше не перемешиваются на новом устройстве.'],
   ['1.10.2','11.11.26','Режим «Учить» переименован в «Изучение» (вкладка в меню, кнопка перехода после экзамена, подпись в настройках экзамена). В «Изучении» клик по любому месту центрального блока карточки проигрывает аудио один раз (во всех языках), повторный клик — ещё раз; в «Листании» клик по центру перезапускает текущее слово, правая треть экрана — следующее слово. Кнопка ▶ (арабский) теперь честно показывает «сейчас играет» и возвращается в «плей» и при синтезе речи, а не только при mp3. В экзамене («Верно-неверно», «Тоны», «Выбор ответов») клик по центру вопроса проигрывает аудио один раз. «Тоны»: пиньинь под иероглифами крупнее (16→24px), перевод после угаданной фразы показывается на секунду дольше (2 с).'],
