@@ -5070,9 +5070,13 @@ function startAssemble(){
   const ch=writeChars[writeCharIdx];
   const tiles=ch?decompTiles(ch):null;
   if(!tiles){
-    // атом или нет данных — пропускаем, переходим к следующему символу
-    area.innerHTML=`<div class="asm-empty">«${ch||''}» не раскладывается на части.<br>Переходим дальше…</div>`;
-    setTimeout(()=>{ if(token===writeToken) writeGoto(writeCharIdx+1); }, 750);
+    // атом или нет данных — пропускаем. Если в слове ВООБЩЕ нет раскладываемых иероглифов,
+    // пропускаем слово целиком (иначе writeGoto зациклится на атоме и слово никогда не засчитается).
+    const hasAssemblable=writeChars.some(c=>decompTiles(c));
+    area.innerHTML=hasAssemblable
+      ?`<div class="asm-empty">«${ch||''}» не раскладывается на части.<br>Переходим дальше…</div>`
+      :`<div class="asm-empty">«${(writeCurItem&&writeCurItem.hanzi)||''}» не из чего собирать.<br>Переходим к следующему слову…</div>`;
+    setTimeout(()=>{ if(token!==writeToken) return; hasAssemblable ? writeGoto(writeCharIdx+1) : writeNext(); }, 750);
     return;
   }
   const distractors=shuffle(asmDistractorPool().filter(c=>!tiles.includes(c))).slice(0,3);
