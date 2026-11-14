@@ -826,6 +826,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .sn-slider .sn-slider-lab{flex:0 0 auto; font-size:12px; color:var(--mut); font-weight:600}
 .sn-slider input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--red); height:28px; margin:0}
 .sn-slider-val{flex:0 0 auto; min-width:52px; text-align:right; font-size:13px; font-weight:700; color:var(--red); font-variant-numeric:tabular-nums}
+/* Ползунок «Постепенно через» в одну строку с переключателем «Постепенно» */
+.exam-sub .grad-inline{flex:1 1 auto; min-width:0; padding:0; gap:4px; margin-left:8px}
+.exam-sub .grad-inline .sn-slider-val{min-width:32px; font-size:12px}
 
 /* Экзамен: верхний тулбар настроек */
 .exam-toolbar{display:flex; justify-content:center; align-items:center; gap:6px; flex-wrap:wrap; margin:0 0 6px; max-width:600px; margin-left:auto; margin-right:auto}
@@ -5568,21 +5571,18 @@ function renderExamSettings(){
         <div class="mi-label">Верно-неверно<span class="mi-hint">Задания «Верно / Не верно»</span></div>
         <button class="sn-switch ${examSettings.tf?'on':''}" data-exam-key="tf"></button>
       </div>
-      <div class="exam-sub">
+      ${examSettings.tf?`<div class="exam-sub">
         <div class="menu-item">
-          <div class="mi-label">Постепенно<span class="mi-hint">Раскрывать пиньинь и перевод по очереди</span></div>
+          <div class="mi-label" style="flex:0 0 auto; margin-right:8px">Постепенно</div>
           <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
+          ${examGradual?`<div class="sn-slider grad-inline"><span class="sn-slider-lab">через</span><input type="range" min="0" max="6" step="1" value="${examGradualDelay}" data-exam-grad><span class="sn-slider-val" data-exam-grad-val>${examGradualDelay} с</span></div>`:''}
         </div>
-        <div class="menu-item" style="display:block">
-          <div class="mi-label">Постепенно через<span class="mi-hint">Пауза: иероглиф → пиньинь → перевод → аудио (0 с — всё сразу)</span></div>
-          <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="1" value="${examGradualDelay}" data-exam-grad><span class="sn-slider-val" data-exam-grad-val>${examGradualDelay} с</span></div>
-        </div>
-      </div>
+      </div>`:''}
       <div class="menu-item">
         <div class="mi-label">Выбор ответов<span class="mi-hint">Задания с вариантами ответов</span></div>
         <button class="sn-switch ${examSettings.choice?'on':''}" data-exam-key="choice"></button>
       </div>
-      <div class="exam-sub">
+      ${examSettings.choice?`<div class="exam-sub">
         <div class="menu-item">
           <div class="mi-label">Число вариантов<span class="mi-hint">Сколько карточек в «Выборе ответов»</span></div>
           <span class="seg sm" id="examChoiceSeg" style="flex:0 0 auto; margin-left:10px">
@@ -5590,17 +5590,17 @@ function renderExamSettings(){
             <button data-v="8" class="active">8</button><button data-v="10">10</button>
           </span>
         </div>
-      </div>
+      </div>`:''}
       ${showTone?`<div class="menu-item">
         <div class="mi-label">Тоны<span class="mi-hint">Указать тон каждого иероглифа (только китайский)</span></div>
         <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="tone"></button>
       </div>
-      <div class="exam-sub">
+      ${examSettings.tone?`<div class="exam-sub">
         <div class="menu-item">
           <div class="mi-label">Пиньинь<span class="mi-hint">Показывать пиньинь без тонов под иероглифом</span></div>
           <button class="sn-switch ${examSettings.tonePy?'on':''}" data-exam-key="tonePy"></button>
         </div>
-      </div>`:''}
+      </div>`:''}`:''}
       <div class="menu-item">
         <div class="mi-label">Подбор пар<span class="mi-hint">Соединить иероглиф и перевод</span></div>
         <button class="sn-switch ${examSettings.match?'on':''}" data-exam-key="match"></button>
