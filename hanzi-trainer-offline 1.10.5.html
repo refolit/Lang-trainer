@@ -508,6 +508,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .chk-row{display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center}
 .chk{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; color:var(--mut); font-weight:600; cursor:pointer; user-select:none}
 .chk input{width:15px; height:15px; margin:0; accent-color:var(--red)}
+/* «Без предложений» — объёмная кнопка-переключатель рядом с галочками пиньинь/перевод */
+.nosent-btn{flex:0 0 auto; cursor:pointer; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:10px; padding:6px 12px; font-size:12.5px; font-weight:700; white-space:nowrap; box-shadow:0 3px 0 var(--line); transition:transform .05s, box-shadow .05s}
+.nosent-btn:active{transform:translateY(3px); box-shadow:0 0 0 var(--line)}
+.nosent-btn.on{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 3px 0 var(--red-d)}
+.nosent-btn.on:active{transform:translateY(3px); box-shadow:0 0 0 var(--red-d)}
 /* «Данные» в Настройках: размер баз слов и аудио */
 .data-stats{display:flex; flex-direction:column; gap:8px; margin-bottom:12px}
 /* Экран «Синхронизация»: админ-статистика + журнал того, что ушло/пришло */
@@ -798,8 +803,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Заголовок секции в окне настроек экзамена (Режимы / Параметры / Тайминги) */
 .sn-sec-h{font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--mut); padding:10px 0 2px; margin-top:4px}
 /* Подрежимы: вложенные настройки под главным переключателем (Постепенно / Число вариантов) */
-.exam-sub{padding-left:14px; border-left:2px solid var(--line); margin:0 0 6px}
+.exam-sub{padding-left:26px; border-left:2px solid var(--line); margin:0 0 6px; animation:examSubIn .22s ease}
 .exam-sub .menu-item{padding:9px 0; border-bottom:0}
+@keyframes examSubIn{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:translateY(0)}}
 /* Окно «Метки»: строка с полем + кнопки ✓ / 🗑 */
 .tag-row{display:flex; align-items:center; gap:6px; margin-bottom:8px}
 .tag-inp{flex:1 1 auto; min-width:0}
@@ -2640,14 +2646,13 @@ function openFilterModal(){
       <button class="flt-chip ${tmp.star?'on':''}" data-flt-star="1">★ Избранное</button>
       <button class="flt-chip ${tmp.learned?'on':''}" data-flt-learned="1">Выучено</button>
       <button class="flt-chip ${tmp.oftenWrong?'on':''}" data-flt-wrong="1">Часто ошибаюсь</button>
-      <button class="flt-chip ${tmp.noSent?'on':''}" data-flt-nosent="1">Без предложений</button>
     </div>
-    <div class="auth-hint" style="margin:0">«Без предложений» скрывает карточки-предложения в режимах и при экспорте.</div>
     <div class="export-row" style="margin-top:14px">
       <button class="btn sec" id="fltExport">Экспорт слов</button>
       <div class="chk-row">
         <label class="chk"><input type="checkbox" id="fltChkPinyin"> пиньинь</label>
         <label class="chk"><input type="checkbox" id="fltChkTr"> перевод</label>
+        <button class="nosent-btn ${tmp.noSent?'on':''}" data-flt-nosent="1">Без предложений</button>
       </div>
     </div>
     <div class="btn-row" style="margin-top:14px">
@@ -5581,7 +5586,9 @@ function renderExamSettings(){
     <div id="examSettingsGeneral" class="${tab==='general'?'':'hidden'}">
       <div class="menu-item" style="display:block">
         <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
-        <div class="sn-slider"><span class="sn-slider-lab">0 с</span><input type="range" min="0" max="6" step="0.5" value="${examAudioDelay}" data-exam-delay><span class="sn-slider-val" data-exam-delay-val>${examAudioDelay} с</span></div>
+        <span class="seg sm" id="examDelaySeg" style="margin-top:8px">
+          ${[0,1,2,3,4,5,6].map(v=>`<button data-v="${v}" class="${examAudioDelay===v?'active':''}">${v} с</button>`).join('')}
+        </span>
       </div>
       <div class="menu-item" style="display:block">
         <div class="mi-label">Размер текста<span class="mi-hint">Отдельно от режима «Изучение»: размер иероглифа / пиньиня / перевода в заданиях</span></div>
@@ -5601,10 +5608,15 @@ function renderExamSettings(){
       </div>
       ${examSettings.tf?`<div class="exam-sub">
         <div class="menu-item">
-          <div class="mi-label" style="flex:0 0 auto; margin-right:8px">Постепенно</div>
+          <div class="mi-label">Постепенно<span class="mi-hint">Показывать пиньинь и перевод с паузой</span></div>
           <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
-          ${examGradual?`<div class="sn-slider grad-inline"><span class="sn-slider-lab">через</span><input type="range" min="0" max="6" step="1" value="${examGradualDelay}" data-exam-grad><span class="sn-slider-val" data-exam-grad-val>${examGradualDelay} с</span></div>`:''}
         </div>
+        ${examGradual?`<div class="menu-item">
+          <div class="mi-label">Через<span class="mi-hint">Пауза между шагами (с)</span></div>
+          <span class="seg sm" id="examGradSeg" style="flex:0 0 auto; margin-left:10px">
+            ${[0,1,2,3,4,5,6].map(v=>`<button data-v="${v}" class="${examGradualDelay===v?'active':''}">${v} с</button>`).join('')}
+          </span>
+        </div>`:''}
       </div>`:''}
       <div class="menu-item">
         <div class="mi-label">Выбор ответов<span class="mi-hint">Задания с вариантами ответов</span></div>
@@ -5663,20 +5675,20 @@ function renderExamSettings(){
       renderExamSettings();
     };
   });
-  m.querySelectorAll('input[type=range][data-exam-delay]').forEach(r=>{
-    r.oninput=()=>{
-      const v=Math.round(Number(r.value)*2)/2;   // шаг 0,5 с
-      examAudioDelay=v;
-      settings.examAudioDelay=v; persist();
-      const val=m.querySelector('[data-exam-delay-val]'); if(val) val.textContent=v+' с';
+  m.querySelectorAll('#examDelaySeg button').forEach(b=>{
+    b.classList.toggle('active', +b.dataset.v===examAudioDelay);
+    b.onclick=()=>{
+      examAudioDelay=+b.dataset.v;
+      settings.examAudioDelay=examAudioDelay; persist();
+      renderExamSettings();
     };
   });
-  m.querySelectorAll('input[type=range][data-exam-grad]').forEach(r=>{
-    r.oninput=()=>{
-      const v=Math.round(Number(r.value));       // шаг 1 с
-      examGradualDelay=v;
-      settings.examGradualDelay=v; persist();
-      const val=m.querySelector('[data-exam-grad-val]'); if(val) val.textContent=v+' с';
+  m.querySelectorAll('#examGradSeg button').forEach(b=>{
+    b.classList.toggle('active', +b.dataset.v===examGradualDelay);
+    b.onclick=()=>{
+      examGradualDelay=+b.dataset.v;
+      settings.examGradualDelay=examGradualDelay; persist();
+      renderExamSettings();
     };
   });
   m.querySelectorAll('input[type=range][data-exam-size]').forEach(r=>{
