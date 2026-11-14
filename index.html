@@ -498,7 +498,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .cf-prev{margin-top:6px; line-height:1.45}
 
 /* Словарь: строка фильтров — 4 одинаковых чипа в ряд (Все слова / Избранное / выучено / Фильтр) */
-.dict-filter-row{display:flex; align-items:stretch; gap:6px; margin-bottom:10px; flex-wrap:wrap}
+.dict-filter-row{display:flex; align-items:stretch; gap:10px 6px; margin-bottom:10px; flex-wrap:wrap}
 .dict-filter{flex:0 0 auto; cursor:pointer; border:1.5px solid var(--line); background:var(--card); color:var(--mut); border-radius:12px; padding:8px 11px; font-size:13px; font-weight:700; white-space:nowrap}
 .dict-filter b{font-weight:800; color:var(--ink)}
 .dict-filter.active{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 4px 0 var(--red-d),0 4px 10px rgba(198,40,40,.18)}
@@ -521,6 +521,21 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .nosent-btn:active{transform:translateY(3px); box-shadow:0 0 0 var(--line)}
 .nosent-btn.on{background:var(--red); color:#fff; border-color:var(--red); box-shadow:0 3px 0 var(--red-d)}
 .nosent-btn.on:active{transform:translateY(3px); box-shadow:0 0 0 var(--red-d)}
+/* «Без предложений» — на всю ширину, компактная высота (в окне «Фильтр» ниже экспорта) */
+.nosent-btn.full{width:100%; display:flex; align-items:center; justify-content:center; padding:9px 12px; margin-top:10px}
+/* Разделительная линия перед блоком «Экспорт слов» */
+.flt-divider{border-top:1.5px solid var(--line); margin:14px 0 10px}
+/* Нативная выпадашка (Уровни в окне «Фильтр») */
+.flt-select{width:100%; font-size:13.5px; padding:10px 12px; border-radius:12px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); font-weight:600}
+/* Выпадашка «Метки» (мультивыбор): кнопка + раскрывающаяся панель с чекбоксами */
+.flt-drop{display:flex; flex-direction:column; margin-top:6px}
+.flt-drop-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); border-radius:12px; padding:10px 12px; font-size:13.5px; font-weight:600; cursor:pointer}
+.flt-drop-btn .arrow{color:var(--mut); font-size:12px}
+.flt-drop-panel{display:none; margin-top:6px; border:1.5px solid var(--line); border-radius:12px; padding:6px; max-height:200px; overflow-y:auto; background:var(--card)}
+.flt-drop-panel.open{display:block}
+.flt-drop-opt{display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; font-size:13.5px; color:var(--ink); cursor:pointer}
+.flt-drop-opt:hover{background:var(--soft)}
+.flt-drop-opt input{width:16px; height:16px; accent-color:var(--red); margin:0}
 /* «Данные» в Настройках: размер баз слов и аудио */
 .data-stats{display:flex; flex-direction:column; gap:8px; margin-bottom:12px}
 /* Экран «Синхронизация»: админ-статистика + журнал того, что ушло/пришло */
@@ -998,9 +1013,9 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="sync-status" id="syncStatus"><span class="dot"></span><span id="syncStatusText">Войдите, чтобы синхронизировать</span></div>
       <div class="dict-filter-row">
         <button class="dict-filter" data-dict-filter="all" id="dictFilterAll">Все слова</button>
+        <button class="dict-filter" id="dictFilterBtn">Фильтр<span class="flt-badge" id="fltBadge"></span></button>
         <button class="dict-filter" data-dict-filter="star" id="dictFilterStar">★ Избранное</button>
         <button class="dict-filter" data-dict-filter="learned" id="dictFilterLearned">выучено</button>
-        <button class="dict-filter" id="dictFilterBtn">Фильтр<span class="flt-badge" id="fltBadge"></span></button>
       </div>
       <div class="btn-row" style="margin-bottom:10px">
         <button class="btn sec" id="btnAdd">＋ Слово</button>
@@ -1398,7 +1413,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.2';
+const APP_VERSION='1.11.3';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2658,35 +2673,39 @@ function openFilterModal(){
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Фильтр</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalFilter')">✕</button></div>
     <div class="flt-count" id="fltCount">Выбрано слов: 0</div>
-    <label class="lbl">Уровни</label>
-    <div class="flt-sec" id="fltLvls">
-      ${[1,2,3,4,5].map(l=>`<button class="flt-chip ${tmp.lvls.has(l)?'on':''}" data-flt-lvl="${l}">Уровень ${l}</button>`).join('')}
-    </div>
-    <label class="lbl">Метки</label>
-    <div class="flt-sec" id="fltTags">
-      ${tags.length?tags.map(t=>`<button class="flt-chip ${tmp.tags.has(t)?'on':''}" data-flt-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join(''):'<div class="auth-hint" style="margin:0">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
-    </div>
     <label class="lbl">Когда добавлено</label>
     <div class="flt-sec" id="fltMonth">
       <button class="flt-chip ${tmp.thisMonth?'on':''}" data-flt-month="this">Этот месяц</button>
       <button class="flt-chip ${tmp.lastMonth?'on':''}" data-flt-month="last">Прошлый месяц</button>
       <button class="flt-chip ${tmp.addedRecent?'on':''}" data-flt-recent="1">Добавлено недавно</button>
     </div>
+    <label class="lbl">Метки</label>
+    <div class="flt-drop" id="fltTagsDrop">
+      <button class="flt-drop-btn" id="fltTagsBtn" type="button"><span id="fltTagsLabel">Все метки</span><span class="arrow">▾</span></button>
+      <div class="flt-drop-panel" id="fltTagsPanel">
+        ${tags.length?tags.map(t=>`<label class="flt-drop-opt"><input type="checkbox" data-flt-tag="${escapeHtml(t)}" ${tmp.tags.has(t)?'checked':''}>${escapeHtml(t)}</label>`).join(''):'<div class="auth-hint" style="margin:6px 4px">Меток пока нет — добавьте их в карточке (поле «Метка»).</div>'}
+      </div>
+    </div>
+    <label class="lbl">Уровни</label>
+    <select class="flt-select" id="fltLvlSel">
+      <option value="">Все уровни</option>
+      ${[1,2,3,4,5].map(l=>`<option value="${l}" ${tmp.lvls.has(l)?'selected':''}>Уровень ${l}</option>`).join('')}
+    </select>
     <label class="lbl">Другое</label>
     <div class="flt-sec" id="fltDue">
-      <button class="flt-chip ${tmp.due?'on':''}" data-flt-due="1">Повторить сейчас</button>
       <button class="flt-chip ${tmp.star?'on':''}" data-flt-star="1">★ Избранное</button>
       <button class="flt-chip ${tmp.learned?'on':''}" data-flt-learned="1">Выучено</button>
       <button class="flt-chip ${tmp.oftenWrong?'on':''}" data-flt-wrong="1">Часто ошибаюсь</button>
     </div>
-    <div class="export-row" style="margin-top:14px">
+    <div class="flt-divider"></div>
+    <div class="export-row">
       <button class="btn sec" id="fltExport">Экспорт слов</button>
       <div class="chk-row">
         <label class="chk"><input type="checkbox" id="fltChkPinyin"> пиньинь</label>
         <label class="chk"><input type="checkbox" id="fltChkTr"> перевод</label>
-        <button class="nosent-btn ${tmp.noSent?'on':''}" data-flt-nosent="1">Без предложений</button>
       </div>
     </div>
+    <button class="nosent-btn full ${tmp.noSent?'on':''}" data-flt-nosent="1">Без предложений</button>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn sec" id="fltReset">Сбросить фильтр</button>
       <button class="btn ok" id="fltApply">Применить фильтр</button>
@@ -2701,11 +2720,23 @@ function openFilterModal(){
     const n=tmpActiveF(tmp) ? exportListBase.filter(it=>passesFilterTmp(it, tmp)).length : 0;
     document.getElementById('fltCount').textContent='Выбрано слов: '+n;
   }
-  // выбор чипов меняет только рабочую копию; к реальному flt ничего не применяется,
+  // выбор меняет только рабочую копию; к реальному flt ничего не применяется,
   // пока пользователь не нажмёт «Применить фильтр» (или «Сбросить» очистит выбор).
-  m.querySelectorAll('[data-flt-lvl]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.lvls, +b.dataset.fltLvl); b.classList.toggle('on', tmp.lvls.has(+b.dataset.fltLvl)); tmpCount(); });
-  m.querySelectorAll('[data-flt-tag]').forEach(b=>b.onclick=()=>{ toggleSet(tmp.tags, b.dataset.fltTag); b.classList.toggle('on', tmp.tags.has(b.dataset.fltTag)); tmpCount(); });
-  m.querySelector('[data-flt-due]').onclick=e=>{ tmp.due=!tmp.due; e.currentTarget.classList.toggle('on', tmp.due); tmpCount(); };
+  // Уровни — одиночный выбор нативной выпадашкой.
+  const lvlSel=m.querySelector('#fltLvlSel');
+  lvlSel.onchange=()=>{ tmp.lvls=new Set(lvlSel.value?[+lvlSel.value]:[]); tmpCount(); };
+  // Метки — мультивыбор: кнопка раскрывает панель чекбоксов, подпись — живой счётчик.
+  const tagsBtn=m.querySelector('#fltTagsBtn'), tagsPanel=m.querySelector('#fltTagsPanel'), tagsLabel=m.querySelector('#fltTagsLabel');
+  function renderTagsLabel(){
+    const n=tmp.tags.size;
+    tagsLabel.textContent = n===0 ? 'Все метки' : (n===1 ? '1 метка' : n+' метки');
+  }
+  tagsBtn.onclick=(e)=>{ e.stopPropagation(); tagsPanel.classList.toggle('open'); };
+  m.querySelectorAll('[data-flt-tag]').forEach(cb=>{
+    cb.onchange=()=>{ if(cb.checked) tmp.tags.add(cb.dataset.fltTag); else tmp.tags.delete(cb.dataset.fltTag); renderTagsLabel(); tmpCount(); };
+  });
+  // клик вне панели закрывает выпадашку меток
+  m.addEventListener('click', e=>{ if(!tagsPanel.contains(e.target) && !tagsBtn.contains(e.target)) tagsPanel.classList.remove('open'); });
   m.querySelectorAll('[data-flt-month]').forEach(b=>b.onclick=()=>{ const k=b.dataset.fltMonth==='this'?'thisMonth':'lastMonth'; tmp[k]=!tmp[k]; b.classList.toggle('on', tmp[k]); tmpCount(); });
   m.querySelector('[data-flt-recent]').onclick=e=>{ tmp.addedRecent=!tmp.addedRecent; e.currentTarget.classList.toggle('on', tmp.addedRecent); tmpCount(); };
   m.querySelector('[data-flt-star]').onclick=e=>{ tmp.star=!tmp.star; e.currentTarget.classList.toggle('on', tmp.star); tmpCount(); };
@@ -6481,6 +6512,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.3','15.11.26','Словарь → Фильтр: порядок кнопок-фишек изменён (Все слова → Фильтр → Избранное → выучено), кнопка «Фильтр» больше не прилипает к «Все слова» при переносе на мобильных. В окне фильтра новый порядок: «Когда добавлено» сверху, «Метки» — выпадающий список с мультивыбором, «Уровни» — выпадающий список с одиночным выбором, «Другое» без «Повторить сейчас»; «Экспорт слов» отделён линией, «Без предложений» — на всю ширину ниже, затем «Сбросить фильтр» и «Применить фильтр».'],
   ['1.11.2','14.11.26','Изучение: значок динамика рядом с шестерёнкой стал независимым переключателем авто-озвучки этой страницы — выключен (перечёркнутый динамик) → автозвук не произносится, включён → произносится; ручное проигрывание кликом по карточке работает всегда. Глобальные «иностранное/русское аудио» больше не влияют на обычные карточки Изучения — только на Листание и Экзамен. Синхронизация ускорена: поиск дублей по облаку заменён с вложенного перебора (O(N×M)) на предварительно построенную карту (O(N+M)) — на больших базах синк заметно быстрее.'],
   ['1.11.1','14.11.26','Встроенный англо-русский словарь (топ-5000 самых частотных слов по SUBTLEX-US, составлен вручную) — работает офлайн. При добавлении нового английского слова русский перевод подставляется автоматически (как IPA-транскрипция): если поле «Перевод» ещё пустое и слово есть в словаре.'],
   ['1.11.0','14.11.26','Встроенный китайско-русский словарь (топ-5000 самых частотных слов по SUBTLEX-CH, составлен вручную) — работает офлайн. При добавлении нового китайского слова русский перевод подставляется автоматически (как пиньинь): если поле «Перевод» ещё пустое и слово есть в словаре.'],
