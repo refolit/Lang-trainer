@@ -803,9 +803,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 /* Заголовок секции в окне настроек экзамена (Режимы / Параметры / Тайминги) */
 .sn-sec-h{font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--mut); padding:10px 0 2px; margin-top:4px}
 /* Подрежимы: вложенные настройки под главным переключателем (Постепенно / Число вариантов) */
-.exam-sub{padding-left:26px; border-left:2px solid var(--line); margin:0 0 6px; animation:examSubIn .22s ease}
+.exam-sub{padding-left:26px; border-left:2px solid var(--line); margin:0 0 6px; animation:examSubIn 1s ease}
 .exam-sub .menu-item{padding:9px 0; border-bottom:0}
-@keyframes examSubIn{from{opacity:0; transform:translateY(-6px)} to{opacity:1; transform:translateY(0)}}
+@keyframes examSubIn{from{opacity:0; transform:translateY(-10px)} to{opacity:1; transform:translateY(0)}}
+/* «Постепенно + Через» в одну строку, компактно (узкие экраны) */
+.exam-sub .exam-grad-row{gap:6px 8px}
+.exam-sub .exam-grad-row .mi-label{font-size:12px}
+#examGradSeg button{padding:4px 3px; font-size:11px}
 /* Окно «Метки»: строка с полем + кнопки ✓ / 🗑 */
 .tag-row{display:flex; align-items:center; gap:6px; margin-bottom:8px}
 .tag-inp{flex:1 1 auto; min-width:0}
@@ -5574,7 +5578,7 @@ function renderExamSettings(){
       <div class="menu-item" style="display:block">
         <div class="mi-label">Задержка аудио<span class="mi-hint">Пауза перед озвучкой нового слова (0 с — без задержки)</span></div>
         <span class="seg sm" id="examDelaySeg" style="margin-top:8px">
-          ${[0,1,2,3,4,5,6].map(v=>`<button data-v="${v}" class="${examAudioDelay===v?'active':''}">${v} с</button>`).join('')}
+          ${[0,1,2,3,4,5,6].map(v=>`<button data-v="${v}" class="${examAudioDelay===v?'active':''}">${v}</button>`).join('')}
         </span>
       </div>
       <div class="menu-item" style="display:block">
@@ -5594,16 +5598,19 @@ function renderExamSettings(){
         <button class="sn-switch ${examSettings.tf?'on':''}" data-exam-key="tf"></button>
       </div>
       ${examSettings.tf?`<div class="exam-sub">
-        <div class="menu-item">
-          <div class="mi-label">Постепенно<span class="mi-hint">Показывать пиньинь и перевод с паузой</span></div>
-          <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
+        <div class="menu-item exam-grad-row">
+          <div style="display:inline-flex; align-items:center; gap:6px; flex:0 0 auto">
+            <span class="mi-label" style="flex:0 0 auto">Постепенно</span>
+            <button class="sn-switch ${examGradual?'on':''}" data-exam-key="gradual"></button>
+          </div>
+          ${examGradual?`<div style="display:inline-flex; align-items:center; gap:6px; flex:0 0 auto">
+            <span class="mi-label" style="flex:0 0 auto">Через</span>
+            <span class="seg sm" id="examGradSeg" style="flex:0 0 auto">
+              ${[0,1,2,3,4,5,6].map(v=>`<button data-v="${v}" class="${examGradualDelay===v?'active':''}">${v}</button>`).join('')}
+            </span>
+          </div>`:''}
         </div>
-        ${examGradual?`<div class="menu-item">
-          <div class="mi-label">Через<span class="mi-hint">Пауза между шагами (с)</span></div>
-          <span class="seg sm" id="examGradSeg" style="flex:0 0 auto; margin-left:10px">
-            ${[0,1,2,3,4,5,6].map(v=>`<button data-v="${v}" class="${examGradualDelay===v?'active':''}">${v} с</button>`).join('')}
-          </span>
-        </div>`:''}
+        ${examGradual?`<div class="mi-hint" style="margin:2px 0 0">Пауза между шагами (сек.)</div>`:''}
       </div>`:''}
       <div class="menu-item">
         <div class="mi-label">Выбор ответов<span class="mi-hint">Задания с вариантами ответов</span></div>
