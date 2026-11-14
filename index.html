@@ -390,11 +390,19 @@ html[data-theme="plum"] .dc.py{color:#c7aef0}
 /* Круглая кнопка повторного озвучивания в строке статуса «Учить» (правки 12.10.26 0.22):
    SVG-громкоговоритель перекрашивается в цвет текста (currentColor), чтобы жить в обеих темах. */
 .study-speak{
-  width:28px; height:28px; border-radius:50%; border:0; cursor:pointer; flex:0 0 auto; padding:0;
-  background:var(--soft); color:var(--mut); display:inline-flex; align-items:center; justify-content:center;
+  width:28px; height:28px; border-radius:10px; border:0; cursor:pointer; flex:0 0 auto; padding:0;
+  background:transparent; color:var(--mut); display:inline-flex; align-items:center; justify-content:center;
+  position:relative;
 }
-.study-speak svg{width:18px; height:18px; display:block; fill:currentColor}
+.study-speak svg{width:28px; height:28px; display:block; fill:currentColor; overflow:visible}
+.study-speak:hover{background:var(--soft)}
 .study-speak:active{transform:scale(.94)}
+/* Выключенное автозвук «Учить»: приглушённый динамик + диагональная перечёркивающая черта */
+.study-speak.off svg{opacity:.45}
+.study-speak.off::after{
+  content:''; position:absolute; left:50%; top:50%; width:34px; height:2px;
+  background:var(--mut); border-radius:1px; transform:translate(-50%,-50%) rotate(-45deg);
+}
 /* Кнопка-переключатель режима «Листание» (правки 27.10.26) — между статусом и 🔊 */
 .study-browse{
   width:28px; height:28px; border-radius:50%; border:1.5px solid var(--line); cursor:pointer; flex:0 0 auto; padding:0;
@@ -1029,7 +1037,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
         <button class="study-browse" id="studyBrowseBtn" title="Листание" aria-label="Листание"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/></svg></button>
         <span class="speaker" id="studySpeed"></span>
         <span class="flt-mode-badge hidden" id="studyFltBadge"></span>
-        <button class="study-speak" id="studySpeakBtn" title="Проиграть ещё раз" aria-label="Проиграть ещё раз"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
+        <button class="study-speak" id="studySpeakBtn" title="Аудио на этой странице: автоматическое озвучивание" aria-label="Аудио на этой странице"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
         <button class="study-gear light" id="studySettingsBtn" title="Настройки режима" aria-label="Настройки режима"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
       </div>
     </div>
@@ -1390,7 +1398,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.1';
+const APP_VERSION='1.11.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2272,7 +2280,10 @@ function tracksFor(it, opts){
   const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
   // Русский аудио-канал в Учить/Экзамен не звучит (правки 27.10.26): только иностранный.
   // Русская озвучка осталась только в режиме «Листание» (проигрывается отдельно, см. browsePlayRussian).
-  const foreignOn = settings.foreignAudio!==false;
+  // Иностранный канал: Экзамен живёт на глобальном тумблере «иностранное аудио», а «Учить»
+  // теперь независим — его авто-озвучку решает своя кнопка (значок динамика), ручное
+  // проигрывание кликом по карточке работает всегда. Поэтому здесь гейтим только экзамен.
+  const foreignOn = opts.mode==='exam' ? (settings.foreignAudio!==false) : true;
   return foreignOn ? foreignTracks(it,opts,speeds,rateMap,labelMap,R) : [];
 }
 // В режиме «Учить» слово озвучивается один раз на обычной скорости.
@@ -3530,7 +3541,18 @@ let studySeqOn=false;   // «Подряд»: слова в порядке соз
 let studyCurDir='fr';
 let studyDirMap=new Map();   // id слова → направление (fr/rf): в mix запоминается при первом показе
 // Аудио в «Учить» — только иностранный канал (русский убран из Учить/Экзамен, правки 27.10.26).
-function studyAudioOn(){ return settings.foreignAudio!==false; }
+// Автозвук «Учить» — независимый тумблер на этой странице (значок динамика рядом с шестерёнкой),
+// НЕ связан с глобальным «иностранное аудио» (то управляет Листанием и Экзаменом).
+function studyAudioOn(){ return settings.studyAudio!==false; }
+// Вид кнопки-тумблера аудио «Учить»: вкл — обычный динамик, выкл — перечёркнутый.
+function renderStudyAudioBtn(){
+  const b=document.getElementById('studySpeakBtn');
+  if(!b) return;
+  const on=studyAudioOn();
+  b.classList.toggle('off', !on);
+  b.title=on ? 'Аудио: включено — нажмите, чтобы выключить' : 'Аудио: выключено — нажмите, чтобы включить';
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
 // Подписи ползунков размера — по РОЛИ текста и языку. Роль 'h' всегда связана с mulH,
 // 'p' — с mulP, 't' — с mulT (см. studyFonts). Транскрипция есть только у zh (пиньинь) и en (IPA),
 // поэтому строка «Пиньинь/Транскрипция» есть только у них.
@@ -3565,6 +3587,7 @@ function applyStudyRows(){
 function applyStudyToggles(){
   const gear=document.getElementById('studySettingsBtn');
   if(gear) gear.classList.toggle('dim', !(studyPyOn&&studyTrOn&&studyHanziOn));
+  renderStudyAudioBtn();
   applyStudyRows();
   applyStudySizes();
   renderStudySettings();
@@ -3911,7 +3934,8 @@ function studyBack(){
   studyIdx--;
   showStudyCard();
 }
-// Кнопка «громкоговоритель» в строке статуса «Учить»: проиграть текущее слово/предложение заново.
+// Ручное проигрывание текущего слова (клик по центру карточки): работает в любом состоянии
+// тумблера автозвука. Значок-динамик рядом с шестерёнкой больше не «повтор», а переключатель автозвука.
 function studySpeak(){
   studyTouch();
   const it=studyQueue[studyIdx]; if(!it) return;
@@ -6457,6 +6481,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.2','14.11.26','Изучение: значок динамика рядом с шестерёнкой стал независимым переключателем авто-озвучки этой страницы — выключен (перечёркнутый динамик) → автозвук не произносится, включён → произносится; ручное проигрывание кликом по карточке работает всегда. Глобальные «иностранное/русское аудио» больше не влияют на обычные карточки Изучения — только на Листание и Экзамен. Синхронизация ускорена: поиск дублей по облаку заменён с вложенного перебора (O(N×M)) на предварительно построенную карту (O(N+M)) — на больших базах синк заметно быстрее.'],
   ['1.11.1','14.11.26','Встроенный англо-русский словарь (топ-5000 самых частотных слов по SUBTLEX-US, составлен вручную) — работает офлайн. При добавлении нового английского слова русский перевод подставляется автоматически (как IPA-транскрипция): если поле «Перевод» ещё пустое и слово есть в словаре.'],
   ['1.11.0','14.11.26','Встроенный китайско-русский словарь (топ-5000 самых частотных слов по SUBTLEX-CH, составлен вручную) — работает офлайн. При добавлении нового китайского слова русский перевод подставляется автоматически (как пиньинь): если поле «Перевод» ещё пустое и слово есть в словаре.'],
   ['1.10.6','14.11.26','Экзамен: вложенные настройки подрежимов появляются плавно (анимация), переключатель «Постепенно» зафиксирован на месте, «Через» и «Задержка аудио» — сегментные кнопки 0–6 (шаг 1 секунда). В окне фильтра «Без предложений» — объёмная кнопка рядом с пиньинь/перевод вместо отдельного чипа.'],
@@ -7870,11 +7895,13 @@ function renderGlobalAudioSettings(){
       if(k==='foreignAudio') settings.foreignAudio = settings.foreignAudio===false;
       else settings.ruAudio = settings.ruAudio===false;
       persist();
-      // мгновенно применить к текущим режимам
+      // мгновенно применить к текущим режимам.
+      // Обычные карточки «Учить» на эти глобальные тумблеры НЕ реагируют — автозвук у них свой
+      // (значок динамика). Глобальные «иностранное/русское аудио» влияют на Листание и Экзамен.
       const scr=document.getElementById('scr-study');
-      if(scr && scr.classList.contains('active')){
-        const it=studyQueue[studyIdx];
-        if(it){ if(studyAudioOn()) studyPlayLoop(it); else { Player.stop(); document.getElementById('studySpeed').textContent='🔇'; } }
+      if(scr && scr.classList.contains('active') && browseOn){
+        const bit=studyQueue[studyIdx];
+        if(bit) browseStep(bit);   // Листание: перезапустить слово с новым состоянием аудио
       }
       const escr=document.getElementById('scr-exam');
       if(escr && escr.classList.contains('active')){
@@ -8343,7 +8370,18 @@ document.getElementById('studyAgain').onclick=()=>{
 document.getElementById('studyKnow').onclick=studyNext;
 document.getElementById('studyBack').onclick=studyBack;
 document.getElementById('studySettingsBtn').onclick=openStudySettings;
-document.getElementById('studySpeakBtn').onclick=studySpeak;
+document.getElementById('studySpeakBtn').onclick=()=>{
+  // Тумблер автозвука «Учить»: переключает независимую настройку этой страницы.
+  settings.studyAudio = settings.studyAudio===false;
+  persist();
+  renderStudyAudioBtn();
+  const scr=document.getElementById('scr-study');
+  if(scr && scr.classList.contains('active')){
+    const it=studyQueue[studyIdx];
+    if(studyAudioOn()){ if(it) studyPlayLoop(it); }
+    else { Player.stop(); if(document.getElementById('studySpeed')) document.getElementById('studySpeed').textContent='🔇'; }
+  }
+};
 document.getElementById('studyCardArea').onclick=studyCardClick;
 document.getElementById('studyBrowseBtn').onclick=toggleBrowse;
 document.getElementById('studyTTBack').onclick=()=>studyTransportSeek(-STUDY_SEEK_STEP);
@@ -8416,7 +8454,7 @@ function bindAudioLifecycle(){
         return;
       }
       const scr=document.getElementById('scr-study');
-      if(scr && scr.classList.contains('active') && settings.foreignAudio!==false){
+      if(scr && scr.classList.contains('active') && studyAudioOn()){
         const it=studyQueue[studyIdx];
         if(it) studyPlayLoop(it);
       }
@@ -8974,19 +9012,25 @@ async function doSync(){
     // --- крос-дедупликация: одинаковый материал (язык+слово) с РАЗНЫМИ id ---
     // По-id мерж такие не ловит (id случайны). Если локальная и облачная копии — дубли,
     // склеиваем их детерминированно (меньший id выживает), прогресс — максимумы.
+    // Индекс «ключ дубля → id облачной строки» строим ОДИН раз за O(облако): раньше для
+    // КАЖДОЙ локальной карточки перебирались все облачные строки (вложенный цикл N×M), что
+    // на большой базе квадратично замедляло синк. После dedupeCloudCards ключ уникален,
+    // поэтому первый (и единственный) совпавший id и есть искомый.
+    const cloudByDup=new Map();          // dupKey → id облачной строки
+    for(const rid of Object.keys(cloudById)){
+      const row=cloudById[rid];
+      const k=dupKeyOfLang(cardFromCloud(row.data||{}, row.u, row.pu));
+      if(!cloudByDup.has(k)) cloudByDup.set(k, rid);
+    }
     for(let i=0;i<items.length;i++){
       const it=items[i];
       if(!String(it.hanzi||'').trim()) continue;
       const k=dupKeyOfLang(it);
-      // находим облачную копию с тем же ключом, но другим id
-      let clRow=null;
-      for(const rid of Object.keys(cloudById)){
-        if(rid===it.id) continue;
-        const row=cloudById[rid];
-        if(row._dupKey===undefined) row._dupKey=dupKeyOfLang(cardFromCloud(row.data||{}, row.u, row.pu));
-        if(row._dupKey===k){ clRow={id:rid, row}; break; }
-      }
-      if(!clRow) continue;
+      const rid=cloudByDup.get(k);
+      if(!rid || rid===it.id) continue;   // нет облачного дубля, либо это та же карточка (self)
+      const row=cloudById[rid];
+      if(!row) continue;                   // облачная строка уже удалена этим же циклом
+      const clRow={id:rid, row};
       const cloudIt=cardFromCloud(clRow.row.data||{}, clRow.row.u, clRow.row.pu);
       let survIt, loserIt;
       if(it.id<clRow.id){
