@@ -333,10 +333,15 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .cube-film .fslot.good{color:var(--blue)}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .cube-film .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
-/* «Фанфары»: собранная фраза сверху (мелким шрифтом, перенос, видна целиком) + текущий кусок по центру */
-.fanfare-built{width:100%; text-align:center; font-size:18px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; margin:4px 0 14px; min-height:1.4em; color:var(--blue)}
-.fanfare-built span{display:inline-block}
-.fanfare-built span.rise{animation:fanfareRise .22s ease}
+/* «Фанфары»: полное предложение сразу крупно (как «Учить»). Набранные куски — обычным цветом,
+   текущее слово подсвечено, ещё не набранное — приглушено. Длинное предложение обрезается до 3 строк
+   и раскрывается по мере набора (автопрокрутка к текущему слову). Размер задаёт JS (studyFonts). */
+.fanfare-full{width:100%; position:relative; text-align:center; font-family:var(--font-cjk); font-weight:700; color:var(--ink); line-height:1.25; margin:6px 0 14px; overflow-y:hidden}
+.fanfare-full .w{display:inline-block; white-space:nowrap; transition:color .18s, opacity .18s}
+.fanfare-full .w.b{color:var(--ink); opacity:1}
+.fanfare-full .w.cur{color:var(--red); opacity:1}
+.fanfare-full .w.todo{color:var(--ink); opacity:.26}
+.fanfare-full .w.rise{animation:fanfareRise .22s ease}
 @keyframes fanfareRise{0%{transform:translateY(18px); opacity:0}100%{transform:translateY(0); opacity:1}}
 .fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px; flex:0 0 auto}
 .fanfare-chunk .fslot{flex:0 0 auto; min-width:34px; height:38px; padding:0 3px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
@@ -344,8 +349,9 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .fanfare-chunk .fslot.good{color:var(--blue)}
 .fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .fanfare-chunk .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
-.fanfare-built.done{animation:fanfareDone .5s ease; font-size:20px; font-weight:800; color:var(--red)}
-@keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+.fanfare-full.done{animation:fanfareDone .5s ease; color:var(--red)}
+.fanfare-full.done .w{color:var(--red); opacity:1}
+@keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
@@ -4915,6 +4921,40 @@ function renderFanfareCard(area){
   };
   loadFanfareChunk(area);
 }
+// Полное предложение «Фанфар» крупно (как «Учить»): каждое слово — отдельный span с состоянием.
+// Завершённые куски — обычный цвет, текущий кусок подсвечен, ещё не набранный — приглушён.
+// Последний завершённый кусок получает анимацию «всплытия» (rise).
+function fanfareFullHtml(s){
+  const parts=[];
+  s.chunks.forEach((words,ci)=>words.forEach(w=>parts.push({w, ci})));
+  const lastBuilt=s.chunkIdx-1;
+  return parts.map(p=>{
+    let cls='w todo';
+    if(p.ci < s.chunkIdx) cls='w b'+(p.ci===lastBuilt?' rise':'');
+    else if(p.ci === s.chunkIdx) cls='w cur';
+    return `<span class="${cls}">${escapeHtml(p.w)}</span>`;
+  }).join(' ');
+}
+// Размер полного предложения — ровно как центр «Учить» (studyFonts), + обрезка до 3 строк
+// и автопрокрутка к текущему слову (длинное предложение раскрывается по мере набора).
+function sizeFanfareFull(area){
+  const el=area.querySelector('#fanfareFull'); if(!el) return;
+  const full=String((cubesState&&cubesState.it&&cubesState.it.hanzi)||'').trim();
+  const len=Array.from(full).length;
+  const f=studyFonts(len, null, false, len);
+  const lh=f.sent?1.4:1.25;
+  el.style.fontSize=f.hz.toFixed(1)+'px';
+  el.style.lineHeight=lh;
+  el.style.maxHeight=(f.hz*lh*3).toFixed(1)+'px';
+  // принудительный reflow, чтобы offsetTop/offsetHeight были актуальны сразу (без rAF,
+  // который не срабатывает на фоновой вкладке), затем прокрутка к текущему слову
+  void el.offsetHeight;
+  const cur=el.querySelector('.w.cur');
+  if(cur){
+    const top=cur.offsetTop - Math.max(0,(el.clientHeight-cur.offsetHeight)/2);
+    el.scrollTop = Math.max(0, top);
+  }
+}
 function loadFanfareChunk(area){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
   const words=s.chunks[s.chunkIdx]||[];
@@ -4924,7 +4964,6 @@ function loadFanfareChunk(area){
   s.letters=letters; s.disp=disp; s.cells=cells; s.pos=0;
   s.bank=cubesBankForLetters(letters);
   const it=s.it;
-  const builtHtml=s.built.map((w,i)=>`<span class="${i===s.built.length-1?'rise':''}">${escapeHtml(w)}</span>`).join(' ');
   const rtl=langInfo().rtl;
   const chunkHtml=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
@@ -4933,9 +4972,10 @@ function loadFanfareChunk(area){
       : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
-    <div class="fanfare-built" id="fanfareBuilt">${builtHtml}</div>
+    <div class="fanfare-full" id="fanfareFull" dir="ltr">${fanfareFullHtml(s)}</div>
     <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
     <div class="wbank" id="wBank">${wbankRows(s.bank)}</div>`);
+  sizeFanfareFull(area);
   paintFanfare(area);
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
@@ -4956,16 +4996,15 @@ function paintFanfare(area){
 function fanfareGood(){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
   const it=s.it;
-  const words=s.chunks[s.chunkIdx]||[];
-  s.built.push(words.join(' '));
   const area=document.getElementById('writeArea');
   if(s.chunkIdx>=s.chunks.length-1){
     // Вся фраза собрана: показать её целиком красным ещё 2 секунды, затем переход.
     paintFanfare(area);
-    const builtEl=area.querySelector('#fanfareBuilt');
-    if(builtEl){
-      builtEl.innerHTML=s.built.map((w,i)=>`<span class="${i===s.built.length-1?'rise':''}">${escapeHtml(w)}</span>`).join(' ');
-      builtEl.classList.add('done');
+    const fullEl=area.querySelector('#fanfareFull');
+    if(fullEl){
+      fullEl.innerHTML=s.chunks.flat().map(w=>`<span class="w b">${escapeHtml(w)}</span>`).join(' ');
+      fullEl.classList.add('done');
+      fullEl.scrollTop = 0;
     }
     // блокируем ввод на время показа, чтобы случайные клавиши не «доиграли»
     const tok=writeToken;
@@ -5828,20 +5867,10 @@ const EXAM_WORD_LIMIT=20;  // максимум слов в одной сесси
 // 2) новые слова — не больше SRS_NEW_PER_SESS за сессию;
 // 3) порядок случайный с приоритетом низким коробкам (коробка 1 чаще коробки 4);
 // 4) слово не повторяется, пока не прошло EXAM_MIN_GAP других заданий.
-function examBuildSeq(){
-  const sep=examModes();
-  // Пул экзамена: due-слова коробок 1–4 + звёзды (даже если не due). Выученные исключены.
+// Пул слов сессии экзамена: due-слова коробок 1–4 + звёзды (даже если не due). Выученные
+// исключены. Возвращает готовый список слов (новые первыми, затем старые по весу коробок).
+function examPool(){
   const all=filteredLangItems().filter(it=>it.translation && !isLearned(it));
-  const modeOrder=[];
-  if(sep.choice) modeOrder.push('choice');
-  if(sep.tf) modeOrder.push('tf');
-  // тон-тест: только для языков с иероглифами (китайский) и только слова/фразы с тонами
-  if(sep.tone && hasStrokes()) modeOrder.push('tone');
-  // подбор: один раунд из 5 пар на «задание» — участвует в общей ротации
-  if(sep.match) modeOrder.push('match');
-  // письмо: одно слово на задание; участвует в ротации только если есть что писать
-  if(sep.write && examWritePool().length) modeOrder.push('write');
-  if(!modeOrder.length) return [];
   // due: звёзды всегда, остальные — по сроку; новое слово (nextDue=0) всегда due.
   let due=all.filter(it=>it.starred || (it.nextDue||0)<=now());
   // при активном фильтре (напр. «уровень 1») due может оказаться пустым, хотя фильтр отобрал
@@ -5870,6 +5899,21 @@ function examBuildSeq(){
     words.push(it);
   }
   while(newSlice.length && words.length<EXAM_WORD_LIMIT) words.push(newSlice.shift());
+  return words;
+}
+function examBuildSeq(){
+  const sep=examModes();
+  const modeOrder=[];
+  if(sep.choice) modeOrder.push('choice');
+  if(sep.tf) modeOrder.push('tf');
+  // тон-тест: только для языков с иероглифами (китайский) и только слова/фразы с тонами
+  if(sep.tone && hasStrokes()) modeOrder.push('tone');
+  // подбор: один раунд из 5 пар на «задание» — участвует в общей ротации
+  if(sep.match) modeOrder.push('match');
+  // письмо: одно слово на задание; участвует в ротации только если есть что писать
+  if(sep.write && examWritePool().length) modeOrder.push('write');
+  if(!modeOrder.length) return [];
+  const words=examPool();
   if(!words.length) return [];
   // Последовательность заданий: каждое слово — во всех включённых режимах. Режимы слова идут
   // в случайном порядке, а сами слова чередуются по раундам (round-robin), чтобы одно слово
@@ -5896,10 +5940,13 @@ function startExam(){
   enterSession();
   examSeq=examBuildSeq();
   examIdx=0; examRight=0; examWrong=[]; examCurrentIt=null;
-  document.getElementById('examEmpty').classList.toggle('hidden', examSeq.length>=4);
-  if(examSeq.length<4){
+  // Гейт и подсказку считаем по ГОТОВЫМ словам сессии (examPool), а не по всем словам с переводом:
+  // выученные (коробка 5) и «не подошедшие по SRS-сроку» в экзамен не попадают, поэтому раньше
+  // подсказка врала («Сейчас слов: 5. Добавьте ещё 0» при реально готовом 1 слове).
+  const have=examPool().length;
+  document.getElementById('examEmpty').classList.toggle('hidden', have>=4);
+  if(have<4){
     document.getElementById('examBody').innerHTML='';
-    const have=filteredLangItems().filter(it=>it.translation).length;
     const need=Math.max(0,4-have);
     document.getElementById('examEmptyCount').textContent='Сейчас слов: '+have+'. Добавьте ещё '+need+' — и можно начинать!';
     updateExamScore();
