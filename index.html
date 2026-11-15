@@ -347,6 +347,14 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 @keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
 /* Русский перевод в «Одним словом»: крупнее, жирнее, на 10px ниже */
 #writeTr.fanfare-tr{font-size:20px; font-weight:700; color:var(--ink); margin-top:10px; margin-bottom:2px}
+/* Результат «Одним словом»: набранные слова появляются по одному (по мере набора слова),
+   текст переносится и центрируется (2 строки для типичной фразы). Место зарезервировано,
+   чтобы карточка не прыгала. */
+.fanfare-result{width:100%; min-height:2.6em; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; align-content:center; gap:0 8px; margin:2px 0 12px; text-align:center; font-family:var(--font-cjk); font-weight:700; font-size:36px; line-height:1.3; color:var(--ink)}
+.fanfare-result .w{white-space:nowrap}
+.fanfare-result .w.rise{animation:fanfareRise .22s ease}
+.fanfare-result.done .w{color:var(--red)}
+@keyframes fanfareRise{0%{transform:translateY(14px); opacity:0}100%{transform:translateY(0); opacity:1}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
@@ -4888,12 +4896,22 @@ function renderCubesCard(area){
   focusCubeArea();
 }
 // ---------- «Фанфары» («Одним словом»): набираем всё предложение целиком ----------
-// Полное предложение — один ряд ячеек (переносится и центрируется), без подсказки на английском:
-// сверху только русский перевод. Набираем всё предложение кубиками; собрано → красное.
+// Сверху русский перевод, под ним — зарезервированное место для результата: набранное слово
+// появляется там по одному (по мере набора слова), текст переносится и центрируется. Ниже —
+// ячейки-буквы (без английской подсказки), набираем кубиками; собрано → красное.
 function renderFanfareCard(area){
   const it=writeCurItem;
   const {cells, letters, disp}=writeCellsCubes(it);
-  cubesState={layout:'fanfare', it, cells, letters, disp, bank:cubesBankForLetters(letters), pos:0};
+  const words=String(it.hanzi||'').trim().split(/\s+/).filter(Boolean);
+  const wordEnds=[];
+  { let li=-1, lastGap=true;
+    for(const c of cells){
+      if(c.gap){ if(!lastGap) wordEnds.push(li); lastGap=true; }
+      else if(!c.punct){ li++; lastGap=false; }
+    }
+    if(!lastGap) wordEnds.push(li);
+  }
+  cubesState={layout:'fanfare', it, cells, letters, disp, bank:cubesBankForLetters(letters), pos:0, words, wordEnds, builtCount:0};
   const rtl=langInfo().rtl;
   const chunkHtml=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
@@ -4902,6 +4920,7 @@ function renderFanfareCard(area){
       : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr fanfare-tr">${escapeHtml(trJoined(it))}</div>
+    <div class="fanfare-result" id="fanfareResult" dir="ltr"></div>
     <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
     <div class="wbank" id="wBank">${wbankRows(cubesState.bank)}</div>`);
   paintFanfare(area);
@@ -4909,6 +4928,20 @@ function renderFanfareCard(area){
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
   });
   focusCubeArea();
+}
+// Сколько слов уже набрано целиком (последняя буква слова пройдена).
+function fanfareBuiltCount(s){
+  let n=0; for(const e of s.wordEnds) if(e < s.pos) n++;
+  return n;
+}
+// Обновить строку результата: набранное слово появляется по одному (с анимацией последнего).
+function updateFanfareResult(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const el=area.querySelector('#fanfareResult'); if(!el) return;
+  const n=fanfareBuiltCount(s);
+  if(n===s.builtCount) return;
+  s.builtCount=n;
+  el.innerHTML=s.words.slice(0,n).map((w,i)=>`<span class="w ${i===n-1?'rise':''}">${escapeHtml(w)}</span>`).join(' ');
 }
 function paintFanfare(area){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
@@ -4919,6 +4952,7 @@ function paintFanfare(area){
     if(li<s.pos){ sl.textContent=(s.disp&&s.disp[li])||s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
     else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); if(li===s.pos) curEl=sl; }
   });
+  updateFanfareResult(area);
 }
 // Всё предложение набрано → показать его красным 2 секунды, затем переход.
 function fanfareGood(){
@@ -4928,6 +4962,8 @@ function fanfareGood(){
   paintFanfare(area);
   const chunk=area.querySelector('#fanfareChunk');
   if(chunk) chunk.classList.add('done');
+  const res=area.querySelector('#fanfareResult');
+  if(res){ res.innerHTML=s.words.map(w=>`<span class="w">${escapeHtml(w)}</span>`).join(' '); res.classList.add('done'); }
   // блокируем ввод на время показа, чтобы случайные клавиши не «доиграли»
   const tok=writeToken;
   cubesState=null;
