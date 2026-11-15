@@ -5045,12 +5045,26 @@ function renderZhWriteBar(){
 // Компоненты иероглифа: берём его разложение в IDS, отбрасываем операторы (⿰⿱…) и «？»,
 // остальные символы — плитки. НЕ раскладываем каждый компонент дальше (компонент остаётся
 // целой плиткой). 0–1 компонент → иероглиф «атом», не собираем (возвращаем null).
-function decompTiles(ch){
+function immParts(ch){
   const d=(window.HANZI_DECOMP||{})[ch];
   if(!d || d==='？') return null;
   const seen=new Set(); const out=[];
   for(const c of d){ if(IDS_OPS.has(c) || c==='？') continue; if(!seen.has(c)){ seen.add(c); out.push(c); } }
   return out.length>=2 ? out : null;
+}
+function decompTiles(ch){
+  const imm=immParts(ch);
+  if(!imm) return null;
+  const seen=new Set(); const out=[];
+  for(const c of imm){
+    const sub=immParts(c);
+    if(sub && sub.every(s=>immParts(s))){
+      for(const s of sub){ if(!seen.has(s)){ seen.add(s); out.push(s); } }
+    }else{
+      if(!seen.has(c)){ seen.add(c); out.push(c); }
+    }
+  }
+  return out.length>=2 ? out : imm;
 }
 // Пул дистракторов: все символы, встречающиеся как компоненты в любом разложении (лениво, один раз).
 function asmDistractorPool(){
