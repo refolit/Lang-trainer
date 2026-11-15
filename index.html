@@ -303,6 +303,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .wbank button.used{opacity:.25; pointer-events:none}
 .wbank button.flash{animation:cubeFlash .42s ease}
 .wbank button.press{animation:cubePress .18s ease}
+/* Банк букв всегда в два ряда, делится поровну, каждая строка — по центру. */
+.wbank-row{display:flex; gap:7px; justify-content:center; flex-wrap:nowrap; width:100%}
 @keyframes cubePress{0%{transform:scale(1)}40%{transform:scale(.88)}100%{transform:scale(1)}}
 @keyframes cubeFlash{0%{background:var(--red); border-color:var(--red); color:#fff}100%{background:var(--card); border-color:var(--line); color:var(--ink)}}
 .wslot-row{display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:14px 0 4px}
@@ -315,7 +317,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 @keyframes slotPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,0,0,0)}50%{box-shadow:0 0 0 5px var(--soft2)}}
 /* «Киноплёнка» (режим кубиков): компактные ячейки в одну ленту, автопрокрутка к текущей.
    Набранное уезжает влево, активная буква всегда видна; между словами — зазор. */
-.cube-film{display:flex; gap:6px; align-items:center; overflow-x:auto; overflow-y:hidden; padding:8px 6px; margin:10px 0 2px; scrollbar-width:none; -ms-overflow-style:none; scroll-behavior:smooth}
+.cube-film{display:flex; gap:6px; align-items:center; overflow-x:auto; overflow-y:hidden; padding:8px 6px; margin:10px 0 2px; scrollbar-width:none; -ms-overflow-style:none; scroll-behavior:smooth; flex:0 0 auto}
 .cube-film::-webkit-scrollbar{display:none}
 .cube-film .fslot{flex:0 0 auto; min-width:34px; height:38px; padding:0 3px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .cube-film .fslot.gap{width:14px; border:0; background:transparent}
@@ -327,7 +329,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .fanfare-built span{display:inline-block}
 .fanfare-built span.rise{animation:fanfareRise .22s ease}
 @keyframes fanfareRise{0%{transform:translateY(18px); opacity:0}100%{transform:translateY(0); opacity:1}}
-.fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px}
+.fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px; flex:0 0 auto}
 .fanfare-chunk .fslot{flex:0 0 auto; min-width:34px; height:38px; padding:0 3px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
 .fanfare-chunk .fslot.good{color:var(--blue)}
@@ -822,12 +824,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .cube-order-lab:first-child{margin-top:0}
 /* Английский «кубики»: панель управления прижата к низу экрана, как кнопки в «Учить»/«Экзамен»
    (экран — flex-колонка на всю высоту, контент скроллится внутри, панель не прыгает). */
-#scr-write.cubes.active{display:flex; flex-direction:column}
+#scr-write.cubes.active{display:flex; flex-direction:column; padding-bottom:0}
+#scr-write.cubes #writeList{display:none}
 #scr-write.cubes #writeCenter{flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; justify-content:flex-start}
 #scr-write.cubes #writeArea.type{flex:1 1 auto; min-height:0; max-width:100%; align-items:stretch; padding:0}
 #scr-write.cubes #writeArea.type .type-card{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; padding:10px 4px 6px}
 /* Банк букв — внизу области выбора, чтобы всё свободное место оставалось под набор */
-#scr-write.cubes .wbank{margin:auto 0 4px; padding-top:12px}
+#scr-write.cubes .wbank{margin:auto 0 4px; padding-top:12px; flex-direction:column; align-items:center; gap:7px}
 #scr-write.cubes .cube-order{flex:0 0 auto; margin-top:6px}
 #scr-write.cubes .write-bottom{flex:0 0 auto}
 /* Собранная фраза в «Киноленте»: короткая подсветка перед переходом к следующему слову */
@@ -1474,7 +1477,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.6';
+const APP_VERSION='1.11.7';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4470,7 +4473,7 @@ function startWrite(focusIt){
   const all=writableItems();
   // «Тон» (китайский): только отдельные слова — предложения не участвуют, всегда без настройки.
   const toneOnlyWords = hasStrokes() && zhWriteMode()==='tone';
-  const avail = toneOnlyWords ? all.filter(it=>!isSentenceItem(it)) : all;
+  const avail = toneOnlyWords ? all.filter(toneWordOk) : all;
   if(!avail.length){
     document.getElementById('writeWord').innerHTML='';
     document.getElementById('writeArea').classList.remove('type','asm','tone');
@@ -4851,6 +4854,14 @@ function cubesBankForLetters(letters){
   }
   return bank;
 }
+// Банк букв всегда в ДВА ряда: набор делится поровну (верхний ряд = ceil(n/2), нижний — остаток),
+// каждый ряд выравнивается по центру. data-bi сохраняет глобальный индекс кубика для кликов.
+function wbankRows(bank){
+  const n=bank.length; if(!n) return '';
+  const half=Math.ceil(n/2);
+  const row=(slice,off)=>`<div class="wbank-row">${slice.map((l,i)=>`<button type="button" class="wletter" data-bi="${off+i}">${escapeHtml(l)}</button>`).join('')}</div>`;
+  return row(bank.slice(0,half),0)+row(bank.slice(half),half);
+}
 function cubesBankLetters(it){
   // банк кубиков для целой фразы (кино-лента) — уникальные буквы слова + 10 случайных
   const need=writeCells(it).letters;
@@ -4876,7 +4887,7 @@ function renderCubesCard(area){
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
     <div class="cube-film ${rtl?'rtl':''}" id="cubeFilm">${film}</div>
-    <div class="wbank" id="wBank">${bank.map((l,bi)=>`<button type="button" class="wletter" data-bi="${bi}">${escapeHtml(l)}</button>`).join('')}</div>`);
+    <div class="wbank" id="wBank">${wbankRows(bank)}</div>`);
   paintCubes(area);
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
@@ -4915,7 +4926,7 @@ function loadFanfareChunk(area){
     <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
     <div class="fanfare-built" id="fanfareBuilt">${builtHtml}</div>
     <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
-    <div class="wbank" id="wBank">${s.bank.map((l,bi)=>`<button type="button" class="wletter" data-bi="${bi}">${escapeHtml(l)}</button>`).join('')}</div>`);
+    <div class="wbank" id="wBank">${wbankRows(s.bank)}</div>`);
   paintFanfare(area);
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
@@ -5132,7 +5143,7 @@ function renderZhWriteBar(){
       if(!writeCurItem) return;
       // перерисовать текущее слово в новом режиме; в «Тоне» предложения не участвуют —
       // если текущее слово — предложение, переходим к первому подходящему слову.
-      if(zhWriteMode()==='tone' && isSentenceItem(writeCurItem)){
+      if(zhWriteMode()==='tone' && !toneWordOk(writeCurItem)){
         rebuildWriteSeq();
         if(writeSeq.length) setWriteItem(writeSeq[0]);
         else startWrite(); // слов нет — пересобрать экран (покажет сообщение)
@@ -5285,7 +5296,7 @@ function tonePool(){
 // Вопрос: верный пиньинь + три варианта, где у КАЖДОГО слога подменён тон (остальные
 // буквы те же). null — если пиньиня нет или вариантов набрать не удалось.
 function toneQuestion(it){
-  if(it && isSentenceItem(it)) return null; // «Тон»: только отдельные слова, предложения пропускаем
+  if(it && !toneWordOk(it)) return null; // «Тон»: только короткие слова (≤4 иероглифа), остальное пропускаем
   const P=window.pinyinPro; if(!P) return null;
   const word=String((it&&it.hanzi)||'').replace(/[^一-鿿]/g,'');
   if(!word) return null;
@@ -5437,7 +5448,7 @@ function writeWordList(){
     return ((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||''));
   });
   // «Тон» (китайский): только отдельные слова — предложения не участвуют, всегда без настройки.
-  if(hasStrokes() && zhWriteMode()==='tone') return list.filter(it=>!isSentenceItem(it));
+  if(hasStrokes() && zhWriteMode()==='tone') return list.filter(toneWordOk);
   return list;
 }
 function rebuildWriteSeq(){
@@ -5685,6 +5696,27 @@ function writeSizeSliderHTML(skey, cur, min, max, label){
 function renderWriteSettings(){
   const m=document.getElementById('modalWriteSettings');
   if(!m || m.classList.contains('hidden')) return;
+  // Английский («кубики»): оставляем только Аудио — Контур/Рандом/Анимация/размер кнопок/Подсказка не нужны.
+  const cubesOnly = writeMode()==='cubes';
+  if(cubesOnly){
+    m.innerHTML=`<div class="sheet">
+      <div class="row"><h2>Настройки режима Письмо</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalWriteSettings')">✕</button></div>
+      <div style="margin-top:6px">
+        <div class="menu-item" data-write-key="writeAudio">
+          <div class="mi-label">Аудио<span class="mi-hint">Озвучка слова/предложения</span></div>
+          <button class="sn-switch ${writeAudioOn?'on':''}" data-write-key="writeAudio"></button>
+        </div>
+      </div>
+    </div>`;
+    m.querySelectorAll('.sn-switch[data-write-key]').forEach(el=>{
+      const k=el.dataset.writeKey;
+      el.onclick=()=>{
+        if(k==='writeAudio') toggleWriteAudio();
+        renderWriteSettings();
+      };
+    });
+    return;
+  }
   // «Тон»: обводка и анимация начертания в задании не участвуют — оставляем только Аудио/Рандом.
   const toneOnly = hasStrokes() && zhWriteMode()==='tone';
   const rows=[['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]];
@@ -6708,6 +6740,15 @@ function isSentenceItem(it){
   const tr=String(it.translation||'').trim();
   return /^\p{Lu}/u.test(tr) && /\s/.test(tr);
 }
+// Для «Тона» слово должно быть коротким — 1–4 иероглифа. Всё длиннее считается фразой/предложением,
+// даже если оно НЕ помечено как «предложение» (например, «你生病的时候习惯做什么») — пропускаем.
+// Граница совпадает с STUDY_SENT_BREAK (5+ иероглифов = предложение в остальных режимах).
+function toneWordOk(it){
+  if(!it) return false;
+  if(isSentenceItem(it)) return false;
+  const n=(String(it.hanzi||'').match(/[一-鿿]/g)||[]).length;
+  return n>=1 && n<=4;
+}
 function matchDraw(arr, n){
   const out=[]; const seen=new Set();
   const src=[...arr];
@@ -6907,6 +6948,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.7','15.11.26','Письмо (английский): блок «Назад/Вперёд» и панель раскладок прижаты к низу на той же высоте, что и строка статуса в «Изучении». Исправлен «Предложением» — лента букв больше не сжимается и не обрезается. В «Настройках режима Письма» для английского осталась только настройка «Аудио» (Контур, Рандом, Анимация, размер кнопок и Подсказка убраны). Банк букв теперь всегда ровно в два ряда, делится поровну и выравнивается по центру.'],
   ['1.11.6','15.11.26','Письмо (английский): у блоков кнопок появились подписи «Буквы расположены» и «Слова расположены», «Кинолента» → «Предложением», «Фанфары» → «Одним словом». Панель с раскладками и «Назад/Вперёд» закреплена снизу и больше не прыгает по высоте — прокручивается только область выбора букв. Заглавные буквы теперь видны в ячейках при наборе и в результате (например, «I love learning English»); в «Предложением» после набора добавлен показ готовой фразы. Письмо (китайский) «🎚️ Тон»: участвуют только отдельные слова — предложения пропускаются всегда, без настройки.'],
   ['1.11.5','15.11.26','Письмо (китайский): третий режим «🎚️ Тон» — показывается иероглиф или слово целиком и четыре пиньиня, у которых отличаются только тоны; нужно выбрать верный (по образцу Дуолинго). Рядом с иероглифом — кнопка прослушивания; пиньинь и перевод до ответа скрыты. Обманки собираются только из реально существующих слогов (из словаря разложений), поэтому не бывает несуществующих сочетаний. Верный ответ засчитывается в прогресс слова.'],
   ['1.11.4','15.11.26','Письмо (китайский): новый режим «Собрать из частей» — иероглиф раскладывается на компоненты (словарь разложений makemeahanzi, ~9500 иероглифов, вшит офлайн), нужно собрать их в правильном порядке по образцу Дуолинго. Переключатель «✍️ Обвести / 🧩 Собрать» над окном письма.'],
