@@ -358,6 +358,29 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .asm-tile.used{opacity:.28; pointer-events:none}
 .asm-tile.wrong{background:var(--red); border-color:var(--red); color:#fff; animation:badShake .4s ease}
 .asm-empty{color:var(--mut); text-align:center; padding:24px 10px; line-height:1.5}
+/* «Выбрать тон» (китайский): иероглиф + озвучка + четыре пиньиня (по образцу Дуолинго).
+   Пиньинь и перевод до ответа скрыты — иначе задание теряет смысл. */
+#writeArea.tone{aspect-ratio:auto; min-height:150px; touch-action:auto; flex-direction:column; gap:18px; padding:18px 14px}
+.tone-q{display:flex; align-items:center; justify-content:center; gap:14px}
+.tone-target{font-family:var(--font-cjk); font-size:56px; font-weight:700; line-height:1.15; color:var(--ink); letter-spacing:.02em}
+.tone-speak{width:44px; height:44px; border-radius:50%; border:0; cursor:pointer; flex:0 0 auto; padding:0;
+  background:var(--soft); color:var(--mut); font-size:20px; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center}
+.tone-speak:hover{background:var(--line)}
+.tone-speak:active{transform:scale(.94)}
+.tone-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; max-width:430px; margin:0 auto}
+.tone-opt{min-height:56px; padding:8px 10px; border:2px solid var(--line); border-radius:14px;
+  background:var(--card); color:var(--ink); font-size:22px; font-weight:700; line-height:1.25;
+  cursor:pointer; box-shadow:var(--shadow-sm);
+  transition:transform .08s, background .12s, border-color .12s, opacity .12s}
+.tone-opt:active{transform:scale(.97)}
+.tone-opt.good{background:var(--green); border-color:var(--green); color:#fff}
+.tone-opt.bad{background:var(--red); border-color:var(--red); color:#fff; animation:badShake .4s ease}
+.tone-opt.dim{opacity:.42}
+@media (max-width:1023px){
+  .tone-target{font-size:46px}
+  .tone-opt{min-height:52px; font-size:20px}
+}
 
 /* Словарь: центрированный список, карточки в 2 строки:
    1) иероглиф / пиньинь / перевод — 3 РАВНЫЕ колонки;
@@ -1434,7 +1457,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.4';
+const APP_VERSION='1.11.5';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4430,6 +4453,7 @@ function startWrite(focusIt){
   const all=writableItems();
   if(!all.length){
     document.getElementById('writeWord').innerHTML='';
+    document.getElementById('writeArea').classList.remove('type','asm','tone');
     document.getElementById('writeArea').innerHTML='<div class="empty">Нет слов для письма.<br>Добавьте их в «Словаре».</div>';
     document.getElementById('writePy').textContent=''; document.getElementById('writeTr').textContent='';
     document.getElementById('writeList').innerHTML='';
@@ -4530,6 +4554,7 @@ function setWriteItemTyping(it, speakNow){
   markShown(it);
   writeToken++;
   const area=document.getElementById('writeArea');
+  area.classList.remove('asm','tone'); // режимы китайского не должны влиять на раскладку клавиатурных карточек
   area.classList.add('type');
   // языки без кисти: очищаем глобальные блоки пиньиня/перевода, оставшиеся от китайского режима
   document.getElementById('writePy').textContent='';
@@ -5026,18 +5051,23 @@ function updateCubeOrderBar(){
 // ===== ПИСЬМО (китайский): СОБРАТЬ ИЗ ЧАСТЕЙ (по образцу Дуолинго) =====
 const IDS_OPS = new Set('⿰⿱⿲⿳⿴⿵⿶⿷⿸⿹⿺⿻'.split(''));
 let asmState=null, asmPool=null;
-// Режим китайского письма: 'trace' — обвести иероглиф (HanziWriter), 'assemble' — собрать из компонентов.
-function zhWriteMode(){ return settings.writeZhMode==='assemble' ? 'assemble' : 'trace'; }
+// Режим китайского письма: 'trace' — обвести иероглиф (HanziWriter), 'assemble' — собрать из компонентов,
+// 'tone' — выбрать правильный пиньинь по тонам (образец Дуолинго).
+function zhWriteMode(){
+  const m=settings.writeZhMode;
+  return (m==='assemble'||m==='tone') ? m : 'trace';
+}
 function renderZhWriteBar(){
   const bar=document.getElementById('zhWriteBar'); if(!bar) return;
   if(!hasStrokes()){ bar.innerHTML=''; return; } // только китайский
   const m=zhWriteMode();
   const btn=(k,label)=>`<button type="button" class="${k===m?'on':''}" data-zhwm="${k}">${label}</button>`;
-  bar.innerHTML=`${btn('trace','✍️ Обвести')}${btn('assemble','🧩 Собрать')}`;
+  bar.innerHTML=`${btn('trace','✍️ Обвести')}${btn('assemble','🧩 Собрать')}${btn('tone','🎚️ Тон')}`;
   bar.querySelectorAll('[data-zhwm]').forEach(b=>{
     b.onclick=()=>{
       if(b.dataset.zhwm===zhWriteMode()) return;
       settings.writeZhMode=b.dataset.zhwm; persist();
+      renderWriteSettings(); // шестерёнка: в «Тоне» набор настроек другой
       if(writeCurItem) setWriteItem(writeCurItem, true); // перерисовать текущее слово в новом режиме
     };
   });
@@ -5079,6 +5109,7 @@ function startAssemble(){
   const token=++writeToken;
   writeAnimRunning=false;
   const area=document.getElementById('writeArea');
+  area.classList.remove('tone');
   area.classList.add('type','asm');
   renderWriteWord(); renderWriteLabels(); renderWriteList(); renderZhWriteBar();
   const ch=writeChars[writeCharIdx];
@@ -5129,6 +5160,164 @@ function asmPick(ti){
     if(btn){ btn.classList.add('wrong'); setTimeout(()=>btn.classList.remove('wrong'),400); }
     if(writeAudioOn && writeCurItem && writeCurItem.hanzi) speak(writeCurItem.hanzi,1,foreignVoice());
   }
+}
+// ===== ПИСЬМО (китайский): ВЫБРАТЬ ТОН (по образцу Дуолинго) =====
+// Показываем иероглиф/слово и четыре пиньиня, различающихся ТОНАМИ. Правильный один.
+// Пиньинь и перевод до ответа скрыты — иначе задание превращается в чтение подсказки.
+let toneState=null, tonePoolCache=null, toneFailStreak=0;
+// Диакритика для тонов: в строю 0 — нейтральный тон (без знака), 1–4 — Ā/Á/Ǎ/À.
+const TONE_VOWELS={
+  a:['a','ā','á','ǎ','à'],
+  e:['e','ē','é','ě','è'],
+  i:['i','ī','í','ǐ','ì'],
+  o:['o','ō','ó','ǒ','ò'],
+  u:['u','ū','ú','ǔ','ù'],
+  'ü':['ü','ǖ','ǘ','ǚ','ǜ']
+};
+// «hao3» → «hǎo», «nü4» → «nǜ», «me0» → «me». Знак ставится по правилу пиньиня:
+// первая a → e → «ou» (на o) → иначе последняя гласная (liu4→liù, gui4→guì).
+function numToTone(s){
+  const str=String(s||'').trim().toLowerCase().replace(/u:|v/g,'ü');
+  const m=/^([a-zü]+)([0-5])$/.exec(str);
+  if(!m) return str;
+  const base=m[1]; const tone=Number(m[2]);
+  if(!tone) return base;
+  let idx=-1;
+  if(base.includes('a')) idx=base.indexOf('a');
+  else if(base.includes('e')) idx=base.indexOf('e');
+  else if(base.includes('ou')) idx=base.indexOf('o');
+  else { for(let i=base.length-1;i>=0;i--){ if('aeiouü'.includes(base[i])){ idx=i; break; } } }
+  if(idx<0) return base;
+  const v=TONE_VOWELS[base[idx]];
+  return base.slice(0,idx)+(v?v[tone]:base[idx])+base.slice(idx+1);
+}
+// Слоги с тонами, которые РЕАЛЬНО существуют в китайском: собираем из словаря разложений
+// (каждый иероглиф → его слог), лениво и один раз (~30 мс). Обманки берём только отсюда,
+// чтобы не подсовывать несуществующие сочетания вроде «hei2».
+function tonePool(){
+  if(tonePoolCache) return tonePoolCache;
+  const map=new Map();
+  const P=window.pinyinPro;
+  if(P){
+    for(const ch of Object.keys(window.HANZI_DECOMP||{})){
+      let a; try{ a=P.pinyin(ch,{toneType:'num',type:'array'}); }catch(e){ continue; }
+      if(!a || a.length!==1) continue;
+      const m=/^([a-zü:]+)([0-5])$/.exec(String(a[0]).toLowerCase());
+      if(!m) continue;
+      const base=m[1].replace(/u:|v/g,'ü');
+      if(!map.has(base)) map.set(base,new Set());
+      map.get(base).add(Number(m[2]));
+    }
+  }
+  tonePoolCache=map;
+  return map;
+}
+// Вопрос: верный пиньинь + три варианта, где у КАЖДОГО слога подменён тон (остальные
+// буквы те же). null — если пиньиня нет или вариантов набрать не удалось.
+function toneQuestion(it){
+  const P=window.pinyinPro; if(!P) return null;
+  const word=String((it&&it.hanzi)||'').replace(/[^一-鿿]/g,'');
+  if(!word) return null;
+  let nums;
+  try{ nums=P.pinyin(word,{toneType:'num',type:'array'}); }catch(e){ return null; }
+  if(!nums || !nums.length) return null;
+  const sylls=nums.map(s=>String(s).toLowerCase());
+  const correct=sylls.map(numToTone).join(' ');
+  const pool=tonePool();
+  // Тоны-кандидаты для слога: сначала РЕАЛЬНО существующие (из словаря), затем, если их
+  // мало (редкие слоги вроде lü/de), добиваем остальными 1–4. Нейтральный тон в обманки
+  // не берём: вариант без пометки («ta» рядом с «tā tǎ tá») читается как опечатка, а в
+  // образце Дуолинго все варианты с тонами. Нейтральный остаётся только если он ВЕРНЫЙ.
+  const tonesFor=(base,cur)=>{
+    const out=Array.from(pool.get(base)||[]).filter(t=>t!==cur && t>0);
+    if(out.length>=3) return out; // хватает живых вариантов — ничего не выдумываем
+    for(const t of [1,2,3,4]) if(t!==cur && !out.includes(t)) out.push(t);
+    return out;
+  };
+  const cand=sylls.map(s=>{
+    const m=/^([a-zü:]+)([0-5])$/.exec(s);
+    const base=String(s).replace(/[0-5]$/,'').replace(/u:|v/g,'ü');
+    return { base, cur:m?Number(m[2]):0, tones:tonesFor(base, m?Number(m[2]):0) };
+  });
+  const seen=new Set([correct]); const out=[];
+  for(let attempt=0; attempt<120 && out.length<3; attempt++){
+    const variant=cand.map(c=>{
+      const t=c.tones[Math.floor(Math.random()*c.tones.length)];
+      return numToTone(c.base+t);
+    }).join(' ');
+    if(variant===correct || seen.has(variant)) continue;
+    seen.add(variant); out.push(variant);
+  }
+  if(out.length<3) return null;
+  return { word, correct, options:shuffle([correct, ...out]) };
+}
+function startTone(){
+  const token=++writeToken;
+  writeAnimRunning=false;
+  const area=document.getElementById('writeArea');
+  area.classList.remove('asm');
+  area.classList.add('type','tone');
+  // до ответа НЕ показываем ни пиньинь, ни подсказку-иероглифы над окном, ни перевод
+  const ww=document.getElementById('writeWord'); ww.innerHTML=''; ww.classList.add('hidden');
+  document.getElementById('writePy').textContent='';
+  document.getElementById('writeTr').textContent='';
+  renderWriteList(); renderZhWriteBar();
+  if(!window.pinyinPro){
+    area.innerHTML='<div class="asm-empty">Пиньинь недоступен: библиотека pinyin-pro не загрузилась.<br>Подключитесь к интернету один раз — дальше она работает офлайн.</div>';
+    return;
+  }
+  const q=toneQuestion(writeCurItem);
+  if(!q){
+    // у слова не нашлось слогов/вариантов — пропускаем, чтобы не застрять.
+    // Счётчик подряд идущих пропусков защищает от бесконечного цикла, когда таких слов ВСЕ.
+    toneFailStreak++;
+    const total=Math.max(1, writeWordList().length);
+    if(toneFailStreak>=total){
+      toneFailStreak=0;
+      area.innerHTML='<div class="asm-empty">Пока нет слов, для которых можно задать выбор тона.<br>Добавьте слова с пиньинем в «Словаре».</div>';
+      return;
+    }
+    area.innerHTML=`<div class="asm-empty">Для «${escapeHtml((writeCurItem&&writeCurItem.hanzi)||'')}» не удалось построить задание на тон.<br>Переходим к следующему слову…</div>`;
+    setTimeout(()=>{ if(token!==writeToken) return; writeNext(); }, 700);
+    return;
+  }
+  toneFailStreak=0;
+  toneState={ ...q, it:writeCurItem, picked:-1, done:false };
+  renderTone();
+}
+function renderTone(){
+  const area=document.getElementById('writeArea');
+  const s=toneState; if(!s) return;
+  const opts=s.options.map((o,i)=>{
+    let cls='tone-opt';
+    if(s.done){
+      if(o===s.correct) cls+=' good';
+      else if(i===s.picked) cls+=' bad';
+      else cls+=' dim';
+    }
+    return `<button type="button" class="${cls}" data-tone="${i}">${escapeHtml(o)}</button>`;
+  }).join('');
+  area.innerHTML=`<div class="tone-q"><div class="tone-target">${escapeHtml(s.word)}</div>`
+    +`<button type="button" class="tone-speak" id="toneSpeak" title="Прослушать" aria-label="Прослушать">🔉</button></div>`
+    +`<div class="tone-opts">${opts}</div>`;
+  const sp=area.querySelector('#toneSpeak');
+  if(sp) sp.onclick=()=>{ const it=s.it||writeCurItem; if(it&&it.hanzi) speak(it.hanzi,1,foreignVoice()); };
+  area.querySelectorAll('[data-tone]').forEach(b=>{ b.onclick=()=>toneOptPick(Number(b.dataset.tone)); });
+}
+// Имя с суффиксом Opt — в «Экзамене» уже есть своя tonePick(), она перебивала бы эту.
+function toneOptPick(i){
+  const s=toneState; if(!s || s.done) return;
+  const it=s.it||writeCurItem;
+  const ok=s.options[i]===s.correct;
+  s.picked=i; s.done=true;
+  // перевод — уже не подсказка, показываем под карточкой
+  const wtr=document.getElementById('writeTr');
+  if(wtr) wtr.textContent=(it&&trJoined(it))||'';
+  renderTone();
+  if(writeAudioOn && it && it.hanzi) speak(it.hanzi,1,foreignVoice());
+  const token=writeToken;
+  if(ok){ if(it){ good(it); newGood(it); persist(); updateChips(); } }
+  setTimeout(()=>{ if(token!==writeToken) return; blinkWriteArea(()=>writeNext()); }, ok?700:1500);
 }
 function renderTypeCardsHint(){
   const el=document.getElementById('writeWord');
@@ -5257,9 +5446,10 @@ function startWriteChar(quiet){
   if(!writeChars.length) return;
   renderZhWriteBar();
   if(zhWriteMode()==='assemble'){ startAssemble(); return; }
+  if(zhWriteMode()==='tone'){ startTone(); return; }
   renderWriteWord(); renderWriteLabels(); renderWriteList();
   const area=document.getElementById('writeArea');
-  area.classList.remove('type','asm');
+  area.classList.remove('type','asm','tone');
   const ch=writeChars[writeCharIdx];
   area.innerHTML=''; area.style.opacity='';
   writer=null;
@@ -5422,13 +5612,14 @@ function writeSizeSliderHTML(skey, cur, min, max, label){
 function renderWriteSettings(){
   const m=document.getElementById('modalWriteSettings');
   if(!m || m.classList.contains('hidden')) return;
-  const rows=[
-    ['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn],
-    ['Контур','Помогающая сетка и контур иероглифа','sn','writeOutline',writeOutlineOn],
-    ['Рандом','Перемешивать порядок прохождения по словам','sn','writeRand',writeRandOn()]
-  ];
-  if(hasStrokes()) rows.splice(2,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
-  else rows.splice(3,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
+  // «Тон»: обводка и анимация начертания в задании не участвуют — оставляем только Аудио/Рандом.
+  const toneOnly = hasStrokes() && zhWriteMode()==='tone';
+  const rows=[['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]];
+  if(!toneOnly) rows.push(['Контур','Помогающая сетка и контур иероглифа','sn','writeOutline',writeOutlineOn]);
+  rows.push(['Рандом','Перемешивать порядок прохождения по словам','sn','writeRand',writeRandOn()]);
+  if(!toneOnly){
+    rows.splice(hasStrokes()?2:3,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
+  }
   const navPct=Math.round(writeNavMul()*100);
   const hintPct=Math.round(writeHintMul()*100);
   m.innerHTML=`<div class="sheet">
@@ -6643,6 +6834,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.5','15.11.26','Письмо (китайский): третий режим «🎚️ Тон» — показывается иероглиф или слово целиком и четыре пиньиня, у которых отличаются только тоны; нужно выбрать верный (по образцу Дуолинго). Рядом с иероглифом — кнопка прослушивания; пиньинь и перевод до ответа скрыты. Обманки собираются только из реально существующих слогов (из словаря разложений), поэтому не бывает несуществующих сочетаний. Верный ответ засчитывается в прогресс слова.'],
   ['1.11.4','15.11.26','Письмо (китайский): новый режим «Собрать из частей» — иероглиф раскладывается на компоненты (словарь разложений makemeahanzi, ~9500 иероглифов, вшит офлайн), нужно собрать их в правильном порядке по образцу Дуолинго. Переключатель «✍️ Обвести / 🧩 Собрать» над окном письма.'],
   ['1.11.3','15.11.26','Словарь → Фильтр: порядок кнопок-фишек изменён (Все слова → Фильтр → Избранное → выучено), кнопка «Фильтр» больше не прилипает к «Все слова» при переносе на мобильных. В окне фильтра новый порядок: «Когда добавлено» сверху, «Метки» — выпадающий список с мультивыбором, «Уровни» — выпадающий список с одиночным выбором, «Другое» без «Повторить сейчас»; «Экспорт слов» отделён линией, «Без предложений» — на всю ширину ниже, затем «Сбросить фильтр» и «Применить фильтр».'],
   ['1.11.2','14.11.26','Изучение: значок динамика рядом с шестерёнкой стал независимым переключателем авто-озвучки этой страницы — выключен (перечёркнутый динамик) → автозвук не произносится, включён → произносится; ручное проигрывание кликом по карточке работает всегда. Глобальные «иностранное/русское аудио» больше не влияют на обычные карточки Изучения — только на Листание и Экзамен. Синхронизация ускорена: поиск дублей по облаку заменён с вложенного перебора (O(N×M)) на предварительно построенную карту (O(N+M)) — на больших базах синк заметно быстрее.'],
