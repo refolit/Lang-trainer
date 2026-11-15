@@ -344,13 +344,15 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .fanfare-chunk .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 .fanfare-chunk.done{animation:fanfareDone .5s ease}
 .fanfare-chunk.done .fslot{color:var(--red); border-color:var(--red)}
+.fanfare-chunk .fslot.hid{display:none}
 @keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
-/* Русский перевод в «Одним словом»: крупнее, жирнее, на 10px ниже */
-#writeTr.fanfare-tr{font-size:20px; font-weight:700; color:var(--ink); margin-top:10px; margin-bottom:2px}
+/* Русский перевод в «Одним словом»: крупнее, жирнее, на 10px ниже.
+   Максимум 2 строки; остаток раскрывается по мере набора (см. paintFanfareTr). */
+#writeTr.fanfare-tr{font-size:20px; font-weight:700; color:var(--ink); margin-top:10px; margin-bottom:2px; line-height:1.4; max-height:2.8em; overflow:hidden}
 /* Результат «Одним словом»: набранные слова появляются по одному (по мере набора слова),
-   текст переносится и центрируется (2 строки для типичной фразы). Место зарезервировано,
-   чтобы карточка не прыгала. */
-.fanfare-result{width:100%; min-height:2.6em; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; align-content:center; gap:0 8px; margin:2px 0 12px; text-align:center; font-family:var(--font-cjk); font-weight:700; font-size:36px; line-height:1.3; color:var(--ink)}
+   текст переносится и центрируется. Место зарезервировано, чтобы карточка не прыгала.
+   Размер текста — как у русского перевода (#writeTr.fanfare-tr) + 2px. */
+.fanfare-result{width:100%; min-height:2.6em; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; align-content:center; gap:0 8px; margin:2px 0 12px; text-align:center; font-family:var(--font-cjk); font-weight:700; font-size:22px; line-height:1.3; color:var(--ink)}
 .fanfare-result .w{white-space:nowrap}
 .fanfare-result .w.rise{animation:fanfareRise .22s ease}
 .fanfare-result.done .w{color:var(--red)}
@@ -1145,19 +1147,6 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
       <div class="bigpy" id="writePy"></div>
       <div id="writeTr"></div>
     </div>
-    <div class="cube-order hidden" id="cubeOrderBar">
-      <div class="cube-order-lab">Буквы расположены</div>
-      <div class="seg sm" id="cubeOrderSeg">
-        <button data-v="shuffle" class="active">Вразброс</button>
-        <button data-v="vowels">Гласные вначале</button>
-        <button data-v="alpha">По алфавиту</button>
-      </div>
-      <div class="cube-order-lab">Слова расположены</div>
-      <div class="seg sm" id="cubeLayoutSeg">
-        <button data-v="film" class="active">Предложением</button>
-        <button data-v="fanfare">Одним словом</button>
-      </div>
-    </div>
     <div class="write-bottom">
       <span class="flt-mode-badge hidden" id="writeFltBadge"></span>
       <button class="btn sec wbtn lg" id="writePrev">◀ Назад</button>
@@ -1495,7 +1484,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.8';
+const APP_VERSION='1.11.9';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4903,6 +4892,8 @@ function renderFanfareCard(area){
   const it=writeCurItem;
   const {cells, letters, disp}=writeCellsCubes(it);
   const words=String(it.hanzi||'').trim().split(/\s+/).filter(Boolean);
+  const trFull=trJoined(it)||'';
+  const trWords=trFull.split(/\s+/).filter(Boolean);
   const wordEnds=[];
   { let li=-1, lastGap=true;
     for(const c of cells){
@@ -4911,7 +4902,7 @@ function renderFanfareCard(area){
     }
     if(!lastGap) wordEnds.push(li);
   }
-  cubesState={layout:'fanfare', it, cells, letters, disp, bank:cubesBankForLetters(letters), pos:0, words, wordEnds, builtCount:0};
+  cubesState={layout:'fanfare', it, cells, letters, disp, bank:cubesBankForLetters(letters), pos:0, words, wordEnds, builtCount:0, trWords, trFit:0, rows:[]};
   const rtl=langInfo().rtl;
   const chunkHtml=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
@@ -4919,10 +4910,12 @@ function renderFanfareCard(area){
       ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
       : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
   area.innerHTML=writeCardWrap(`
-    <div id="writeTr" class="type-tr fanfare-tr">${escapeHtml(trJoined(it))}</div>
+    <div id="writeTr" class="type-tr fanfare-tr"></div>
     <div class="fanfare-result" id="fanfareResult" dir="ltr"></div>
     <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
     <div class="wbank" id="wBank">${wbankRows(cubesState.bank)}</div>`);
+  initFanfareTr(area);
+  fanfareMeasureRows(area);
   paintFanfare(area);
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
@@ -4953,6 +4946,69 @@ function paintFanfare(area){
     else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); if(li===s.pos) curEl=sl; }
   });
   updateFanfareResult(area);
+  applyFanfareRows(area);
+  paintFanfareTr(area);
+}
+// Русский перевод: сколько слов влезает в 2 строки (меряем по фактической высоте),
+// остаток раскрывается по мере набора (прогресс = набранные буквы).
+function fitTrWords(el, words){
+  const cs=getComputedStyle(el);
+  const lh=parseFloat(cs.lineHeight)||28;
+  const maxH=lh*2; // 2 строки
+  el.textContent=words.join(' ');
+  if(el.scrollHeight<=maxH) return words.length;
+  let lo=0, hi=words.length, ans=0;
+  while(lo<=hi){
+    const mid=(lo+hi)>>1;
+    el.textContent=words.slice(0,mid).join(' ');
+    if(el.scrollHeight<=maxH){ ans=mid; lo=mid+1; } else hi=mid-1;
+  }
+  return ans;
+}
+function initFanfareTr(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const el=area.querySelector('#writeTr'); if(!el) return;
+  s.trFit=(s.trWords && s.trWords.length)?fitTrWords(el, s.trWords):0;
+}
+function paintFanfareTr(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const el=area.querySelector('#writeTr'); if(!el) return;
+  if(!s.trWords || !s.trWords.length){ el.textContent=''; return; }
+  const total=s.trWords.length;
+  const progress=(s.letters && s.letters.length)?(s.pos/s.letters.length):1;
+  let visible=s.trFit + Math.round((total-s.trFit)*progress);
+  if(visible<1) visible=1;
+  if(visible>total) visible=total;
+  el.textContent=s.trWords.slice(0, visible).join(' ');
+}
+// Ячейки «Одним словом»: максимум 3 строки. Группируем по строкам (по offsetTop),
+// показываем первые 3; как только они набраны — показываем следующие 3, и так далее.
+function fanfareMeasureRows(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare') return;
+  const chunk=area.querySelector('#fanfareChunk'); if(!chunk) return;
+  const rows=[]; let cur=null;
+  chunk.querySelectorAll('.fslot').forEach(sl=>{
+    const top=sl.offsetTop;
+    if(!cur || top!==cur.top){ cur={top, lastLi:-1, els:[]}; rows.push(cur); }
+    cur.els.push(sl);
+    if(sl.dataset.li!=null){ const li=Number(sl.dataset.li); if(li>cur.lastLi) cur.lastLi=li; }
+  });
+  s.rows=rows;
+}
+function fanfareVisibleRows(s){
+  const total=(s.rows||[]).length;
+  let visible=Math.min(3, total);
+  while(visible<total){
+    const lastLi=s.rows[visible-1].lastLi;
+    if(lastLi<0 || lastLi<s.pos) visible+=3; else break;
+  }
+  return Math.min(visible, total);
+}
+function applyFanfareRows(area){
+  const s=cubesState; if(!s || s.layout!=='fanfare' || !s.rows) return;
+  const chunk=area.querySelector('#fanfareChunk'); if(!chunk) return;
+  const visible=fanfareVisibleRows(s);
+  s.rows.forEach((row,i)=>row.els.forEach(sl=>sl.classList.toggle('hid', i>=visible)));
 }
 // Всё предложение набрано → показать его красным 2 секунды, затем переход.
 function fanfareGood(){
@@ -5093,34 +5149,10 @@ function focusCubeArea(){
   try{ area.focus({preventScroll:true}); }catch(e){ try{ area.focus(); }catch(e2){} }
 }
 function updateCubeOrderBar(){
-  const bar=document.getElementById('cubeOrderBar'); if(!bar) return;
-  // англ. «кубики»: экран становится flex-колонкой — панель прижата к низу, как в «Учить»
+  // англ. «кубики»: экран становится flex-колонкой — панель прижата к низу, как в «Учить».
+  // Переключатели «Буквы/Слова расположены» переехали в «Настройки режима Письмо».
   const scr=document.getElementById('scr-write');
   if(scr) scr.classList.toggle('cubes', activeLang==='en');
-  // переключатель порядка кубиков и режима (кинолента/фанфары) — только для английского
-  if(activeLang==='en'){
-    bar.classList.remove('hidden');
-    const seg=document.getElementById('cubeOrderSeg');
-    seg.querySelectorAll('button').forEach(b=>{
-      b.classList.toggle('active', b.dataset.v===cubeOrder());
-      b.onclick=()=>{
-        seg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
-        settings.cubeOrder=b.dataset.v; persist();
-        if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false); // перерисовать кубики в новом порядке
-      };
-    });
-    const lseg=document.getElementById('cubeLayoutSeg');
-    lseg.querySelectorAll('button').forEach(b=>{
-      b.classList.toggle('active', b.dataset.v===cubeLayout());
-      b.onclick=()=>{
-        lseg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
-        settings.cubeLayout=b.dataset.v; persist();
-        if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false); // перерисовать кубики в новом режиме
-      };
-    });
-  }else{
-    bar.classList.add('hidden');
-  }
 }
 // ===== ПИСЬМО (китайский): СОБРАТЬ ИЗ ЧАСТЕЙ (по образцу Дуолинго) =====
 const IDS_OPS = new Set('⿰⿱⿲⿳⿴⿵⿶⿷⿸⿹⿺⿻'.split(''));
@@ -5701,12 +5733,25 @@ function renderWriteSettings(){
   // Английский («кубики»): оставляем только Аудио — Контур/Рандом/Анимация/размер кнопок/Подсказка не нужны.
   const cubesOnly = writeMode()==='cubes';
   if(cubesOnly){
+    const orderBtns=['shuffle','vowels','alpha'].map(v=>{
+      const label=v==='shuffle'?'Вразброс':(v==='vowels'?'Гласные вначале':'По алфавиту');
+      return `<button data-v="${v}" class="${cubeOrder()===v?'active':''}">${label}</button>`;
+    }).join('');
+    const layoutBtns=['film','fanfare'].map(v=>
+      `<button data-v="${v}" class="${cubeLayout()===v?'active':''}">${v==='film'?'Предложением':'Одним словом'}</button>`
+    ).join('');
     m.innerHTML=`<div class="sheet">
       <div class="row"><h2>Настройки режима Письмо</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalWriteSettings')">✕</button></div>
       <div style="margin-top:6px">
         <div class="menu-item" data-write-key="writeAudio">
           <div class="mi-label">Аудио<span class="mi-hint">Озвучка слова/предложения</span></div>
           <button class="sn-switch ${writeAudioOn?'on':''}" data-write-key="writeAudio"></button>
+        </div>
+        <div class="cube-order" style="margin-top:6px">
+          <div class="cube-order-lab">Буквы расположены</div>
+          <div class="seg sm" id="cubeOrderSeg">${orderBtns}</div>
+          <div class="cube-order-lab">Слова расположены</div>
+          <div class="seg sm" id="cubeLayoutSeg">${layoutBtns}</div>
         </div>
       </div>
     </div>`;
@@ -5715,6 +5760,22 @@ function renderWriteSettings(){
       el.onclick=()=>{
         if(k==='writeAudio') toggleWriteAudio();
         renderWriteSettings();
+      };
+    });
+    const orderSeg=m.querySelector('#cubeOrderSeg');
+    orderSeg.querySelectorAll('button').forEach(b=>{
+      b.onclick=()=>{
+        orderSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+        settings.cubeOrder=b.dataset.v; persist();
+        if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false);
+      };
+    });
+    const layoutSeg=m.querySelector('#cubeLayoutSeg');
+    layoutSeg.querySelectorAll('button').forEach(b=>{
+      b.onclick=()=>{
+        layoutSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));
+        settings.cubeLayout=b.dataset.v; persist();
+        if(writeCurItem && langOf(writeCurItem)==='en') setWriteItemTyping(writeCurItem, false);
       };
     });
     return;
@@ -6958,6 +7019,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.9','15.11.26','Письмо (английский, «Одним словом»): переключатели «Буквы/Слова расположены» перенесены со экрана в «Настройки режима Письмо». Русский перевод помещается в 2 строки, остаток раскрывается по мере набора. Размер набранного результата уменьшен до размера перевода +2px. Ячейки показываются максимум по 3 строки, следующие 3 раскрываются по мере заполнения.'],
   ['1.11.8','15.11.26','Шрифт интерфейса заменён с Segoe UI на Nunito — встроен офлайн (латиница + кириллица + турецкие символы). Иероглифы теперь грузят Noto Sans SC (Source Han Sans) с Google Fonts на ходу — онлайн рисуется им, офлайн/не загрузился остаётся Microsoft YaHei.'],
   ['1.11.7','15.11.26','Письмо (английский): блок «Назад/Вперёд» и панель раскладок прижаты к низу на той же высоте, что и строка статуса в «Изучении». Исправлен «Предложением» — лента букв больше не сжимается и не обрезается. В «Настройках режима Письма» для английского осталась только настройка «Аудио» (Контур, Рандом, Анимация, размер кнопок и Подсказка убраны). Банк букв теперь всегда ровно в два ряда, делится поровну и выравнивается по центру.'],
   ['1.11.6','15.11.26','Письмо (английский): у блоков кнопок появились подписи «Буквы расположены» и «Слова расположены», «Кинолента» → «Предложением», «Фанфары» → «Одним словом». Панель с раскладками и «Назад/Вперёд» закреплена снизу и больше не прыгает по высоте — прокручивается только область выбора букв. Заглавные буквы теперь видны в ячейках при наборе и в результате (например, «I love learning English»); в «Предложением» после набора добавлен показ готовой фразы. Письмо (китайский) «🎚️ Тон»: участвуют только отдельные слова — предложения пропускаются всегда, без настройки.'],
