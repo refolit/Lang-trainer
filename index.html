@@ -334,17 +334,17 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .cube-film .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 /* «Фанфары» («Одним словом»): полное предложение — одним набором ячеек (без подсказки на английском).
-   Ячейки переносятся и центрируются; длинное предложение занимает 2+ строки. Вверху — русский перевод
-   (крупнее и жирнее, чем в других режимах). Собрано → все ячейки красные. */
-.fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px; flex:0 0 auto}
+   Слова переносятся ЦЕЛИКОМ (не разрываются по буквам), строки центрируются. Вверху — русский перевод
+   (крупнее и жирнее, чем в других режимах). Собрано → все ячейки зелёные. */
+.fanfare-chunk{display:flex; flex-wrap:wrap; align-items:center; justify-content:center; column-gap:14px; row-gap:6px; margin:14px 0 2px; min-height:40px; flex:0 0 auto}
+.fanfare-word{display:flex; align-items:center; gap:6px}
 .fanfare-chunk .fslot{flex:0 0 auto; min-width:34px; height:38px; padding:0 3px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
-.fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
 .fanfare-chunk .fslot.good{color:var(--blue)}
 .fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .fanfare-chunk .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
 .fanfare-chunk.done{animation:fanfareDone .5s ease}
-.fanfare-chunk.done .fslot{color:var(--red); border-color:var(--red)}
-.fanfare-chunk .fslot.hid{display:none}
+.fanfare-chunk.done .fslot{color:var(--green); border-color:var(--green)}
+.fanfare-word.hid{display:none}
 @keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
 /* Русский перевод в «Одним словом»: крупнее, жирнее, на 10px ниже.
    Максимум 2 строки; остаток раскрывается по мере набора (см. paintFanfareTr). */
@@ -355,7 +355,7 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .fanfare-result{width:100%; min-height:2.6em; display:flex; flex-wrap:wrap; justify-content:center; align-items:center; align-content:center; gap:0 8px; margin:2px 0 12px; text-align:center; font-family:var(--font-cjk); font-weight:700; font-size:22px; line-height:1.3; color:var(--ink)}
 .fanfare-result .w{white-space:nowrap}
 .fanfare-result .w.rise{animation:fanfareRise .22s ease}
-.fanfare-result.done .w{color:var(--red)}
+.fanfare-result.done .w{color:var(--green)}
 @keyframes fanfareRise{0%{transform:translateY(14px); opacity:0}100%{transform:translateY(0); opacity:1}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
@@ -1484,7 +1484,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.9';
+const APP_VERSION='1.11.10';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -4904,11 +4904,14 @@ function renderFanfareCard(area){
   }
   cubesState={layout:'fanfare', it, cells, letters, disp, bank:cubesBankForLetters(letters), pos:0, words, wordEnds, builtCount:0, trWords, trFit:0, rows:[]};
   const rtl=langInfo().rtl;
-  const chunkHtml=cells.map((c,i)=> c.gap
-    ? `<div class="fslot gap"></div>`
-    : c.punct
-      ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
-      : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
+  // группируем ячейки по словам (разрыв = пробел): каждое слово — отдельный контейнер,
+  // чтобы flex переносил его на новую строку ЦЕЛИКОМ, не разрывая по буквам.
+  const wordGroups=[]; let curGroup=[];
+  cells.forEach((c,i)=>{ if(c.gap){ if(curGroup.length){ wordGroups.push(curGroup); curGroup=[]; } } else curGroup.push({c,i}); });
+  if(curGroup.length) wordGroups.push(curGroup);
+  const chunkHtml=wordGroups.map(g=>`<span class="fanfare-word">${g.map(({c,i})=> c.punct
+    ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
+    : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('')}</span>`).join('');
   area.innerHTML=writeCardWrap(`
     <div id="writeTr" class="type-tr fanfare-tr"></div>
     <div class="fanfare-result" id="fanfareResult" dir="ltr"></div>
@@ -4939,11 +4942,12 @@ function updateFanfareResult(area){
 function paintFanfare(area){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
   const chunk=area.querySelector('#fanfareChunk'); if(!chunk) return;
-  let curEl=null;
-  chunk.querySelectorAll('.fslot').forEach(sl=>{
+  // только буквенные ячейки (data-li): знаки препинания и зазоры не трогаем,
+  // иначе paintFanfare стирал бы пунктуацию, которая стоит на своих местах.
+  chunk.querySelectorAll('.fslot[data-li]').forEach(sl=>{
     const li=Number(sl.dataset.li);
     if(li<s.pos){ sl.textContent=(s.disp&&s.disp[li])||s.letters[li]; sl.classList.add('good'); sl.classList.remove('cur'); }
-    else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); if(li===s.pos) curEl=sl; }
+    else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); }
   });
   updateFanfareResult(area);
   applyFanfareRows(area);
@@ -4986,12 +4990,14 @@ function paintFanfareTr(area){
 function fanfareMeasureRows(area){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
   const chunk=area.querySelector('#fanfareChunk'); if(!chunk) return;
+  // группируем по строкам на уровне СЛОВ (fanfare-word): слово целиком лежит на одной строке,
+  // поэтому скрываем/показываем сразу всё слово.
   const rows=[]; let cur=null;
-  chunk.querySelectorAll('.fslot').forEach(sl=>{
-    const top=sl.offsetTop;
-    if(!cur || top!==cur.top){ cur={top, lastLi:-1, els:[]}; rows.push(cur); }
-    cur.els.push(sl);
-    if(sl.dataset.li!=null){ const li=Number(sl.dataset.li); if(li>cur.lastLi) cur.lastLi=li; }
+  chunk.querySelectorAll('.fanfare-word').forEach(w=>{
+    const top=w.offsetTop;
+    if(!cur || top!==cur.top){ cur={top, lastLi:-1, words:[]}; rows.push(cur); }
+    cur.words.push(w);
+    w.querySelectorAll('.fslot[data-li]').forEach(sl=>{ const li=Number(sl.dataset.li); if(li>cur.lastLi) cur.lastLi=li; });
   });
   s.rows=rows;
 }
@@ -5008,7 +5014,7 @@ function applyFanfareRows(area){
   const s=cubesState; if(!s || s.layout!=='fanfare' || !s.rows) return;
   const chunk=area.querySelector('#fanfareChunk'); if(!chunk) return;
   const visible=fanfareVisibleRows(s);
-  s.rows.forEach((row,i)=>row.els.forEach(sl=>sl.classList.toggle('hid', i>=visible)));
+  s.rows.forEach((row,i)=>row.words.forEach(w=>w.classList.toggle('hid', i>=visible)));
 }
 // Всё предложение набрано → показать его красным 2 секунды, затем переход.
 function fanfareGood(){
@@ -7019,6 +7025,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.10','15.11.26','Письмо (английский, «Одним словом»): собранная фраза мигает зелёным (было красным), слова переносятся на новую строку целиком (не разрываясь по буквам), знаки препинания больше не стираются при наборе.'],
   ['1.11.9','15.11.26','Письмо (английский, «Одним словом»): переключатели «Буквы/Слова расположены» перенесены со экрана в «Настройки режима Письмо». Русский перевод помещается в 2 строки, остаток раскрывается по мере набора. Размер набранного результата уменьшен до размера перевода +2px. Ячейки показываются максимум по 3 строки, следующие 3 раскрываются по мере заполнения.'],
   ['1.11.8','15.11.26','Шрифт интерфейса заменён с Segoe UI на Nunito — встроен офлайн (латиница + кириллица + турецкие символы). Иероглифы теперь грузят Noto Sans SC (Source Han Sans) с Google Fonts на ходу — онлайн рисуется им, офлайн/не загрузился остаётся Microsoft YaHei.'],
   ['1.11.7','15.11.26','Письмо (английский): блок «Назад/Вперёд» и панель раскладок прижаты к низу на той же высоте, что и строка статуса в «Изучении». Исправлен «Предложением» — лента букв больше не сжимается и не обрезается. В «Настройках режима Письма» для английского осталась только настройка «Аудио» (Контур, Рандом, Анимация, размер кнопок и Подсказка убраны). Банк букв теперь всегда ровно в два ряда, делится поровну и выравнивается по центру.'],
