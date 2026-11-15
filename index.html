@@ -333,25 +333,20 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .cube-film .fslot.good{color:var(--blue)}
 .cube-film .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .cube-film .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
-/* «Фанфары»: полное предложение сразу крупно (как «Учить»). Набранные куски — обычным цветом,
-   текущее слово подсвечено, ещё не набранное — приглушено. Длинное предложение обрезается до 3 строк
-   и раскрывается по мере набора (автопрокрутка к текущему слову). Размер задаёт JS (studyFonts). */
-.fanfare-full{width:100%; position:relative; text-align:center; font-family:var(--font-cjk); font-weight:700; color:var(--ink); line-height:1.25; margin:6px 0 14px; overflow-y:hidden}
-.fanfare-full .w{display:inline-block; white-space:nowrap; transition:color .18s, opacity .18s}
-.fanfare-full .w.b{color:var(--ink); opacity:1}
-.fanfare-full .w.cur{color:var(--red); opacity:1}
-.fanfare-full .w.todo{color:var(--ink); opacity:.26}
-.fanfare-full .w.rise{animation:fanfareRise .22s ease}
-@keyframes fanfareRise{0%{transform:translateY(18px); opacity:0}100%{transform:translateY(0); opacity:1}}
+/* «Фанфары» («Одним словом»): полное предложение — одним набором ячеек (без подсказки на английском).
+   Ячейки переносятся и центрируются; длинное предложение занимает 2+ строки. Вверху — русский перевод
+   (крупнее и жирнее, чем в других режимах). Собрано → все ячейки красные. */
 .fanfare-chunk{display:flex; gap:6px; align-items:center; justify-content:center; flex-wrap:wrap; margin:14px 0 2px; min-height:40px; flex:0 0 auto}
 .fanfare-chunk .fslot{flex:0 0 auto; min-width:34px; height:38px; padding:0 3px; border:2px solid var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; background:var(--card); color:var(--blue); transition:background .12s, border-color .12s}
 .fanfare-chunk .fslot.gap{width:14px; border:0; background:transparent}
 .fanfare-chunk .fslot.good{color:var(--blue)}
 .fanfare-chunk .fslot.cur{border-color:var(--red); animation:slotPulse 1.1s ease-in-out infinite}
 .fanfare-chunk .fslot.punct{border:0; background:transparent; width:auto; min-width:14px; font-weight:800; color:var(--mut)}
-.fanfare-full.done{animation:fanfareDone .5s ease; color:var(--red)}
-.fanfare-full.done .w{color:var(--red); opacity:1}
+.fanfare-chunk.done{animation:fanfareDone .5s ease}
+.fanfare-chunk.done .fslot{color:var(--red); border-color:var(--red)}
 @keyframes fanfareDone{0%{transform:scale(1)}50%{transform:scale(1.04)}100%{transform:scale(1)}}
+/* Русский перевод в «Одним словом»: крупнее, жирнее, на 10px ниже */
+#writeTr.fanfare-tr{font-size:20px; font-weight:700; color:var(--ink); margin-top:10px; margin-bottom:2px}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
@@ -4827,25 +4822,8 @@ let cubesState=null;
 const CUBES_EXTRA=10;
 const CUBES_VOWELS=new Set(['a','e','i','o','u','y']);
 function cubeOrder(){ const o=settings.cubeOrder; return (o==='vowels'||o==='alpha')?o:'shuffle'; }
-// Режим кубиков (en): 'film' — кинолента (по умолчанию), 'fanfare' — фанфары (фраза уезжает наверх).
+// Режим кубиков (en): 'film' — кинолента (по умолчанию), 'fanfare' — «Одним словом» (всё предложение).
 function cubeLayout(){ const l=settings.cubeLayout; return (l==='fanfare')?'fanfare':'film'; }
-// Делим фразу на куски по числу символов: короткие слова (артикли/предлоги) идут вместе,
-// длинные — по 1–2 на кусок. Каждый кусок — массив слов.
-function splitFanfareChunks(it){
-  // режем ОРИГИНАЛЬНУЮ строку (с регистром): собранное показывается как в словаре
-  const words=String((it&&it.hanzi)||'').trim().split(/\s+/).filter(Boolean);
-  if(!words.length) return [[]];
-  const chunks=[]; let cur=[], curLen=0;
-  const isShort=w=>w.length<=3;                    // артикли/предлоги (a, an, the, of, to, in…)
-  for(const w of words){
-    // новую группу начинаем, если: уже 2 слова, или (короткое слово после длинного и уже есть что-то)
-    // — эвристика: длинное слово = свой кусок; короткие группируются, пока суммарно не слишком длинно.
-    if(cur.length && (cur.length>=2 || !isShort(w) || curLen+w.length>24)){ chunks.push(cur); cur=[]; curLen=0; }
-    cur.push(w); curLen+=w.length+1;
-  }
-  if(cur.length) chunks.push(cur);
-  return chunks;
-}
 function cubesBankForLetters(letters){
   // общий банк кубиков для набора букв (уникальные + 10 случайных) — используется и в фанфарах
   const uniq=[];
@@ -4909,61 +4887,13 @@ function renderCubesCard(area){
   });
   focusCubeArea();
 }
-// ---------- «Фанфары»: набираем по кускам, собранное уезжает на строку вверх ----------
+// ---------- «Фанфары» («Одним словом»): набираем всё предложение целиком ----------
+// Полное предложение — один ряд ячеек (переносится и центрируется), без подсказки на английском:
+// сверху только русский перевод. Набираем всё предложение кубиками; собрано → красное.
 function renderFanfareCard(area){
   const it=writeCurItem;
-  const chunks=splitFanfareChunks(it);
-  // начальное состояние: куски-группы слов, индекс текущего куска, набор букв текущего куска
-  cubesState={
-    layout:'fanfare', it, chunks, chunkIdx:0,
-    // built — массив уже набранных кусков (строками), для верхней строки
-    built:[], letters:[], bank:[], pos:0
-  };
-  loadFanfareChunk(area);
-}
-// Полное предложение «Фанфар» крупно (как «Учить»): каждое слово — отдельный span с состоянием.
-// Завершённые куски — обычный цвет, текущий кусок подсвечен, ещё не набранный — приглушён.
-// Последний завершённый кусок получает анимацию «всплытия» (rise).
-function fanfareFullHtml(s){
-  const parts=[];
-  s.chunks.forEach((words,ci)=>words.forEach(w=>parts.push({w, ci})));
-  const lastBuilt=s.chunkIdx-1;
-  return parts.map(p=>{
-    let cls='w todo';
-    if(p.ci < s.chunkIdx) cls='w b'+(p.ci===lastBuilt?' rise':'');
-    else if(p.ci === s.chunkIdx) cls='w cur';
-    return `<span class="${cls}">${escapeHtml(p.w)}</span>`;
-  }).join(' ');
-}
-// Размер полного предложения — ровно как центр «Учить» (studyFonts), + обрезка до 3 строк
-// и автопрокрутка к текущему слову (длинное предложение раскрывается по мере набора).
-function sizeFanfareFull(area){
-  const el=area.querySelector('#fanfareFull'); if(!el) return;
-  const full=String((cubesState&&cubesState.it&&cubesState.it.hanzi)||'').trim();
-  const len=Array.from(full).length;
-  const f=studyFonts(len, null, false, len);
-  const lh=f.sent?1.4:1.25;
-  el.style.fontSize=f.hz.toFixed(1)+'px';
-  el.style.lineHeight=lh;
-  el.style.maxHeight=(f.hz*lh*3).toFixed(1)+'px';
-  // принудительный reflow, чтобы offsetTop/offsetHeight были актуальны сразу (без rAF,
-  // который не срабатывает на фоновой вкладке), затем прокрутка к текущему слову
-  void el.offsetHeight;
-  const cur=el.querySelector('.w.cur');
-  if(cur){
-    const top=cur.offsetTop - Math.max(0,(el.clientHeight-cur.offsetHeight)/2);
-    el.scrollTop = Math.max(0, top);
-  }
-}
-function loadFanfareChunk(area){
-  const s=cubesState; if(!s || s.layout!=='fanfare') return;
-  const words=s.chunks[s.chunkIdx]||[];
-  const text=words.join(' ');
-  // буквы текущего куска без пробелов (для набора), cells — с пробелами/знаками (для отрисовки)
-  const {cells, letters, disp}=writeCellsCubes({hanzi:text});
-  s.letters=letters; s.disp=disp; s.cells=cells; s.pos=0;
-  s.bank=cubesBankForLetters(letters);
-  const it=s.it;
+  const {cells, letters, disp}=writeCellsCubes(it);
+  cubesState={layout:'fanfare', it, cells, letters, disp, bank:cubesBankForLetters(letters), pos:0};
   const rtl=langInfo().rtl;
   const chunkHtml=cells.map((c,i)=> c.gap
     ? `<div class="fslot gap"></div>`
@@ -4971,11 +4901,9 @@ function loadFanfareChunk(area){
       ? `<div class="fslot punct">${escapeHtml(c.punct)}</div>`
       : `<div class="fslot" data-li="${letterIndex(cells,i)}"></div>`).join('');
   area.innerHTML=writeCardWrap(`
-    <div id="writeTr" class="type-tr">${escapeHtml(trJoined(it))}</div>
-    <div class="fanfare-full" id="fanfareFull" dir="ltr">${fanfareFullHtml(s)}</div>
+    <div id="writeTr" class="type-tr fanfare-tr">${escapeHtml(trJoined(it))}</div>
     <div class="fanfare-chunk ${rtl?'rtl':''}" id="fanfareChunk">${chunkHtml}</div>
-    <div class="wbank" id="wBank">${wbankRows(s.bank)}</div>`);
-  sizeFanfareFull(area);
+    <div class="wbank" id="wBank">${wbankRows(cubesState.bank)}</div>`);
   paintFanfare(area);
   area.querySelectorAll('#wBank .wletter').forEach(btn=>{
     btn.onclick=()=>cubeTap(Number(btn.dataset.bi));
@@ -4992,30 +4920,20 @@ function paintFanfare(area){
     else { sl.textContent=''; sl.classList.remove('good','bad'); sl.classList.toggle('cur', li===s.pos); if(li===s.pos) curEl=sl; }
   });
 }
-// Кусок набран целиком → уходит наверх; если это последний — зачёт фразы.
+// Всё предложение набрано → показать его красным 2 секунды, затем переход.
 function fanfareGood(){
   const s=cubesState; if(!s || s.layout!=='fanfare') return;
   const it=s.it;
   const area=document.getElementById('writeArea');
-  if(s.chunkIdx>=s.chunks.length-1){
-    // Вся фраза собрана: показать её целиком красным ещё 2 секунды, затем переход.
-    paintFanfare(area);
-    const fullEl=area.querySelector('#fanfareFull');
-    if(fullEl){
-      fullEl.innerHTML=s.chunks.flat().map(w=>`<span class="w b">${escapeHtml(w)}</span>`).join(' ');
-      fullEl.classList.add('done');
-      fullEl.scrollTop = 0;
-    }
-    // блокируем ввод на время показа, чтобы случайные клавиши не «доиграли»
-    const tok=writeToken;
-    cubesState=null;
-    setTimeout(()=>{
-      if(writeToken===tok && writeCurItem) writeGood(it);
-    }, 2000);
-    return;
-  }
-  s.chunkIdx++;
-  loadFanfareChunk(area);
+  paintFanfare(area);
+  const chunk=area.querySelector('#fanfareChunk');
+  if(chunk) chunk.classList.add('done');
+  // блокируем ввод на время показа, чтобы случайные клавиши не «доиграли»
+  const tok=writeToken;
+  cubesState=null;
+  setTimeout(()=>{
+    if(writeToken===tok && writeCurItem) writeGood(it);
+  }, 2000);
 }
 // Лёгкий «клик» при нажатии кубика (Web Audio, ленивый контекст) + короткая вибрация.
 // Звук в духе клавиатуры iPhone: короткий щелчок из белого шума (полосовой фильтр + быстрое
