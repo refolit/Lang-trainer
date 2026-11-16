@@ -103,6 +103,22 @@ html[data-theme="plum"]{
   --shadow-sm:0 1px 2px rgba(0,0,0,.35);
   --shadow-md:0 6px 16px rgba(0,0,0,.45);
 }
+/* Режим «Стандартный»: всего 5 семантических цветов во всём приложении.
+   Ставится атрибутом data-color="standard" на <html>, перекрывает любую тему:
+   иероглифы (ink), пиньинь (amber), перевод (mut), неактивные кнопки (soft),
+   активные кнопки (red). Зелёный/синий оставлены как статусные сигналы
+   (верно / ссылка) — вне пяти цветов. */
+html[data-color="standard"]{
+  --bg:#f7f4ef; --card:#ffffff; --ink:#1d1c1a; --mut:#6b7280;
+  --blue:#1565c0;
+  --red:#c62828; --red-d:#a32222; --green:#2e7d32; --amber:#b7791f;
+  --line:#e8e2d8; --soft:#f0ece4; --soft2:#ece9e2; --sec-d:#e3ddd1;
+  --nav-bg:rgba(255,255,255,.96);
+  --shadow-sm:0 1px 2px rgba(30,28,26,.05);
+  --shadow-md:0 6px 16px rgba(30,28,26,.08);
+}
+html[data-color="standard"] .dc.py{color:var(--amber)}
+html[data-color="standard"] .dc.tr{color:var(--mut)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%}
 body{
@@ -822,6 +838,14 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 }
 .tone-btns button.good .tm{color:#fff !important}
 .tone-btns button.good .tl{color:#fff !important}
+/* Выбор ответов: верная кнопка вспыхивает зелёным (та же семантика, что у тонов) */
+.exam-opt.good{
+  animation:goodPulse .55s ease 2;
+  background-color:var(--green) !important;
+  border-color:var(--green) !important;
+  color:#fff !important;
+}
+.exam-opt.good .opt-txt{color:#fff !important}
 
 .empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
 .empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
@@ -1295,6 +1319,11 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
             <button data-v="graphite">⬛ Графитовая</button>
             <button data-v="plum">🍇 Сливовая</button>
           </div>
+          <label class="lbl">Цвета</label>
+          <div class="seg" id="colorModeSeg">
+            <button data-v="standard">Стандартный (5 цветов)</button>
+            <button data-v="multi" class="active">Разноцветный</button>
+          </div>
         </div>
 
         <div class="card">
@@ -1486,7 +1515,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.11';
+const APP_VERSION='1.11.12';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -6312,12 +6341,15 @@ function flashBad(el, done){
 }
 // Зелёная вспышка (тоны: последний верный тон — «всё верно, идём дальше»).
 // Та же механика, что и flashBad, только ярко-зелёным классом .good.
-function flashGood(el, done){
+// ms — длительность подсветки: для тонов по умолчанию 1000мс, для «Выбора ответов»
+// правильный ответ вспыхивает коротко (~350мс) и сразу идёт следующая карточка.
+function flashGood(el, done, ms){
   if(!el) return;
+  if(!ms) ms=1000;
   el.classList.remove('good'); void el.offsetWidth;
   el.classList.add('good');
-  setTimeout(()=>el.classList.remove('good'), 1000);
-  if(done) setTimeout(done, 1000);
+  setTimeout(()=>el.classList.remove('good'), ms);
+  if(done) setTimeout(done, ms);
 }
 function examAdv(){
   Player.stop();
@@ -6505,6 +6537,7 @@ function renderExamChoice(q){
     shuffle(opts);
     const box=document.getElementById('examOpts');
     box.innerHTML='';
+    let correctBtn=null;
     opts.forEach(o=>{
       const b=document.createElement('button');
       // вариант-иероглиф (китайский, направление рус→кит) — крупный шрифт CJK, свой размер
@@ -6514,10 +6547,11 @@ function renderExamChoice(q){
       t.className='opt-txt';
       t.textContent=o;
       b.appendChild(t);
+      if(isRight(o)) correctBtn=b;
       b.onclick=()=>{
         examTouch();
-        if(isRight(o)){ examCorrectCounted(it); examFinish(1); }
-        else { examMistake(it); flashBad(b, ()=>examFinish(1)); }
+        if(isRight(o)){ examCorrectCounted(it); flashGood(b, ()=>examFinish(1), 350); }
+        else { examMistake(it); flashBad(b); if(correctBtn) flashGood(correctBtn); setTimeout(()=>examFinish(1), 1000); }
       };
       box.appendChild(b);
     });
@@ -7081,6 +7115,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.12','17.11.26','Экзамен «Выбор ответов»: при неверном ответе нажатая кнопка подсвечивается красным, правильная — зелёным (обе 1 сек, затем следующая карточка); при верном — короткая зелёная вспышка и сразу следующая. Настройки → Оформление → новый переключатель «Цвета»: «Стандартный (5 цветов)» — всё приложение в 5 семантических цветах (иероглифы/пиньинь/перевод/неактивные кнопки/активные кнопки), и «Разноцветный» — цвета как раньше (по умолчанию).'],
   ['1.11.11','16.11.26','Экзамен: починены ползунки размера шрифтов (теперь охватывают карточки «Выбора ответов», «Подбора пар», «Тонов» и «Письма»). Иероглифы в «Подборе пар» и русский перевод в «Выборе ответов» увеличены. В «Тонах» перевод стал размером с пиньинь, задержка перевода +1 сек. Экзамен «Письмо»: пиньинь больше не мелкий, перевод больше не огромный, окно — по размеру «Обвести». Режим «Письмо → Тон» перенесён в «Экзамен → Тоны → Пиньинь» (под-режимы «Стрелки» и «Пиньинь»). Настройка «Показывать пиньинь без тонов» удалена (всегда включена). В «Подборе пар» аудио больше не звучит до выбора карточки.'],
   ['1.11.10','15.11.26','Письмо (английский, «Одним словом»): собранная фраза мигает зелёным (было красным), слова переносятся на новую строку целиком (не разрываясь по буквам), знаки препинания больше не стираются при наборе.'],
   ['1.11.9','15.11.26','Письмо (английский, «Одним словом»): переключатели «Буквы/Слова расположены» перенесены со экрана в «Настройки режима Письмо». Русский перевод помещается в 2 строки, остаток раскрывается по мере набора. Размер набранного результата уменьшен до размера перевода +2px. Ячейки показываются максимум по 3 строки, следующие 3 раскрываются по мере заполнения.'],
@@ -8396,6 +8431,26 @@ function bindThemeControls(){
   };
   document.getElementById('themeSeg').querySelectorAll('button').forEach(b=>{
     b.onclick=()=>{ cur=b.dataset.v; applyTheme(cur); };
+  });
+}
+// ---- Цветовой режим (5 цветов / разноцветный) ----
+// Личная настройка устройства, как и тема: хранится в localStorage ('ltColorMode'),
+// не участвует в облачной синхронизации. По умолчанию — 'multi' (разноцветный).
+function applyColorMode(m){
+  if(m!=='standard') m='multi';
+  if(m==='standard') document.documentElement.setAttribute('data-color','standard');
+  else document.documentElement.removeAttribute('data-color');
+  try{ localStorage.setItem('ltColorMode', m); }catch(e){}
+  const seg=document.getElementById('colorModeSeg');
+  if(seg) seg.querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.v===m));
+}
+function bindColorModeControls(){
+  let cur='multi';
+  try{ cur=localStorage.getItem('ltColorMode')||'multi'; }catch(e){}
+  if(cur!=='standard') cur='multi';
+  applyColorMode(cur);
+  document.getElementById('colorModeSeg').querySelectorAll('button').forEach(b=>{
+    b.onclick=()=>{ cur=b.dataset.v; applyColorMode(cur); };
   });
 }
 function bindSettings(){
@@ -10325,6 +10380,7 @@ async function boot(){
   refreshSyncUI();
   bindSettings();
   bindThemeControls();
+  bindColorModeControls();
   bindAudioSlot();
   bindAudioLifecycle();
   refreshAll();
