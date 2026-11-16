@@ -846,6 +846,20 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   color:#fff !important;
 }
 .exam-opt.good .opt-txt{color:#fff !important}
+/* Верно-неверно / Подбор пар: верный ответ коротко вспыхивает зелёным (общий класс .good) */
+.btn.good{
+  animation:goodPulse .55s ease 2;
+  background-color:var(--green) !important;
+  border-color:var(--green) !important;
+  color:#fff !important;
+}
+.match-pair.good{
+  animation:goodPulse .55s ease 2;
+  background-color:var(--green) !important;
+  border-color:var(--green) !important;
+  color:#fff !important;
+  opacity:1 !important;
+}
 
 .empty{text-align:center; color:var(--mut); padding:40px 10px; font-size:14px}
 .empty .big-ic{font-size:44px; display:block; margin-bottom:8px}
@@ -1190,6 +1204,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
     <div class="exam-status-bar">
       <span class="flt-mode-badge hidden" id="examFltBadge"></span>
       <span class="chip" id="examProgress"></span>
+      <button class="study-speak" id="examSpeakBtn" title="Аудио на этой странице: автоматическое озвучивание" aria-label="Аудио на этой странице"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
       <button class="study-gear light" id="examSettingsBtn" title="Настройки экзамена" aria-label="Настройки экзамена"><svg viewBox="0 -960 960 960" width="28" height="28" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
     </div>
     <div class="empty hidden" id="examEmpty">
@@ -1487,7 +1502,8 @@ let settings = {
   writeZhMode:'trace',                                                   // режим письма для китайского: trace (обвести) | assemble (собрать из частей)
   cubeOrder:'shuffle',                                                   // порядок кубиков (en): shuffle|vowels|alpha
   cubeLayout:'film',                                                     // режим кубиков (en): film|fanfare
-  dir:'fr', foreignAudio:true, foreignVoice:'', ruAudio:true, ruVoice:''
+  dir:'fr', foreignAudio:true, foreignVoice:'', ruAudio:true, ruVoice:'',
+  examAudio:true                                                          // независимый тумблер озвучки Экзамена (значок динамика)
 };
 let stats = { streak:0, lastDay:'', activity:{} };
 // Активный язык (Фаза 5): справочник языков; у каждого — свои карточки и статистика.
@@ -1515,7 +1531,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.12';
+const APP_VERSION='1.11.13';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2397,11 +2413,10 @@ function tracksFor(it, opts){
   const speeds = opts.mode==='exam' ? ['norm'] : (opts.speeds||['norm']);
   // Русский аудио-канал в Учить/Экзамен не звучит (правки 27.10.26): только иностранный.
   // Русская озвучка осталась только в режиме «Листание» (проигрывается отдельно, см. browsePlayRussian).
-  // Иностранный канал: Экзамен живёт на глобальном тумблере «иностранное аудио», а «Учить»
-  // теперь независим — его авто-озвучку решает своя кнопка (значок динамика), ручное
-  // проигрывание кликом по карточке работает всегда. Поэтому здесь гейтим только экзамен.
-  const foreignOn = opts.mode==='exam' ? (settings.foreignAudio!==false) : true;
-  return foreignOn ? foreignTracks(it,opts,speeds,rateMap,labelMap,R) : [];
+  // Иностранный канал: у «Учить» и «Экзамена» теперь независимые тумблеры (значок динамика),
+  // ручное проигрывание кликом по карточке/вопросу работает всегда. Гейт по глобальному
+  // «иностранное аудио» остался только у Листания (browsePlayForeign проверяет его сам).
+  return foreignTracks(it,opts,speeds,rateMap,labelMap,R);
 }
 // В режиме «Учить» слово озвучивается один раз на обычной скорости.
 // Повтор — только при продолжительном простое (см. studyIdle) или кнопкой «Повторить».
@@ -6029,7 +6044,18 @@ function startExamRepeat(it){
 // Озвучка нового слова в вопросе: с задержкой «Задержка аудио» (0–6 с), затем переменные повторы.
 // При 0 — сразу. Задержка касается только ПЕРВОГО озвучивания.
 // Аудио в экзамене — только иностранный канал (русский убран из Учить/Экзамен, правки 27.10.26).
-function examAudioOn(){ return settings.foreignAudio!==false; }
+// Автозвук Экзамена — НЕЗАВИСИМЫЙ тумблер на этой странице (значок динамика слева от шестерёнки),
+// НЕ связан с глобальным «иностранное аудио» (то управляет Листанием).
+function examAudioOn(){ return settings.examAudio!==false; }
+// Вид кнопки-тумблера аудио «Экзамена»: вкл — обычный динамик, выкл — перечёркнутый.
+function renderExamAudioBtn(){
+  const b=document.getElementById('examSpeakBtn');
+  if(!b) return;
+  const on=examAudioOn();
+  b.classList.toggle('off', !on);
+  b.title=on ? 'Аудио: включено — нажмите, чтобы выключить' : 'Аудио: выключено — нажмите, чтобы включить';
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+}
 function examSpeakDelayed(it){
   if(!examAudioOn()) return;
   if(!it || !it.hanzi) return;
@@ -6470,7 +6496,7 @@ function renderExamTF(q){
   body.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{
     examTouch();
     const taskOk=(b.dataset.v==='1')===showOk;
-    if(taskOk){ examCorrect(it); examFinish(1); }
+    if(taskOk){ examCorrect(it); flashGood(b, ()=>examFinish(1), 350); }
     else { examMistakeSoft(it); flashBad(b, ()=>examFinish(1)); }
   });
   // клик по слову/центру вопроса — единый обработчик examBodyClick (одно проигрывание).
@@ -6579,9 +6605,11 @@ function toneNumOf(pyNum){
 function buildToneGroups(hanzi){
   const words=String(hanzi||'').trim().split(/\s+/).filter(Boolean);
   const raw=[];
+  // Размер группы иероглифов: на ноутбуке (≥1024px) влезает 5, на телефоне — 3.
+  const groupN = window.matchMedia('(min-width:1024px)').matches ? 5 : 3;
   for(const w of words){
     const chars=Array.from(w);
-    for(let i=0;i<chars.length;i+=3) raw.push(chars.slice(i,i+3));
+    for(let i=0;i<chars.length;i+=groupN) raw.push(chars.slice(i,i+groupN));
   }
   const out=[];
   for(const g of raw){
@@ -6644,8 +6672,11 @@ function tonePick(n, btn){
   if(cur && cur.num===n){
     cur.revealed=true;   // верный тон → открываем пиньинь этого иероглифа (с знаком тона)
     toneCI++;
-    const isLast=(toneCI>=seg.length);          // последний тон текущей группы из 3 иероглифов
+    const isLast=(toneCI>=seg.length);          // последний тон текущей группы
     drawTone();          // сразу показать открывшийся пиньинь (в т.ч. последнего иероглифа группы)
+    // промежуточные верные тоны коротко вспыхивают зелёным (после перерисовки — на свежей кнопке);
+    // финальный вспыхивает в ветке ниже, вместе с переводом.
+    if(!isLast){ const fb=document.querySelector('#examBody [data-tone="'+n+'"]'); flashGood(fb, null, 350); }
     if(isLast){
       toneCI=0; toneGI++;
       if(toneGI>=toneGroups.length){
@@ -7057,6 +7088,9 @@ function matchPickRight(id, btn){
 function matchDone(leftBtn, rightBtn, id){
   leftBtn.classList.remove('sel');
   rightBtn.classList.remove('sel');
+  // верная пара коротко вспыхивает зелёным (opacity:1 в .good перекрывает затемнение .done)
+  flashGood(leftBtn, null, 350);
+  flashGood(rightBtn, null, 350);
   leftBtn.classList.add('done'); leftBtn.disabled=true;
   rightBtn.classList.add('done'); rightBtn.disabled=true;
   matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
@@ -7066,14 +7100,19 @@ function matchDone(leftBtn, rightBtn, id){
   if(document.querySelectorAll('#matchLeft button:not(.done)').length===0){
     // Раунд угадан. Каждая верная пара уже получила SRS-зачёт в matchDone (выше),
     // поэтому здесь только балл задания: без ошибок = +1, с ошибками — повтор слов и без балла.
-    if(matchError){
-      matchErrItems.forEach(w=>requeueExam(w));
-      examFinish(1);
-    } else {
-      examRight++;
-      touchStreak(); logActivity(); persist();
-      examFinish(1);
-    }
+    // На последней паре ждём окончания зелёной вспышки, чтобы её было видно перед переходом.
+    const finish=()=>{
+      if(matchError){
+        matchErrItems.forEach(w=>requeueExam(w));
+        examFinish(1);
+      } else {
+        examRight++;
+        touchStreak(); logActivity(); persist();
+        examFinish(1);
+      }
+    };
+    if(matchError) finish();
+    else setTimeout(finish, 350);
   }
 }
 
@@ -7115,6 +7154,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.13','17.11.26','Экзамен: в «Тонах» на ноутбуке (≥1024px) показывается 5 иероглифов, на телефоне — 3. Во всех режимах экзамена верный ответ вспыхивает коротким зелёным, неверный — красным. Добавлена кнопка аудио слева от шестерёнки экзамена (независимый тумблер озвучки, как в «Изучении»).'],
   ['1.11.12','17.11.26','Экзамен «Выбор ответов»: при неверном ответе нажатая кнопка подсвечивается красным, правильная — зелёным (обе 1 сек, затем следующая карточка); при верном — короткая зелёная вспышка и сразу следующая. Настройки → Оформление → новый переключатель «Цвета»: «Стандартный (5 цветов)» — всё приложение в 5 семантических цветах (иероглифы/пиньинь/перевод/неактивные кнопки/активные кнопки), и «Разноцветный» — цвета как раньше (по умолчанию).'],
   ['1.11.11','16.11.26','Экзамен: починены ползунки размера шрифтов (теперь охватывают карточки «Выбора ответов», «Подбора пар», «Тонов» и «Письма»). Иероглифы в «Подборе пар» и русский перевод в «Выборе ответов» увеличены. В «Тонах» перевод стал размером с пиньинь, задержка перевода +1 сек. Экзамен «Письмо»: пиньинь больше не мелкий, перевод больше не огромный, окно — по размеру «Обвести». Режим «Письмо → Тон» перенесён в «Экзамен → Тоны → Пиньинь» (под-режимы «Стрелки» и «Пиньинь»). Настройка «Показывать пиньинь без тонов» удалена (всегда включена). В «Подборе пар» аудио больше не звучит до выбора карточки.'],
   ['1.11.10','15.11.26','Письмо (английский, «Одним словом»): собранная фраза мигает зелёным (было красным), слова переносятся на новую строку целиком (не разрываясь по буквам), знаки препинания больше не стираются при наборе.'],
@@ -8560,17 +8600,13 @@ function renderGlobalAudioSettings(){
       else settings.ruAudio = settings.ruAudio===false;
       persist();
       // мгновенно применить к текущим режимам.
-      // Обычные карточки «Учить» на эти глобальные тумблеры НЕ реагируют — автозвук у них свой
-      // (значок динамика). Глобальные «иностранное/русское аудио» влияют на Листание и Экзамен.
+      // Обычные карточки «Учить» и «Экзамена» на эти глобальные тумблеры НЕ реагируют —
+      // автозвук у них свой (значок динамика). Глобальные «иностранное/русское аудио»
+      // влияют только на Листание.
       const scr=document.getElementById('scr-study');
       if(scr && scr.classList.contains('active') && browseOn){
         const bit=studyQueue[studyIdx];
         if(bit) browseStep(bit);   // Листание: перезапустить слово с новым состоянием аудио
-      }
-      const escr=document.getElementById('scr-exam');
-      if(escr && escr.classList.contains('active')){
-        if(examAudioOn()){ const it=examCurrentIt; if(it&&it.hanzi) startExamRepeat(it); }
-        else clearExamIdle();
       }
       renderGlobalAudioSettings();
     };
@@ -9055,6 +9091,17 @@ document.getElementById('writePrev').onclick=writePrev;
 document.getElementById('writeNext').onclick=writeNext;
 document.getElementById('writeSettingsBtn').onclick=openWriteSettings;
 document.getElementById('examSettingsBtn').onclick=openExamSettings;
+document.getElementById('examSpeakBtn').onclick=()=>{
+  // Тумблер автозвука «Экзамена»: независимая настройка этой страницы (как в «Учить»).
+  settings.examAudio = settings.examAudio===false;
+  persist();
+  renderExamAudioBtn();
+  const escr=document.getElementById('scr-exam');
+  if(escr && escr.classList.contains('active')){
+    if(examAudioOn()){ const it=examCurrentIt; if(it&&it.hanzi) startExamRepeat(it); }
+    else { Player.stop(); clearExamIdle(); }
+  }
+};
 document.getElementById('examBody').onclick=examBodyClick;
 document.getElementById('btnTagsManage').onclick=openTagsModal;
 document.getElementById('btnExport').onclick=doExport;
@@ -10381,6 +10428,7 @@ async function boot(){
   bindSettings();
   bindThemeControls();
   bindColorModeControls();
+  renderExamAudioBtn();
   bindAudioSlot();
   bindAudioLifecycle();
   refreshAll();
