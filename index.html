@@ -359,6 +359,8 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 @keyframes fanfareRise{0%{transform:translateY(14px); opacity:0}100%{transform:translateY(0); opacity:1}}
 .wl-letters-ctrl{display:flex; gap:10px; justify-content:center; align-items:center; margin-top:10px}
 #examWriteArea{width:100%; height:auto; aspect-ratio:1/1; max-width:min(620px,100%); background:var(--card); border-radius:12px; position:relative; display:flex; align-items:center; justify-content:center; touch-action:none; margin:0 auto}
+/* Планшеты+ (≥768px): окно письма экзамена — как в режиме «Обвести» (620→496px), чтобы на ноутбуке не раздувалось */
+@media (min-width:768px){ #examWriteArea{max-width:496px} }
 /* Вспышки на поле письма в экзамене (верно — зелёная рамка, ошибка — красная) */
 #examWriteArea.good{outline:3px solid var(--green); animation:badShake 1s ease}
 #examWriteArea.bad{outline:3px solid var(--red); animation:badShake 1s ease}
@@ -989,7 +991,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
    (держит высоту строки, чтобы колонки не «прыгали» при открытии). */
 .tone-cell .tp{font-size:24px; color:var(--ink); font-weight:600; letter-spacing:.03em; min-height:1.4em; text-align:center; line-height:1.4em}
 .tone-cell .tp.off{color:transparent}
-.tone-tr{font-size:18px; color:var(--ink); text-align:center; min-height:1.4em; margin-top:10px; font-weight:600}
+.tone-tr{font-size:24px; color:var(--ink); text-align:center; min-height:1.4em; margin-top:10px; font-weight:600}
 .tone-btns{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:10px}
 .tone-btns button{
   min-width:0; padding:16px 12px; border-radius:14px; border:1.5px solid var(--line);
@@ -1020,13 +1022,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:22px 0 0; align-items:stretch; width:100%}
 /* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
 .exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
-.exam-opt{font-size:14px; padding:12px 8px; min-height:70px; word-break:break-word}
+.exam-opt{font-size:17px; padding:12px 8px; min-height:70px; word-break:break-word}
 /* Вариант-иероглиф (китайский, направление рус→кит): крупный CJK-шрифт; длинная фраза сжимается */
 .exam-opt.hz{font-family:var(--font-cjk); font-size:32px; line-height:1.3; padding:14px 10px; min-height:80px}
 .exam-opt.hz.sent{font-size:22px; line-height:1.4}
 
 .match-col{display:grid; grid-template-rows:repeat(5, minmax(72px, 1fr)); gap:10px; align-content:stretch}
-.match-pair{font-family:var(--font-cjk); font-size:22px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word; overflow-wrap:anywhere}
+.match-pair{font-family:var(--font-cjk); font-size:25px; line-height:1.25; width:100%; height:100%; margin:0; word-break:break-word; overflow-wrap:anywhere}
 .match-pair.sent{font-size:16px; line-height:1.35}
 .match-pair.match-txt{font-family:'Nunito',system-ui,-apple-system,var(--font-cjk),sans-serif; font-size:17px; font-weight:600}
 .match-pair.sel{background:var(--amber); border-color:#d6930b; color:#3b2f00; transform:translateY(3px); box-shadow:0 1px 0 #d6930b}
@@ -1037,10 +1039,10 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
    Телефоны и планшеты (<1024px) — размеры прежние. */
 @media (min-width:1024px){
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
-  .exam-opt{font-size:19px; padding:18px 14px; min-height:91px; word-break:break-word}
+  .exam-opt{font-size:22px; padding:18px 14px; min-height:91px; word-break:break-word}
   .exam-opt.hz{font-size:38px; line-height:1.3; padding:16px 14px; min-height:96px}
   .exam-opt.hz.sent{font-size:26px; line-height:1.4}
-  .match-pair{font-size:26px; line-height:1.3}
+  .match-pair{font-size:29px; line-height:1.3}
   .match-pair.sent{font-size:19px; line-height:1.35}
   .match-pair.match-txt{font-size:20px; line-height:1.35}
   .match-col{grid-template-rows:repeat(5, minmax(84px, 1fr)); gap:12px}
@@ -1484,7 +1486,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.10';
+const APP_VERSION='1.11.11';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3967,6 +3969,27 @@ function eqSizesStyle(hanzi, opts){
   if(o.tr) lines.push('font-size:'+f.tr.toFixed(1)+'px');
   return lines.join(';');
 }
+// Размеры КАРТОЧНЫХ элементов экзамена (варианты ответов, карточки подбора, тон, письмо).
+// В отличие от eqSizesStyle (размер ГЛАВНОГО вопроса), это компактные базовые размеры,
+// которые масштабируются ползунками «Иероглиф/Пиньинь/Перевод» в настройках экзамена.
+function examRoleSize(role){
+  const desktop=innerWidth>=1024;
+  const h=settings.examMulH||1, p=settings.examMulP||1, t=settings.examMulT||1;
+  switch(role){
+    case 'choice-hz': return (desktop?38:32)*h;
+    case 'choice-hz-sent': return (desktop?26:22)*h;
+    case 'choice-tr': return (desktop?22:17)*t;
+    case 'match-hz': return (desktop?29:25)*h;
+    case 'match-hz-sent': return (desktop?19:16)*h;
+    case 'match-tr': return (desktop?20:17)*t;
+    case 'tone-py': return 24*p;
+    case 'tone-tr': return 24*t;
+    case 'write-py': return 30*p;
+    case 'write-tr': return 18*t;
+  }
+  return 0;
+}
+function examRoleStyle(role){ const px=examRoleSize(role); return px?('font-size:'+px.toFixed(1)+'px'):''; }
 function updateStudySize(){
   applyStudySizes();   // строка размеров («иер px · пин px · пер px») обновляется вместе с размерами
 }
@@ -4477,16 +4500,11 @@ function startWrite(focusIt){
   loadWritePrefs(); applyWriteToggles();
   updateCubeOrderBar();
   renderZhWriteBar();
-  const all=writableItems();
-  // «Тон» (китайский): только отдельные слова — предложения не участвуют, всегда без настройки.
-  const toneOnlyWords = hasStrokes() && zhWriteMode()==='tone';
-  const avail = toneOnlyWords ? all.filter(toneWordOk) : all;
+  const avail=writableItems();
   if(!avail.length){
     document.getElementById('writeWord').innerHTML='';
     document.getElementById('writeArea').classList.remove('type','asm','tone');
-    document.getElementById('writeArea').innerHTML = toneOnlyWords
-      ? '<div class="empty">В «Тоне» участвуют только отдельные слова.<br>Добавьте слово в «Словаре» (предложения не подходят).</div>'
-      : '<div class="empty">Нет слов для письма.<br>Добавьте их в «Словаре».</div>';
+    document.getElementById('writeArea').innerHTML = '<div class="empty">Нет слов для письма.<br>Добавьте их в «Словаре».</div>';
     document.getElementById('writePy').textContent=''; document.getElementById('writeTr').textContent='';
     document.getElementById('writeList').innerHTML='';
     return;
@@ -5163,33 +5181,24 @@ function updateCubeOrderBar(){
 // ===== ПИСЬМО (китайский): СОБРАТЬ ИЗ ЧАСТЕЙ (по образцу Дуолинго) =====
 const IDS_OPS = new Set('⿰⿱⿲⿳⿴⿵⿶⿷⿸⿹⿺⿻'.split(''));
 let asmState=null, asmPool=null;
-// Режим китайского письма: 'trace' — обвести иероглиф (HanziWriter), 'assemble' — собрать из компонентов,
-// 'tone' — выбрать правильный пиньинь по тонам (образец Дуолинго).
+// Режим китайского письма: 'trace' — обвести иероглиф (HanziWriter), 'assemble' — собрать из компонентов.
+// («Тон» перенесён в экзамен → «Тоны» → «Пиньинь».)
 function zhWriteMode(){
   const m=settings.writeZhMode;
-  return (m==='assemble'||m==='tone') ? m : 'trace';
+  return (m==='assemble') ? m : 'trace';
 }
 function renderZhWriteBar(){
   const bar=document.getElementById('zhWriteBar'); if(!bar) return;
   if(!hasStrokes()){ bar.innerHTML=''; return; } // только китайский
   const m=zhWriteMode();
   const btn=(k,label)=>`<button type="button" class="${k===m?'on':''}" data-zhwm="${k}">${label}</button>`;
-  bar.innerHTML=`${btn('trace','✍️ Обвести')}${btn('assemble','🧩 Собрать')}${btn('tone','🎚️ Тон')}`;
+  bar.innerHTML=`${btn('trace','✍️ Обвести')}${btn('assemble','🧩 Собрать')}`;
   bar.querySelectorAll('[data-zhwm]').forEach(b=>{
     b.onclick=()=>{
       if(b.dataset.zhwm===zhWriteMode()) return;
       settings.writeZhMode=b.dataset.zhwm; persist();
-      renderWriteSettings(); // шестерёнка: в «Тоне» набор настроек другой
-      if(!writeCurItem) return;
-      // перерисовать текущее слово в новом режиме; в «Тоне» предложения не участвуют —
-      // если текущее слово — предложение, переходим к первому подходящему слову.
-      if(zhWriteMode()==='tone' && !toneWordOk(writeCurItem)){
-        rebuildWriteSeq();
-        if(writeSeq.length) setWriteItem(writeSeq[0]);
-        else startWrite(); // слов нет — пересобрать экран (покажет сообщение)
-      } else {
-        setWriteItem(writeCurItem, true);
-      }
+      renderWriteSettings();
+      if(writeCurItem) setWriteItem(writeCurItem, true);
     };
   });
 }
@@ -5282,10 +5291,10 @@ function asmPick(ti){
     if(writeAudioOn && writeCurItem && writeCurItem.hanzi) speak(writeCurItem.hanzi,1,foreignVoice());
   }
 }
-// ===== ПИСЬМО (китайский): ВЫБРАТЬ ТОН (по образцу Дуолинго) =====
+// ===== ВЫБОР ПИНЬИНЯ ПО ТОНУ (задание «Экзамен → Тоны → Пиньинь», по образцу Дуолинго) =====
 // Показываем иероглиф/слово и четыре пиньиня, различающихся ТОНАМИ. Правильный один.
-// Пиньинь и перевод до ответа скрыты — иначе задание превращается в чтение подсказки.
-let toneState=null, tonePoolCache=null, toneFailStreak=0;
+// До ответа пиньинь и перевод не раскрываются — иначе задание превращается в чтение подсказки.
+let tonePoolCache=null;
 // Диакритика для тонов: в строю 0 — нейтральный тон (без знака), 1–4 — Ā/Á/Ǎ/À.
 const TONE_VOWELS={
   a:['a','ā','á','ǎ','à'],
@@ -5373,74 +5382,6 @@ function toneQuestion(it){
   if(out.length<3) return null;
   return { word, correct, options:shuffle([correct, ...out]) };
 }
-function startTone(){
-  const token=++writeToken;
-  writeAnimRunning=false;
-  const area=document.getElementById('writeArea');
-  area.classList.remove('asm');
-  area.classList.add('type','tone');
-  // до ответа НЕ показываем ни пиньинь, ни подсказку-иероглифы над окном, ни перевод
-  const ww=document.getElementById('writeWord'); ww.innerHTML=''; ww.classList.add('hidden');
-  document.getElementById('writePy').textContent='';
-  document.getElementById('writeTr').textContent='';
-  renderWriteList(); renderZhWriteBar();
-  if(!window.pinyinPro){
-    area.innerHTML='<div class="asm-empty">Пиньинь недоступен: библиотека pinyin-pro не загрузилась.<br>Подключитесь к интернету один раз — дальше она работает офлайн.</div>';
-    return;
-  }
-  const q=toneQuestion(writeCurItem);
-  if(!q){
-    // у слова не нашлось слогов/вариантов — пропускаем, чтобы не застрять.
-    // Счётчик подряд идущих пропусков защищает от бесконечного цикла, когда таких слов ВСЕ.
-    toneFailStreak++;
-    const total=Math.max(1, writeWordList().length);
-    if(toneFailStreak>=total){
-      toneFailStreak=0;
-      area.innerHTML='<div class="asm-empty">Пока нет слов, для которых можно задать выбор тона.<br>Добавьте слова с пиньинем в «Словаре».</div>';
-      return;
-    }
-    area.innerHTML=`<div class="asm-empty">Для «${escapeHtml((writeCurItem&&writeCurItem.hanzi)||'')}» не удалось построить задание на тон.<br>Переходим к следующему слову…</div>`;
-    setTimeout(()=>{ if(token!==writeToken) return; writeNext(); }, 700);
-    return;
-  }
-  toneFailStreak=0;
-  toneState={ ...q, it:writeCurItem, picked:-1, done:false };
-  renderTone();
-}
-function renderTone(){
-  const area=document.getElementById('writeArea');
-  const s=toneState; if(!s) return;
-  const opts=s.options.map((o,i)=>{
-    let cls='tone-opt';
-    if(s.done){
-      if(o===s.correct) cls+=' good';
-      else if(i===s.picked) cls+=' bad';
-      else cls+=' dim';
-    }
-    return `<button type="button" class="${cls}" data-tone="${i}">${escapeHtml(o)}</button>`;
-  }).join('');
-  area.innerHTML=`<div class="tone-q"><div class="tone-target">${escapeHtml(s.word)}</div>`
-    +`<button type="button" class="tone-speak" id="toneSpeak" title="Прослушать" aria-label="Прослушать">🔉</button></div>`
-    +`<div class="tone-opts">${opts}</div>`;
-  const sp=area.querySelector('#toneSpeak');
-  if(sp) sp.onclick=()=>{ const it=s.it||writeCurItem; if(it&&it.hanzi) speak(it.hanzi,1,foreignVoice()); };
-  area.querySelectorAll('[data-tone]').forEach(b=>{ b.onclick=()=>toneOptPick(Number(b.dataset.tone)); });
-}
-// Имя с суффиксом Opt — в «Экзамене» уже есть своя tonePick(), она перебивала бы эту.
-function toneOptPick(i){
-  const s=toneState; if(!s || s.done) return;
-  const it=s.it||writeCurItem;
-  const ok=s.options[i]===s.correct;
-  s.picked=i; s.done=true;
-  // перевод — уже не подсказка, показываем под карточкой
-  const wtr=document.getElementById('writeTr');
-  if(wtr) wtr.textContent=(it&&trJoined(it))||'';
-  renderTone();
-  if(writeAudioOn && it && it.hanzi) speak(it.hanzi,1,foreignVoice());
-  const token=writeToken;
-  if(ok){ if(it){ good(it); newGood(it); persist(); updateChips(); } }
-  setTimeout(()=>{ if(token!==writeToken) return; blinkWriteArea(()=>writeNext()); }, ok?700:1500);
-}
 function renderTypeCardsHint(){
   const el=document.getElementById('writeWord');
   // в режиме печати подсказка-слово не нужна: слово уже целиком показано в карточке
@@ -5487,8 +5428,6 @@ function writeWordList(){
   const list=writableItems().slice().sort((a,b)=>{
     return ((b.addedAt||0)-(a.addedAt||0)) || String(b.id||'').localeCompare(String(a.id||''));
   });
-  // «Тон» (китайский): только отдельные слова — предложения не участвуют, всегда без настройки.
-  if(hasStrokes() && zhWriteMode()==='tone') return list.filter(toneWordOk);
   return list;
 }
 function rebuildWriteSeq(){
@@ -5570,7 +5509,6 @@ function startWriteChar(quiet){
   if(!writeChars.length) return;
   renderZhWriteBar();
   if(zhWriteMode()==='assemble'){ startAssemble(); return; }
-  if(zhWriteMode()==='tone'){ startTone(); return; }
   renderWriteWord(); renderWriteLabels(); renderWriteList();
   const area=document.getElementById('writeArea');
   area.classList.remove('type','asm','tone');
@@ -5786,14 +5724,10 @@ function renderWriteSettings(){
     });
     return;
   }
-  // «Тон»: обводка и анимация начертания в задании не участвуют — оставляем только Аудио/Рандом.
-  const toneOnly = hasStrokes() && zhWriteMode()==='tone';
   const rows=[['Аудио','Озвучка слова/предложения','sn','writeAudio',writeAudioOn]];
-  if(!toneOnly) rows.push(['Контур','Помогающая сетка и контур иероглифа','sn','writeOutline',writeOutlineOn]);
+  rows.push(['Контур','Помогающая сетка и контур иероглифа','sn','writeOutline',writeOutlineOn]);
   rows.push(['Рандом','Перемешивать порядок прохождения по словам','sn','writeRand',writeRandOn()]);
-  if(!toneOnly){
-    rows.splice(hasStrokes()?2:3,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
-  }
+  rows.splice(hasStrokes()?2:3,0,['Анимация','Показывать, как пишется иероглиф','sn','writeAnim',writeAnimOn]);
   const navPct=Math.round(writeNavMul()*100);
   const hintPct=Math.round(writeHintMul()*100);
   m.innerHTML=`<div class="sheet">
@@ -5843,7 +5777,7 @@ function renderWriteSettings(){
 // examSeq — упорядоченный поток заданий (слова с повтором по числу иероглифов в Письменно);
 // каждый элемент: {it, mode:'tf'|'choice'|'write'|'match', charIdx?}
 let examSeq=[], examIdx=0, examRight=0, examWrong=[];
-let examSettings={tf:true, choice:true, choiceN:8, tone:false, match:false, write:false, tonePy:true};
+let examSettings={tf:true, choice:true, choiceN:8, tone:false, tonePyQ:false, match:false, write:false};
 let examAllTr=true;   // «Все переводы» — использовать альтернативные переводы в заданиях
 let examIdleTimer=null, examCurrentIt=null, examLastMove=0;
 let examCurDir='fr';  // направление текущего вопроса (fr/rf); mix решается случайно на каждый вопрос
@@ -5863,7 +5797,7 @@ function examPickTr(it){
   return all[Math.floor(Math.random()*all.length)];
 }
 function examChoiceN(){ return examSettings.choiceN||8; }
-function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, match:!!examSettings.match, write:!!examSettings.write}; }
+function examModes(){ return {tf:examSettings.tf, choice:examSettings.choice, tone:!!examSettings.tone, tonePyQ:!!examSettings.tonePyQ, match:!!examSettings.match, write:!!examSettings.write}; }
 // Группа длины иероглифа: 1 / 2 / 3–4 / 5+ (предложение). По ней подбираем дистракторы,
 // чтобы нельзя было угадать ответ «по размеру»: и в выборе ответов, и в верно-неверно.
 function examHzLenBucket(n){ return n<=1?1:(n===2?2:(n<=4?3:4)); }
@@ -5927,20 +5861,27 @@ function examBuildSeq(){
   const modeOrder=[];
   if(sep.choice) modeOrder.push('choice');
   if(sep.tf) modeOrder.push('tf');
-  // тон-тест: только для языков с иероглифами (китайский) и только слова/фразы с тонами
+  // тон-тест «Стрелки»: только для языков с иероглифами (китайский)
   if(sep.tone && hasStrokes()) modeOrder.push('tone');
   // подбор: один раунд из 5 пар на «задание» — участвует в общей ротации
   if(sep.match) modeOrder.push('match');
   // письмо: одно слово на задание; участвует в ротации только если есть что писать
   if(sep.write && examWritePool().length) modeOrder.push('write');
-  if(!modeOrder.length) return [];
+  // тон-тест «Пиньинь»: только китайский и только короткие слова (≤4 иероглифа) — добавляется
+  // каждому слову ОТДЕЛЬНО (не всем подряд), поэтому не входит в общий modeOrder.
+  const tonePyOk = sep.tonePyQ && hasStrokes();
+  if(!modeOrder.length && !tonePyOk) return [];
   const words=examPool();
   if(!words.length) return [];
   // Последовательность заданий: каждое слово — во всех включённых режимах. Режимы слова идут
   // в случайном порядке, а сами слова чередуются по раундам (round-robin), чтобы одно слово
   // не показывалось подряд и соблюдался отступ EXAM_MIN_GAP.
   const seq=[];
-  const remaining=words.map(w=>({it:w, modes:modeOrder.slice()}));
+  const remaining=words.map(w=>{
+    const modes=modeOrder.slice();
+    if(tonePyOk && toneWordOk(w)) modes.push('tonePy');
+    return {it:w, modes};
+  });
   // раунд: проходим слова по кругу; каждое слово отдаёт один случайный режим из своих оставшихся
   while(true){
     let progressed=false;
@@ -6009,6 +5950,7 @@ function nextExamQ(){
   if(q.mode==='tf') renderExamTF(q);
   else if(q.mode==='choice') renderExamChoice(q);
   else if(q.mode==='tone') renderExamTone(q);
+  else if(q.mode==='tonePy') renderExamTonePy(q);
   else if(q.mode==='match'){ matchStart(); }
   else if(q.mode==='write') renderExamWrite(q);
   else renderExamTF(q);
@@ -6091,7 +6033,7 @@ function examBodyClick(e){
   if(t && t.closest && t.closest('button, input, textarea, select, .exam-opts, .tone-btns, .btn-col')) return;
   const q=examSeq[examIdx];
   if(!q || !q.it) return;
-  if(!['tf','choice','tone'].includes(q.mode)) return;
+  if(!['tf','choice','tone','tonePy'].includes(q.mode)) return;
   examTouch();
   examRepeatGen++;                                   // гасим автоповтор — дальше одно проигрывание
   if(examRepeatTmo){ clearTimeout(examRepeatTmo); examRepeatTmo=null; }
@@ -6107,10 +6049,14 @@ function examSizeSliderHTML(skey, label){
   return `<div class="sn-slider"><span class="sn-slider-lab">${escapeHtml(label)}</span><input type="range" min="50" max="250" step="10" value="${cur}" data-exam-size="${skey}"><span class="sn-slider-val" data-exam-size-val="${skey}">${cur}%</span></div>`;
 }
 // Мгновенно применяет размеры текста к текущему вопросу экзамена (не трогает озвучку).
+// Покрывает ВСЕ элементы задания: главный вопрос (.eq-word/.exam-py/.eq-tr) и карточные
+// элементы (варианты ответов, карточки подбора, тон, письмо) — иначе ползунки «не работали»
+// для режимов, чьи размеры зашиты в CSS фиксированными px.
 function applyExamSizes(){
-  const w=document.querySelector('#examBody .eq-word');
-  const py=document.querySelector('#examBody .exam-py');
-  const tr=document.querySelector('#examBody .eq-tr');
+  const body=document.getElementById('examBody');
+  if(!body) return;
+  const w=body.querySelector('.eq-word');
+  const py=body.querySelector('.exam-py');
   const hanzi=(w&&w.textContent)||'';
   // сжатие иероглифа — по ЕГО длине (в rf .eq-word = русский, а не иероглиф)
   const hzLen = examCurDir==='rf' && examCurrentIt ? Array.from(examCurrentIt.hanzi||'').length : Array.from(hanzi).length;
@@ -6122,15 +6068,59 @@ function applyExamSizes(){
     else { w.style.wordBreak='break-all'; w.style.overflowWrap=''; }
   }
   if(py) py.style.fontSize=f.py.toFixed(1)+'px';
+  // перевод главного вопроса (ВН/Выбор), НО не перевод письма — у него свой компактный размер
+  const tr=body.querySelector('.eq-tr:not(#examWriteTr)');
   if(tr) tr.style.fontSize=f.tr.toFixed(1)+'px';
+  // Варианты ответов: иероглиф крупно, перевод компактно; длинная фраза сжимается.
+  body.querySelectorAll('.exam-opt').forEach(o=>{
+    const hz=o.classList.contains('hz'), sent=o.classList.contains('sent');
+    o.style.fontSize=examRoleSize(hz?(sent?'choice-hz-sent':'choice-hz'):'choice-tr').toFixed(1)+'px';
+  });
+  // Карточки подбора пар: слева/справа — иероглиф или перевод (match-txt).
+  body.querySelectorAll('.match-pair').forEach(o=>{
+    const txt=o.classList.contains('match-txt'), sent=o.classList.contains('sent');
+    o.style.fontSize=examRoleSize(txt?'match-tr':(sent?'match-hz-sent':'match-hz')).toFixed(1)+'px';
+  });
+  // Тоны («Стрелки»): пиньинь под иероглифом и перевод внизу.
+  body.querySelectorAll('.tone-cell .tp').forEach(o=>{ o.style.fontSize=examRoleSize('tone-py').toFixed(1)+'px'; });
+  const ttr=body.querySelector('.tone-tr'); if(ttr) ttr.style.fontSize=examRoleSize('tone-tr').toFixed(1)+'px';
+  // Письмо: перевод компактный (пиньинь уже покрыт общим .exam-py выше).
+  const wtr=body.querySelector('#examWriteTr'); if(wtr) wtr.style.fontSize=examRoleSize('write-tr').toFixed(1)+'px';
 }
 function toggleExamMode(k){
   examSettings[k]=!examSettings[k];
   // хотя бы один режим должен оставаться включённым (иначе не из чего строить экзамен)
-  if(!examSettings.tf && !examSettings.choice && !examSettings.tone && !examSettings.match && !examSettings.write){ examSettings[k]=true; }
-  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice; settings.examTone=!!examSettings.tone; settings.examMatch=!!examSettings.match; settings.examWrite=!!examSettings.write;
-  persist();
+  if(!examSettings.tf && !examSettings.choice && !examSettings.tone && !examSettings.tonePyQ && !examSettings.match && !examSettings.write){ examSettings[k]=true; }
+  persistExamModes();
   // П.2: переключение режима перестраивает очередь, чтобы выключенный режим перестал давать задания
+  if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
+}
+function persistExamModes(){
+  settings.examTf=examSettings.tf; settings.examChoice=examSettings.choice;
+  settings.examTone=!!examSettings.tone; settings.examTonePyQ=!!examSettings.tonePyQ;
+  settings.examMatch=!!examSettings.match; settings.examWrite=!!examSettings.write;
+  persist();
+}
+// Группа «Тоны»: один переключатель — включает/выключает ОБА под-режима сразу.
+function toggleExamToneGroup(){
+  const on=examSettings.tone || examSettings.tonePyQ;
+  if(on){ examSettings.tone=false; examSettings.tonePyQ=false; }
+  else { examSettings.tone=true; examSettings.tonePyQ=true; }
+  persistExamModes();
+  if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
+}
+// Под-режим «Стрелки» (указать тон каждого иероглифа): хотя бы один под-режим «Тонов» должен остаться.
+function toggleExamToneArrows(){
+  examSettings.tone=!examSettings.tone;
+  if(!examSettings.tone && !examSettings.tonePyQ) examSettings.tonePyQ=true;
+  persistExamModes();
+  if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
+}
+// Под-режим «Пиньинь» (выбрать правильный пиньинь по тону).
+function toggleExamTonePyQ(){
+  examSettings.tonePyQ=!examSettings.tonePyQ;
+  if(!examSettings.tone && !examSettings.tonePyQ) examSettings.tone=true;
+  persistExamModes();
   if(document.getElementById('scr-exam').classList.contains('active')) restartExamSeq();
 }
 // Пересобрать экзамен в ответ на смену режимов/таймингов, сохранив позицию и счёт.
@@ -6222,13 +6212,17 @@ function renderExamSettings(){
         </div>
       </div>`:''}
       ${showTone?`<div class="menu-item">
-        <div class="mi-label">Тоны<span class="mi-hint">Указать тон каждого иероглифа (только китайский)</span></div>
-        <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="tone"></button>
+        <div class="mi-label">Тоны<span class="mi-hint">Задания на тон (только китайский)</span></div>
+        <button class="sn-switch ${(examSettings.tone||examSettings.tonePyQ)?'on':''}" data-exam-key="tone"></button>
       </div>
-      ${examSettings.tone?`<div class="exam-sub">
+      ${(examSettings.tone||examSettings.tonePyQ)?`<div class="exam-sub">
         <div class="menu-item">
-          <div class="mi-label">Пиньинь<span class="mi-hint">Показывать пиньинь без тонов под иероглифом</span></div>
-          <button class="sn-switch ${examSettings.tonePy?'on':''}" data-exam-key="tonePy"></button>
+          <div class="mi-label">Стрелки<span class="mi-hint">Указать тон каждого иероглифа</span></div>
+          <button class="sn-switch ${examSettings.tone?'on':''}" data-exam-key="toneArrows"></button>
+        </div>
+        <div class="menu-item">
+          <div class="mi-label">Пиньинь<span class="mi-hint">Выбрать правильный пиньинь по тону</span></div>
+          <button class="sn-switch ${examSettings.tonePyQ?'on':''}" data-exam-key="tonePyQ"></button>
         </div>
       </div>`:''}`:''}
       <div class="menu-item">
@@ -6249,12 +6243,13 @@ function renderExamSettings(){
       const k=el.dataset.examKey;
       if(k==='tf'){ toggleExamMode('tf'); renderExamSettings(); }
       else if(k==='choice'){ toggleExamMode('choice'); renderExamSettings(); }
-      else if(k==='tone'){ toggleExamMode('tone'); renderExamSettings(); }
+      else if(k==='tone'){ toggleExamToneGroup(); renderExamSettings(); }
+      else if(k==='toneArrows'){ toggleExamToneArrows(); renderExamSettings(); }
+      else if(k==='tonePyQ'){ toggleExamTonePyQ(); renderExamSettings(); }
       else if(k==='match'){ toggleExamMode('match'); renderExamSettings(); }
       else if(k==='write'){ toggleExamMode('write'); renderExamSettings(); }
       else if(k==='allTr'){ toggleExamAllTr(); renderExamSettings(); }
       else if(k==='gradual'){ toggleExamGradual(); renderExamSettings(); }
-      else if(k==='tonePy'){ toggleExamTonePy(); renderExamSettings(); }
     };
   });
   m.querySelectorAll('#examChoiceSeg button').forEach(b=>{
@@ -6294,13 +6289,6 @@ function renderExamSettings(){
 function toggleExamGradual(){
   examGradual=!examGradual;
   settings.examGradual=examGradual; persist();
-}
-function toggleExamTonePy(){
-  examSettings.tonePy=!examSettings.tonePy;
-  settings.examTonePy=examSettings.tonePy; persist();
-  // применить сразу: если сейчас показывается задание «Тонов», перерисовать его без смены режима
-  const q=examSeq[examIdx];
-  if(q && q.mode==='tone') drawTone();
 }
 // сбрасывает отсчёт бездействия на новое взаимодействие (касание/ответ/рисование)
 function examTouch(){
@@ -6535,6 +6523,7 @@ function renderExamChoice(q){
     });
   }
   drawOpts(examChoiceN());
+  applyExamSizes();
   examSpeakDelayed(it);
 }
 // ---------- Тон-тест (третий режим экзамена) ----------
@@ -6595,7 +6584,7 @@ function drawTone(){
   const cells=seg.map((s,i)=>`
     <div class="tone-cell">
       <span class="tc tap ${i===toneCI?'cur':''}">${escapeHtml(s.ch)}</span>
-      ${examSettings.tonePy?`<span class="tp ${s.revealed?'':'off'}">${s.revealed?escapeHtml(s.pyMark):'·'}</span>`:''}
+      <span class="tp ${s.revealed?'':'off'}">${s.revealed?escapeHtml(s.pyMark):'·'}</span>
     </div>`).join('');
   body.innerHTML=`
     <div class="exam-q" style="flex:1 1 auto; justify-content:flex-start; width:100%">
@@ -6611,6 +6600,7 @@ function drawTone(){
       </div>
     </div>`;
   body.querySelectorAll('[data-tone]').forEach(b=>b.onclick=()=>tonePick(+b.dataset.tone, b));
+  applyExamSizes();
   // клик по иероглифу/центру вопроса — единый обработчик examBodyClick (одно проигрывание).
 }
 function tonePick(n, btn){
@@ -6636,7 +6626,7 @@ function tonePick(n, btn){
         // на 2 секунды, затем переходим к следующему слову
         const tr=document.getElementById('toneTr');
         if(tr){ tr.textContent=trJoined(examCurrentIt); tr.hidden=false; }
-        setTimeout(examFinish, 2000, 1);
+        setTimeout(examFinish, 3000, 1);
         return;
       }
       // следующая группа — через короткую паузу, чтобы успеть увидеть открывшийся пиньинь.
@@ -6648,6 +6638,71 @@ function tonePick(n, btn){
     // просто фиксируем ошибку и продолжаем, пока не отмечены все иероглифы.
     toneError=true;
     flashBad(btn, null);
+  }
+}
+
+// ---------- Тон-тест «Пиньинь» (выбрать правильный пиньинь по тону) ----------
+// Показываем слово и четыре пиньиня, различающихся тонами; верный один. До ответа пиньинь
+// и перевод не раскрываются. Верно = +1, ошибка = −1 (слово повторяется).
+let examTonePyState=null;
+function renderExamTonePy(q){
+  const it=q.it;
+  examCurrentIt=it;
+  Player.stop();
+  clearExamIdle();
+  const body=document.getElementById('examBody');
+  if(!window.pinyinPro){
+    examMistakeSoft(it); examFinish(1); return;
+  }
+  const tq=toneQuestion(it);
+  if(!tq){
+    // для слова не нашлось слогов/вариантов — пропускаем (не застреваем)
+    examMistakeSoft(it); examFinish(1); return;
+  }
+  examTonePyState={ ...tq, it, picked:-1, done:false };
+  drawExamTonePy();
+  examSpeakDelayed(it);
+}
+function drawExamTonePy(){
+  const s=examTonePyState; if(!s) return;
+  const body=document.getElementById('examBody');
+  const opts=s.options.map((o,i)=>{
+    let cls='tone-opt';
+    if(s.done){
+      if(o===s.correct) cls+=' good';
+      else if(i===s.picked) cls+=' bad';
+      else cls+=' dim';
+    }
+    return `<button type="button" class="${cls}" data-tonepy="${i}">${escapeHtml(o)}</button>`;
+  }).join('');
+  body.innerHTML=`
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
+      <div class="tone-q"><div class="tone-target">${escapeHtml(s.word)}</div>`
+    +`<button type="button" class="tone-speak" id="examTonePySpeak" title="Прослушать" aria-label="Прослушать">🔉</button></div>`
+    +`<div class="tone-opts">${opts}</div>`
+    +`<div class="tone-tr" id="examTonePyTr" hidden></div>`;
+  const sp=body.querySelector('#examTonePySpeak');
+  if(sp) sp.onclick=()=>{ const it=s.it; if(it&&it.hanzi) speak(it.hanzi,1,foreignVoice()); };
+  body.querySelectorAll('[data-tonepy]').forEach(b=>{ b.onclick=()=>examTonePyPick(Number(b.dataset.tonepy)); });
+  applyExamSizes();
+}
+function examTonePyPick(i){
+  examTouch();
+  const s=examTonePyState; if(!s || s.done) return;
+  const it=s.it;
+  const ok=s.options[i]===s.correct;
+  s.picked=i; s.done=true;
+  // перевод под карточкой открывается после ответа (drawExamTonePy перерисует с классами good/bad/dim)
+  const tr=document.getElementById('examTonePyTr');
+  if(tr){ tr.textContent=(it&&trJoined(it))||''; tr.hidden=false; }
+  drawExamTonePy();
+  if(it && it.hanzi) speak(it.hanzi,1,foreignVoice());
+  if(ok){
+    examCorrect(it);
+    setTimeout(()=>examFinish(1), 700);
+  }else{
+    examMistakeSoft(it);
+    setTimeout(()=>examFinish(1), 1000);
   }
 }
 
@@ -6685,8 +6740,9 @@ function renderExamWrite(q){
       <div id="examWriteWord" class="char-strip" style="justify-content:center; margin-bottom:8px"></div>
       <div id="examWriteArea"></div>
       <div class="exam-py" id="examWritePy" style="margin-top:8px; min-height:1.3em"></div>
-      <div class="eq-tr" style="${eqSizesStyle(it.hanzi,{tr:true})}; margin-top:2px">${escapeHtml(trJoined(it))}</div>
+      <div class="eq-tr" id="examWriteTr" style="${examRoleStyle('write-tr')}; margin-top:2px">${escapeHtml(trJoined(it))}</div>
     </div>`;
+  applyExamSizes();
   examWriteChar();
   examSpeakDelayed(it);
 }
@@ -6845,7 +6901,6 @@ function matchStart(){
   matchRound=[]; matchSelLeft=null; matchSelRight=null; matchSelRightEl=null;
   matchError=false; matchErrItems=[];
   matchNextRound();
-  if(examAudioOn() && matchRound.length && matchRound[0]) examSpeakWord(matchRound[0]);
 }
 function matchNextRound(){
   const deck=matchDeck();
@@ -6912,6 +6967,7 @@ function renderMatch(){
   document.querySelectorAll('#matchRight button').forEach(b=>{
     b.onclick=()=>matchPickRight(b.dataset.id, b);
   });
+  applyExamSizes();
 }
 function matchPair(id, side){
   const el=document.querySelector(`#match${side} button[data-id="${id}"]`);
@@ -7025,6 +7081,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.11','16.11.26','Экзамен: починены ползунки размера шрифтов (теперь охватывают карточки «Выбора ответов», «Подбора пар», «Тонов» и «Письма»). Иероглифы в «Подборе пар» и русский перевод в «Выборе ответов» увеличены. В «Тонах» перевод стал размером с пиньинь, задержка перевода +1 сек. Экзамен «Письмо»: пиньинь больше не мелкий, перевод больше не огромный, окно — по размеру «Обвести». Режим «Письмо → Тон» перенесён в «Экзамен → Тоны → Пиньинь» (под-режимы «Стрелки» и «Пиньинь»). Настройка «Показывать пиньинь без тонов» удалена (всегда включена). В «Подборе пар» аудио больше не звучит до выбора карточки.'],
   ['1.11.10','15.11.26','Письмо (английский, «Одним словом»): собранная фраза мигает зелёным (было красным), слова переносятся на новую строку целиком (не разрываясь по буквам), знаки препинания больше не стираются при наборе.'],
   ['1.11.9','15.11.26','Письмо (английский, «Одним словом»): переключатели «Буквы/Слова расположены» перенесены со экрана в «Настройки режима Письмо». Русский перевод помещается в 2 строки, остаток раскрывается по мере набора. Размер набранного результата уменьшен до размера перевода +2px. Ячейки показываются максимум по 3 строки, следующие 3 раскрываются по мере заполнения.'],
   ['1.11.8','15.11.26','Шрифт интерфейса заменён с Segoe UI на Nunito — встроен офлайн (латиница + кириллица + турецкие символы). Иероглифы теперь грузят Noto Sans SC (Source Han Sans) с Google Fonts на ходу — онлайн рисуется им, офлайн/не загрузился остаётся Microsoft YaHei.'],
@@ -10200,7 +10257,7 @@ function initAuthState(){
 async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
-  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePy:true,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',dir:'fr',foreignAudio:true,foreignVoice:'',ruAudio:true,ruVoice:'',sessN:0,activeLang:'zh',langChosen:false}, ...((await DB.get(SET))||{})};
+  settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePyQ:false,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',dir:'fr',foreignAudio:true,foreignVoice:'',ruAudio:true,ruVoice:'',sessN:0,activeLang:'zh',langChosen:false}, ...((await DB.get(SET))||{})};
   // Миграция 1.10.0: направление и голос «Учить» переехали в глобальные dir/foreignVoice.
   if(settings.dir==null){ settings.dir=settings.studyDir||'fr'; }
   if(settings.foreignVoice==null){ settings.foreignVoice=settings.studyVoice||''; }
@@ -10225,7 +10282,7 @@ async function boot(){
   if(!statsByLang[activeLang]) statsByLang[activeLang]={streak:0,lastDay:'',activity:{}};
   if(!statsByLang.zh) statsByLang.zh={streak:0,lastDay:'',activity:{}};
   stats=statsByLang[activeLang];
-  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, match:!!settings.examMatch, write:!!settings.examWrite, tonePy:settings.examTonePy!==false};
+  examSettings={tf:settings.examTf!==false, choice:settings.examChoice!==false, choiceN:settings.examChoiceN||8, tone:!!settings.examTone, tonePyQ:!!settings.examTonePyQ, match:!!settings.examMatch, write:!!settings.examWrite};
   examAllTr=settings.examAllTr!==false;
   examAudioDelay=Number(settings.examAudioDelay)||0;
   examGradual=settings.examGradual!==false;
