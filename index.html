@@ -103,22 +103,12 @@ html[data-theme="plum"]{
   --shadow-sm:0 1px 2px rgba(0,0,0,.35);
   --shadow-md:0 6px 16px rgba(0,0,0,.45);
 }
-/* Режим «Стандартный»: всего 5 семантических цветов во всём приложении.
-   Ставится атрибутом data-color="standard" на <html>, перекрывает любую тему:
-   иероглифы (ink), пиньинь (amber), перевод (mut), неактивные кнопки (soft),
-   активные кнопки (red). Зелёный/синий оставлены как статусные сигналы
-   (верно / ссылка) — вне пяти цветов. */
-html[data-color="standard"]{
-  --bg:#f7f4ef; --card:#ffffff; --ink:#1d1c1a; --mut:#6b7280;
-  --blue:#1565c0;
-  --red:#c62828; --red-d:#a32222; --green:#2e7d32; --amber:#b7791f;
-  --line:#e8e2d8; --soft:#f0ece4; --soft2:#ece9e2; --sec-d:#e3ddd1;
-  --nav-bg:rgba(255,255,255,.96);
-  --shadow-sm:0 1px 2px rgba(30,28,26,.05);
-  --shadow-md:0 6px 16px rgba(30,28,26,.08);
-}
-html[data-color="standard"] .dc.py{color:var(--amber)}
-html[data-color="standard"] .dc.tr{color:var(--mut)}
+/* Режим «Стандартный» (5 семантических цветов) — полный блок CSS вынесен в КОНЕЦ
+   стилевой секции, чтобы его правила гарантированно перекрывали тему за счёт
+   порядка в исходнике. Здесь остаётся только пояснение:
+   иероглифы #2563eb, пиньинь #0d9488, перевод #ef4444, неактивные кнопки #f0ece4,
+   активные кнопки #0891b2. В тёмных темах — светлые варианты первых трёх и тёмный
+   беж для неактивных кнопок. Зелёный «верно» и красный «ошибка» экзамена не трогаем. */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;height:100%}
 body{
@@ -1085,6 +1075,146 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   .match-pair.match-txt{font-size:20px; line-height:1.35}
   .match-col{grid-template-rows:repeat(5, minmax(84px, 1fr)); gap:12px}
 }
+
+/* ================= РЕЖИМ «СТАНДАРТНЫЙ» (5 СЕМАНТИЧЕСКИХ ЦВЕТОВ) =================
+   Весь блок вынесен в конец <style>, чтобы перекрывать тему порядком правил.
+   Пять цветов: иероглифы #2563eb, пиньинь #0d9488, перевод #ef4444,
+   неактивные кнопки #f0ece4, активные кнопки #0891b2.
+   Тёмные темы: светлые варианты первых трёх + тёмный беж для неактивных.
+   Зелёный «верно» и красный «ошибка» (статус-сигналы) — вне схемы, не трогаем. */
+
+/* 1) Светлые темы (light/sepia/blue) — цвета как есть */
+html[data-color="standard"][data-theme="light"],
+html[data-color="standard"][data-theme="sepia"],
+html[data-color="standard"][data-theme="blue"]{
+  --c-hanzi:#2563eb;
+  --c-pinyin:#0d9488;
+  --c-trans:#ef4444;
+  --c-inactive:#f0ece4;
+  --c-inactive-d:#e3ddd1;   /* тень/нижняя кромка неактивной кнопки */
+  --c-active:#0891b2;
+  --c-active-d:#0e7490;      /* тень/нижняя кромка активной кнопки */
+  --c-active-soft:#e6f4f8;   /* светлая подложка под активное (вкладки, иконки) */
+}
+
+/* 2) Тёмные темы (dark/navy/forest/graphite/plum) — светлее тексты, темнее подложки */
+html[data-color="standard"][data-theme="dark"],
+html[data-color="standard"][data-theme="navy"],
+html[data-color="standard"][data-theme="forest"],
+html[data-color="standard"][data-theme="graphite"],
+html[data-color="standard"][data-theme="plum"]{
+  --c-hanzi:#7db8f2;
+  --c-pinyin:#5eead4;
+  --c-trans:#f87171;
+  --c-inactive:#3a352e;
+  --c-inactive-d:#2b2824;
+  --c-active:#0891b2;
+  --c-active-d:#0e7490;
+  --c-active-soft:#0d3a44;
+}
+
+/* ===== ИЕРОГЛИФЫ → --c-hanzi ===== */
+html[data-color="standard"] header.top .title .zh,
+html[data-color="standard"] .item-line .zh,
+html[data-color="standard"] .dc.zh,
+html[data-color="standard"] .admin-edit-row .zh,
+html[data-color="standard"] .big,
+html[data-color="standard"] .asm-target,
+html[data-color="standard"] .tone-target,
+html[data-color="standard"] #writeWord .wch{
+  color:var(--c-hanzi);
+}
+/* Плейсхолдер иероглифа при письме остаётся еле видимым (вне цветовой схемы) */
+
+/* ===== ПИНЬИНЬ → --c-pinyin ===== */
+html[data-color="standard"] .item-line .py,
+html[data-color="standard"] .dc.py,
+html[data-color="standard"] .bigpy{
+  color:var(--c-pinyin) !important;
+}
+
+/* ===== ПЕРЕВОД → --c-trans ===== */
+html[data-color="standard"] .item-line .tr,
+html[data-color="standard"] .dc.tr,
+html[data-color="standard"] .bigtr,
+html[data-color="standard"] .admin-edit-row .tr{
+  color:var(--c-trans);
+}
+
+/* ===== НЕАКТИВНЫЕ КНОПКИ (подложка) → --c-inactive =====
+   Достаточно переопределить --soft/--soft2/--sec-d: все «нейтральные» подложки
+   (сегменты, чипы, бейджи, иконки, клетки календарей, пустые ячейки, тень
+   вторичной кнопки) берут эти переменные и перекрасятся сами. */
+html[data-color="standard"]{
+  --soft:var(--c-inactive);
+  --soft2:var(--c-inactive-d);
+  --sec-d:var(--c-inactive-d);
+}
+
+/* ===== АКТИВНЫЕ КНОПКИ / ВЫДЕЛЕННОЕ / ПРОГРЕСС → --c-active ===== */
+html[data-color="standard"] .btn,
+html[data-color="standard"] .voice-play,
+html[data-color="standard"] .dict-up-fab{
+  background:var(--c-active);
+  box-shadow:0 4px 0 var(--c-active-d), 0 6px 14px rgba(8,145,178,.25);
+}
+html[data-color="standard"] .btn:active,
+html[data-color="standard"] .voice-play:active{
+  box-shadow:0 1px 0 var(--c-active-d), 0 2px 6px rgba(8,145,178,.25);
+}
+html[data-color="standard"] .btn.ghost{background:transparent; color:var(--c-active); box-shadow:none}
+html[data-color="standard"] nav.tabs button.active{
+  color:var(--c-active); background:var(--c-active-soft);
+}
+html[data-color="standard"] .wmode button.on,
+html[data-color="standard"] .write-toolbar .wbtn.on,
+html[data-color="standard"] .exam-toolbar .wbtn.on,
+html[data-color="standard"] .study-browse.on,
+html[data-color="standard"] .dict-filter.active,
+html[data-color="standard"] .flt-chip.on,
+html[data-color="standard"] .cf-global .cf-seg-btn.on,
+html[data-color="standard"] .nosent-btn.on,
+html[data-color="standard"] .sn-switch.on,
+html[data-color="standard"] .flt-badge{
+  background:var(--c-active); border-color:var(--c-active); color:#fff;
+  box-shadow:0 4px 0 var(--c-active-d), 0 4px 10px rgba(8,145,178,.2);
+}
+html[data-color="standard"] .char-strip .c.cur,
+html[data-color="standard"] #writeWord .wch.cur,
+html[data-color="standard"] .wl-zh-pill.cur,
+html[data-color="standard"] .tone-hanzi .tc.cur{
+  background:var(--c-active); color:#fff;
+  box-shadow:0 1px 4px rgba(8,145,178,.4);
+}
+/* Рамки «текущей» клетки при письме (пульс) — текущее = активное */
+html[data-color="standard"] .wslot.cur,
+html[data-color="standard"] .cube-film .fslot.cur,
+html[data-color="standard"] .fanfare-chunk .fslot.cur,
+html[data-color="standard"] .wle-cell.todo{
+  border-color:var(--c-active);
+}
+/* Прогресс-полосы и статистика → --c-active */
+html[data-color="standard"] .browse-fill,
+html[data-color="standard"] .hmbar .fill,
+html[data-color="standard"] .hbar .hcol,
+html[data-color="standard"] .streak .s-bar,
+html[data-color="standard"] .hm-cell.on,
+html[data-color="standard"] .cell.on,
+html[data-color="standard"] .stat .num,
+html[data-color="standard"] .sync-status.spin .dot{border-top-color:var(--c-active);}
+html[data-color="standard"] .hmbar .fill,
+html[data-color="standard"] .hbar .hcol,
+html[data-color="standard"] .streak .s-bar{
+  background:var(--c-active);
+}
+html[data-color="standard"] .stat .num{color:var(--c-active)}
+html[data-color="standard"] .sync-status.spin .dot{border-top-color:var(--c-active)}
+/* Чекбоксы и слайдеры */
+html[data-color="standard"] .chk input,
+html[data-color="standard"] .flt-drop-opt input,
+html[data-color="standard"] .sn-slider input[type=range]{
+  accent-color:var(--c-active);
+}
 </style>
 </head>
 <body>
@@ -1531,7 +1661,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.13';
+const APP_VERSION='1.11.14';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -7154,6 +7284,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.14','17.11.26','Режим «Стандартный» переделан: теперь честные 5 семантических цветов — иероглифы #2563eb (синий), пиньинь #0d9488 (бирюзовый), перевод #ef4444 (красный), неактивные кнопки #f0ece4 (беж), активные кнопки #0891b2 (циан). Режим стал theme-aware: во всех 8 темах, в тёмных используются светлые варианты текстов и тёмный беж подложек. Зелёный «верно» и красный «ошибка» экзамена не меняются. «Разноцветный» остаётся по умолчанию.'],
   ['1.11.13','17.11.26','Экзамен: в «Тонах» на ноутбуке (≥1024px) показывается 5 иероглифов, на телефоне — 3. Во всех режимах экзамена верный ответ вспыхивает коротким зелёным, неверный — красным. Добавлена кнопка аудио слева от шестерёнки экзамена (независимый тумблер озвучки, как в «Изучении»).'],
   ['1.11.12','17.11.26','Экзамен «Выбор ответов»: при неверном ответе нажатая кнопка подсвечивается красным, правильная — зелёным (обе 1 сек, затем следующая карточка); при верном — короткая зелёная вспышка и сразу следующая. Настройки → Оформление → новый переключатель «Цвета»: «Стандартный (5 цветов)» — всё приложение в 5 семантических цветах (иероглифы/пиньинь/перевод/неактивные кнопки/активные кнопки), и «Разноцветный» — цвета как раньше (по умолчанию).'],
   ['1.11.11','16.11.26','Экзамен: починены ползунки размера шрифтов (теперь охватывают карточки «Выбора ответов», «Подбора пар», «Тонов» и «Письма»). Иероглифы в «Подборе пар» и русский перевод в «Выборе ответов» увеличены. В «Тонах» перевод стал размером с пиньинь, задержка перевода +1 сек. Экзамен «Письмо»: пиньинь больше не мелкий, перевод больше не огромный, окно — по размеру «Обвести». Режим «Письмо → Тон» перенесён в «Экзамен → Тоны → Пиньинь» (под-режимы «Стрелки» и «Пиньинь»). Настройка «Показывать пиньинь без тонов» удалена (всегда включена). В «Подборе пар» аудио больше не звучит до выбора карточки.'],
