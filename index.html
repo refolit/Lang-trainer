@@ -1595,7 +1595,8 @@ const DB = {
   tx(mode){ return DB.db.transaction('kv',mode).objectStore('kv'); },
   get(k){ return new Promise((res,rej)=>{ const q=DB.tx('readonly').get(k); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); },
   put(k,v){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').put(v,k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); },
-  del(k){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').delete(k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); }
+  del(k){ return new Promise((res,rej)=>{ const q=DB.tx('readwrite').delete(k); q.onsuccess=()=>res(); q.onerror=()=>rej(q.error); }); },
+  keys(){ return new Promise((res,rej)=>{ const q=DB.tx('readonly').getAllKeys(); q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error); }); }
 };
 
 // ============================== КЭШ ОЗВУЧКИ (отдельное хранилище) ==============================
@@ -8930,7 +8931,39 @@ const PRAYERS=[
       ['وَصَلَّى اللهُ تَعَالَى عَلَى خَيْرِ خَلْقِهِ مُحَمَّدٍ','14)Да благословит Аллах Всевышний лучшее из своих творений Мухаммада'],
       ['وَعَلَى آلِهِ وَأَصْحَابِهِ أَجْمَعِينَ','15)его родных и всех его сподвижников']
     ]
-  }
+  },
+  {name:'Арабский Мухаммадия 1 урок', tag:'мухаммадия 1 урок', lang:'ar', cards:[
+    ['تِلْمِيذٌ','ученик'],
+    ['تَلَامِيذُ','ученики'],
+    ['إِمَامٌ','имам'],
+    ['أَئِمَّةٌ','имамы'],
+    ['مُعَلِّمٌ','учитель'],
+    ['مُعَلِّمُونَ','учителя'],
+    ['كِتَابٌ','книга'],
+    ['كُتُبٌ','книги'],
+    ['طَالِبٌ','студент'],
+    ['طُلَّابٌ','студенты'],
+    ['مُسْلِمٌ','мусульманин'],
+    ['مُسْلِمُونَ','мусульмане'],
+    ['قَلَمٌ','ручка'],
+    ['أَقْلَامٌ','ручки'],
+    ['دَفْتَرٌ','тетрадь'],
+    ['دَفَاتِرُ','тетради'],
+    ['مَدْرَسَةٌ','школа'],
+    ['مَدَارِسُ','школы'],
+    ['نَافِذَةٌ','окно'],
+    ['نَوَافِذُ','окна'],
+    ['لَوْحٌ','доска'],
+    ['أَلْوَاحٌ','доски'],
+    ['مِسْطَرَةٌ','линейка'],
+    ['مَسَاطِرُ','линейки'],
+    ['مُؤَذِّنٌ','муэдзин'],
+    ['مُؤَذِّنُونَ','муэдзины'],
+    ['بَيْتٌ','дом'],
+    ['بُيُوتٌ','дома'],
+    ['حُجْرَةٌ','комната'],
+    ['حُجُرَاتٌ','комнаты']
+  ]}
 ];
 // Создаёт карточку молитвы с той же структурой, что и обычная карточка. lang берётся из
 // набора (молитвы привязаны к языку), tag — имя набора (для фильтра «по названию молитвы»).
@@ -8987,8 +9020,10 @@ async function addPrayerAudio(p){
   }
   return {added, audioAdded};
 }
-// Кнопка «Удалить»: все карточки молитвы (по tag) мягко в Корзину (deleted_at). Аудио
-// остаётся в базе — как при обычном мягком удалении карточки. Возвращает число удалённых.
+// Кнопка «Удалить»: карточки молитвы (по tag) мягко в Корзину (deleted_at), а их аудио —
+// сразу и навсегда (локальный IndexedDB + облачный Storage): у аудио нет «корзины», и именно
+// освобождение места было целью этой кнопки (1.10.4). Текст восстанавливается из Корзины,
+// аудио — заново подключается кнопкой «＋ Аудио». Возвращает число удалённых карточек.
 async function removePrayer(p){
   const t=now();
   const touched=[];
@@ -8998,13 +9033,51 @@ async function removePrayer(p){
     it.deleted_at=t;
     touched.push(it);
   }
+  // Удаляем аудио сразу: revoke blob-URL + локальную запись + облачный файл.
+  for(const it of touched){
+    revokeAll(it);
+    for(const r of (it.recordings||[])){
+      if(!r || !r.speed) continue;
+      try{ await DB.del('aud:'+it.id+':'+r.speed); }catch(e){}
+      try{ await removeAudioRemote(it, r.speed); }catch(e){}
+    }
+  }
   if(!touched.length) return 0;
   await persist();
   try{
     const c=sbClient();
     if(c && _syncUser){ for(const it of touched){ await pushCard(it, _syncUser); cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0}; } }
   }catch(e){ /* офлайн/нет входа — метка доедет при следующей синхронизации */ }
+  await sweepOrphanPrayerAudio(p);
   return touched.length;
+}
+// Проверка после удаления молитвы: перечисляем ВСЕ ключи aud:* в IndexedDB и находим
+// осиротевшие файлы этой молитвы — id карточки принадлежит молитве, но живая карточка больше
+// не ссылается на этот слот (или карточка уже была удалена ранее). Такие файлы дочищаем
+// локально и в облаке, чтобы не оставалось «хвостов» (случай, когда удалялись не все файлы).
+async function sweepOrphanPrayerAudio(p){
+  const ids=new Set(items.filter(it=>String(it.tag||'').trim()===String(p.tag||'').trim()).map(it=>it.id));
+  if(!ids.size) return;
+  let keys=[];
+  try{ keys=await DB.keys(); }catch(e){ return; }
+  // Какие aud:<id>:<slot> легитимно нужны: живая (не удалённая) карточка, слот в recordings.
+  const want=new Set();
+  for(const it of items){
+    if(!ids.has(it.id) || it.deleted_at) continue;
+    for(const r of (it.recordings||[])) if(r && r.speed) want.add('aud:'+it.id+':'+r.speed);
+  }
+  for(const k of keys){
+    if(typeof k!=='string' || !k.startsWith('aud:')) continue;
+    if(want.has(k)) continue;
+    const rest=k.slice(4);
+    const idx=rest.lastIndexOf(':');
+    if(idx<=0) continue;
+    const id=rest.slice(0, idx);
+    const slot=rest.slice(idx+1);
+    if(!ids.has(id)) continue;
+    try{ await DB.del(k); }catch(e){}
+    try{ await removeAudioRemote({id}, slot); }catch(e){}
+  }
 }
 // Реальный размер mp3 молитвы (сумма встроенных base64), для подписи в модалке.
 function prayerAudioBytes(p){
@@ -9079,10 +9152,10 @@ function openPrayersModal(){
       }else if(act==='del'){
         const n=items.filter(it=>!it.deleted_at && String(it.tag||'').trim()===String(p.tag||'').trim()).length;
         if(!n){ toastShort('Молитвы нет в базе'); return; }
-        if(!confirm(`Убрать молитву «${p.name}» (${n} карт.) в Корзину?`)) return;
+        if(!confirm(`Убрать молитву «${p.name}» (${n} карт.) в Корзину?\n\nАудио будет удалено сразу и навсегда (освободит место). Текст можно восстановить из Корзины, аудио — заново подключить кнопкой «＋ Аудио».`)) return;
         const removed=await removePrayer(p);
         renderDict(); updateChips(); refreshModeFilterBadges(); updateTrashButton();
-        toastShort('Молитва в корзине');
+        toastShort('Молитва в корзине, аудио удалено');
       }
       closeModal('modalPrayers');
     };
