@@ -1662,7 +1662,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.14';
+const APP_VERSION='1.11.15';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2327,10 +2327,17 @@ function baiduTts2URL(text, tag){
   if(!lan) return null;
   return BAIDU_TTS2.replace('TXT', lan).replace('Q', encodeURIComponent(String(text).slice(0,100)));
 }
-// Флаг «Google-TTS недоступен»: после первой неудачи Google на этом устройстве/сети
-// пропускаем его на следующих словах и сразу идём в Youdao/Baidu (быстрее, без мёртвых таймаутов).
-let googleTtsDown=false;
-function markGoogleTtsDown(){ googleTtsDown=true; }
+// Флаг «Google-TTS недоступен»: после двух подряд неудач Google на этом устройстве/сети
+// даём ему передышку (GOOGLE_TTS_COOLDOWN_MS), пропускаем его и идём в Youdao/Baidu. Раньше
+// флаг ставился НАВСЕГДА до перезагрузки страницы — из-за этого арабский (у которого нет
+// запасных голосов, только Google) замолкал насовсем после серии карточек. Теперь блокировка
+// временная: по истечении паузы Google пробуем снова, а при первом же успехе — сбрасываем.
+const GOOGLE_TTS_COOLDOWN_MS=25000;  // пауза перед повторной попыткой Google после двух провалов
+let googleTtsDownUntil=0;
+// Два провала подряд — блокируем Google на GOOGLE_TTS_COOLDOWN_MS (не навсегда).
+function markGoogleTtsDown(){ googleTtsDownUntil=Date.now()+GOOGLE_TTS_COOLDOWN_MS; }
+// Успех Google — снимаем блокировку сразу (источник снова доступен).
+function clearGoogleTtsDown(){ googleTtsDownUntil=0; }
 // Пробует загрузить mp3 по url: canplay в пределах timeout; error/таймаут → null.
 function tryRemoteAudio(url, timeout){
   return new Promise(res=>{
@@ -2339,11 +2346,11 @@ function tryRemoteAudio(url, timeout){
     a.preload='auto';
     let failed=false, done=false;
     const finish=v=>{ if(done) return; done=true; a.onerror=null; try{ a.removeEventListener('canplay', onCan); }catch(e){} res(v); };
-    const onCan=()=>finish(failed?null:a);
+    const onCan=()=>{ if(failed){ finish(null); } else { finish(a); } };
     a.addEventListener('canplay', onCan, {once:true});
     a.addEventListener('error', ()=>{ failed=true; finish(null); }, {once:true});
     a.src=url;                                  // src после подписки на error — не пропустим раннюю ошибку
-    setTimeout(()=>finish(failed?null:a), timeout); // страховка: canplay мог не прийти — отдаём что есть
+    setTimeout(()=>finish(null), timeout); // страховка: canplay так и не пришёл — это НЕ успех, отдаём null
   });
 }
 async function fetchRemoteTTS(text, langTag){
@@ -2355,14 +2362,15 @@ async function fetchRemoteTTS(text, langTag){
   const yUrl=youdaoTtsURL(t, tag);
   const bUrl=baiduTtsURL(t, tag);
   const b2Url=baiduTts2URL(t, tag);
-  // 1) Google translate_tts: до 2 попыток, таймаут 2 с (если Google уже «свалился» на этом
-  // устройстве — пропускаем сразу и не жжём по 2×2 с мёртвого таймаута на каждое слово).
-  if(!googleTtsDown){
+  // 1) Google translate_tts: до 2 попыток, таймаут 2 с. После двух подряд неудач блокируем
+  // Google на GOOGLE_TTS_COOLDOWN_MS (временная пауза, не до перезагрузки страницы).
+  if(Date.now()>=googleTtsDownUntil){
+    let ok=false;
     for(let i=0;i<2;i++){
       const a=await tryRemoteAudio(gUrl, 2000);
-      if(a) return a;
+      if(a){ clearGoogleTtsDown(); return a; }
     }
-    markGoogleTtsDown(); // два провала подряд — считаем Google недоступным до перезагрузки страницы
+    markGoogleTtsDown(); // два провала подряд — даём Google передышку, пробуем ниже Youdao/Baidu
   }
   // 2) Youdao dictvoice (zh/en) — чтобы не было тишины, если Google недоступен.
   if(yUrl){
@@ -7285,6 +7293,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.11.15','18.11.26','Озвучка арабского (и других языков без запасных голосов) починена: Google translate_tts после двух подряд неудач блокируется лишь на 25 с (раньше — навсегда до перезагрузки страницы), при успехе блокировка снимается. Загрузка mp3 больше не считается успешной, если canplay так и не наступил (убраны «тихие» проигрывания).'],
   ['1.11.14','17.11.26','Режим «Стандартный» переделан: теперь честные 5 семантических цветов — иероглифы #2563eb (синий), пиньинь #0d9488 (бирюзовый), перевод #ef4444 (красный), неактивные кнопки #f0ece4 (беж), активные кнопки #0891b2 (циан). Режим стал theme-aware: во всех 8 темах, в тёмных используются светлые варианты текстов и тёмный беж подложек. Зелёный «верно» и красный «ошибка» экзамена не меняются. «Разноцветный» остаётся по умолчанию.'],
   ['1.11.13','17.11.26','Экзамен: в «Тонах» на ноутбуке (≥1024px) показывается 5 иероглифов, на телефоне — 3. Во всех режимах экзамена верный ответ вспыхивает коротким зелёным, неверный — красным. Добавлена кнопка аудио слева от шестерёнки экзамена (независимый тумблер озвучки, как в «Изучении»).'],
   ['1.11.12','17.11.26','Экзамен «Выбор ответов»: при неверном ответе нажатая кнопка подсвечивается красным, правильная — зелёным (обе 1 сек, затем следующая карточка); при верном — короткая зелёная вспышка и сразу следующая. Настройки → Оформление → новый переключатель «Цвета»: «Стандартный (5 цветов)» — всё приложение в 5 семантических цветах (иероглифы/пиньинь/перевод/неактивные кнопки/активные кнопки), и «Разноцветный» — цвета как раньше (по умолчанию).'],
