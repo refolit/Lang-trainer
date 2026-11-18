@@ -836,6 +836,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
   color:#fff !important;
 }
 .exam-opt.good .opt-txt{color:#fff !important}
+.exam-opt.dim{opacity:.42}
 /* Верно-неверно / Подбор пар: верный ответ коротко вспыхивает зелёным (общий класс .good) */
 .btn.good{
   animation:goodPulse .55s ease 2;
@@ -6252,9 +6253,13 @@ function applyExamSizes(){
   const w=body.querySelector('.eq-word');
   const py=body.querySelector('.exam-py');
   const hanzi=(w&&w.textContent)||'';
+  // Тон-тест «Пиньинь»: слово ВСЕГДА иероглиф (не зависит от направления вопроса), поэтому
+  // размер считаем как fr (иероглиф = крупный CJK), а не через examCurDir.
+  const tonePyWord = w && w.id==='examTonePyWord';
   // сжатие иероглифа — по ЕГО длине (в rf .eq-word = русский, а не иероглиф)
-  const hzLen = examCurDir==='rf' && examCurrentIt ? Array.from(examCurrentIt.hanzi||'').length : Array.from(hanzi).length;
-  const f=studyFonts(Array.from(hanzi).length, examMult(), examCurDir==='rf', hzLen);
+  const rf = examCurDir==='rf' && !tonePyWord;
+  const hzLen = rf && examCurrentIt ? Array.from(examCurrentIt.hanzi||'').length : Array.from(hanzi).length;
+  const f=studyFonts(Array.from(hanzi).length, examMult(), rf, hzLen);
   if(w){
     w.style.fontSize=f.hz.toFixed(1)+'px';
     w.style.lineHeight=f.sent?'1.3':'1.2';
@@ -6871,19 +6876,20 @@ function drawExamTonePy(){
   const s=examTonePyState; if(!s) return;
   const body=document.getElementById('examBody');
   const opts=s.options.map((o,i)=>{
-    let cls='tone-opt';
+    let cls='exam-opt';
     if(s.done){
       if(o===s.correct) cls+=' good';
       else if(i===s.picked) cls+=' bad';
       else cls+=' dim';
     }
-    return `<button type="button" class="${cls}" data-tonepy="${i}">${escapeHtml(o)}</button>`;
+    return `<button type="button" class="${cls}" data-tonepy="${i}"><span class="opt-txt">${escapeHtml(o)}</span></button>`;
   }).join('');
   body.innerHTML=`
-    <div class="exam-q" style="flex:1 1 auto; justify-content:center; width:100%">
-      <div class="tone-q"><div class="tone-target">${escapeHtml(s.word)}</div>`
+    <div class="exam-q" style="flex:1 1 auto; justify-content:center; margin-bottom:14px; width:100%">
+      <div class="tone-q"><div class="eq-word tap" id="examTonePyWord">${escapeHtml(s.word)}</div>`
     +`<button type="button" class="tone-speak" id="examTonePySpeak" title="Прослушать" aria-label="Прослушать">🔉</button></div>`
-    +`<div class="tone-opts">${opts}</div>`
+    +`</div>`
+    +`<div class="exam-q" style="width:100%"><div class="exam-opts" id="examTonePyOpts">${opts}</div></div>`
     +`<div class="tone-tr" id="examTonePyTr" hidden></div>`;
   const sp=body.querySelector('#examTonePySpeak');
   if(sp) sp.onclick=()=>{ const it=s.it; if(it&&it.hanzi) speak(it.hanzi,1,foreignVoice()); };
@@ -9932,14 +9938,18 @@ async function uploadAudio(it, slot){
 // чтобы сам факт выгрузки не делал карточку победителем над облачной версией.
 async function uploadPendingAudio(){
   if(!_syncUser || !sbClient()) return;
+  // Собираем только слоты с локальным файлом и без path (которые реально нужно выгрузить);
+  // пустой список — выходим сразу, не делая DB-чтений и сетевых запросов по всем карточкам.
+  const jobs=[];
   for(const it of items){
     for(const r of (it.recordings||[])){
       if(!r || !r.speed || !AUDIO_SLOTS.includes(r.speed)) continue;
       if(r.path || it.id.startsWith('_tmp')) continue;
-      try{ await uploadAudio(it, r.speed); }
-      catch(e){ /* не выгрузился — попробуем в следующую синхронизацию */ }
+      if(!r.url || !r.url.startsWith('blob:')) continue;
+      jobs.push({it, slot:r.speed});
     }
   }
+  await mapLimit(jobs, 3, j=>uploadAudio(j.it, j.slot).catch(()=>{ /* не выгрузился — попробуем в следующую синхронизацию */ }));
 }
 // Удаляем файл из Storage (когда запись снята с карточки).
 async function removeAudioRemote(it, slot){
@@ -9951,12 +9961,40 @@ async function removeAudioRemote(it, slot){
 // ---------- MERGE + PUSH (Фаза 8: контент/прогресс по отдельности) ----------
 // Пуш одной карточки: две авторитетные колонки updated_at (контент) и prog_at (прогресс).
 // Серверные guard-триггеры не дадут записать метку меньше хранимой даже от багнутого/старого клиента.
+// Готовая строка карточки для upsert (общая для одиночного и батчевого пуша).
+function cardRow(it){
+  return { id:it.id, lang:langOf(it), data:cloudCard(it), updated_at:it.updated_at||0, prog_at:it.prog_at||0 };
+}
 async function pushCard(it, u){
-  const r=await sbClient().from('cards').upsert({
-    id:it.id, user_id:u.id, lang:langOf(it), data:cloudCard(it),
-    updated_at:it.updated_at||0, prog_at:it.prog_at||0
-  },{onConflict:'user_id,id'});
+  const r=await sbClient().from('cards').upsert({...cardRow(it), user_id:u.id},{onConflict:'user_id,id'});
   if(r.error) throw r.error;
+}
+// Батчевый пуш карточек (одним upsert по несколько сотен строк) — вместо N сетевых запросов
+// при последовательном pushCard. Чанкуем, чтобы не упереться в лимит размера тела запроса Supabase.
+async function pushCards(rows, u){
+  if(!rows || !rows.length) return;
+  const B=400;
+  for(let i=0;i<rows.length;i+=B){
+    const chunk=rows.slice(i,i+B).map(x=>({...cardRow(x), user_id:u.id}));
+    const r=await sbClient().from('cards').upsert(chunk,{onConflict:'user_id,id'});
+    if(r.error) throw r.error;
+  }
+}
+// Параллельный прогон списка с ограничением одновременности (для выгрузки/докачки аудио —
+// чтобы не заваливать сеть и не упираться в rate-limit, но и не ждать строго по одному).
+async function mapLimit(list, limit, fn){
+  if(!list || !list.length) return;
+  limit=Math.max(1, limit||3);
+  const results=new Array(list.length);
+  let idx=0;
+  async function worker(){
+    while(idx<list.length){
+      const i=idx++;
+      results[i]=await fn(list[i], i);
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(limit,list.length)}, worker));
+  return results;
 }
 // Копируем контент из источника (облако) в цель. Аудио: облачные слоты (speed+name+path),
 // но локальный blob-кэш — поверх path, чтобы играть офлайн на этом устройстве.
@@ -10251,12 +10289,13 @@ async function doSync(){
     }
 
     // --- применяем план ---
+    const pushBatch=[];                 // карточки для батчевого пуша (после цикла одним upsert)
     for(const plan of plans){
       const it=plan.it;
       if(!plan.rec){
         // локальна, в облаке нет → push целиком (если часть свежая — считаем её по направлению)
         if(!it.updated_at && !it.prog_at){ const ts=now(); it.updated_at=ts; it.prog_at=ts; }
-        await pushCard(it, u);
+        pushBatch.push(it);
         pushedN++;
         if(it.updated_at>0) cPush++;          // контент новый (или только что помечен)
         if(it.prog_at>0) pPush++;
@@ -10282,13 +10321,14 @@ async function doSync(){
       // Тогда принудительно пушим метаданные (path), даже если направление мержа было 'pull'.
       pushPaths = missingCloudPaths(it, plan.cloudIt);
       if(cd==='push' || pd==='push' || pushPaths){
-        await pushCard(it, u);
+        pushBatch.push(it);
         pushedN++;
         if(pushPaths) cPush++;
       }
       cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0};
       seedCardSigs(it);                 // нейтрализуем persist() после внешних записей
     }
+    await pushCards(pushBatch, u);
     // облачные карточки, которых нет локально → pull (новое устройство / восстановление)
     for(const id of Object.keys(cloudById)){
       if(localSeen[id]) continue;
