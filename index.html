@@ -9321,6 +9321,39 @@ async function sweepOrphanPrayerAudio(p){
     try{ await removeAudioRemote({id}, slot); }catch(e){}
   }
 }
+// «Удалить все» в группе «Арабский Мухаммадия»: мягко в Корзину все живые карточки уроков
+// 1–10 (тег начинается с «мухаммадия»), их аудио — сразу и навсегда (локально + облако).
+// «Дуа Кунут» не трогаем. Возвращает число удалённых карточек.
+async function removeAllMuhammadiya(){
+  const muh=PRAYERS.filter(p=>p.lang==='ar' && String(p.tag||'').trim().startsWith('мухаммадия'));
+  const t=now();
+  const touched=[];
+  for(const it of items){
+    if(it.deleted_at) continue;
+    if(!String(it.tag||'').trim().startsWith('мухаммадия')) continue;
+    it.deleted_at=t;
+    touched.push(it);
+  }
+  if(!touched.length) return 0;
+  for(const it of touched){
+    revokeAll(it);
+    for(const r of (it.recordings||[])){
+      if(!r || !r.speed) continue;
+      try{ await DB.del('aud:'+it.id+':'+r.speed); }catch(e){}
+      try{ await removeAudioRemote(it, r.speed); }catch(e){}
+    }
+  }
+  await persist();
+  try{
+    const c=sbClient();
+    if(c && _syncUser){
+      await pushCards(touched, _syncUser);
+      for(const it of touched) cloudRecs[it.id]={u:it.updated_at||0, pu:it.prog_at||0};
+    }
+  }catch(e){ /* офлайн/нет входа — метки доедут при следующей синхронизации */ }
+  for(const p of muh) await sweepOrphanPrayerAudio(p);
+  return touched.length;
+}
 // Реальный размер mp3 молитвы (сумма встроенных base64), для подписи в модалке.
 function prayerAudioBytes(p){
   let bytes=0;
@@ -9342,6 +9375,31 @@ function prayerTextSize(p){
   let bytes=0;
   for(const c of (p.cards||[])) bytes+=utf8Bytes(c[0]||'')+utf8Bytes(c[1]||'');
   return bytes?fmtBytes(bytes):'';
+}
+// Состояние набора молитвы относительно базы пользователя: сколько живых карточек этого
+// тега в базе, все ли слова добавлены (по ключу «язык|слово»), подключено ли аудио (слот norm)
+// ко всем карточкам. Нужно для гашения кнопок «＋ Текст / ＋ Аудио / Удалить» в модалке.
+function prayerState(p){
+  const total=(p.cards||[]).length;
+  const live=items.filter(it=>!it.deleted_at && String(it.tag||'').trim()===String(p.tag||'').trim());
+  const have=new Set(live.map(dupKeyOfLang));
+  // уникальные слова набора (защита от дублей внутри одного набора)
+  const needKeys=new Set();
+  for(const c of (p.cards||[])) needKeys.add(dupKeyOfLang({hanzi:c[0], lang:p.lang}));
+  let covered=0;
+  for(const k of needKeys) if(have.has(k)) covered++;
+  const coveredAll = needKeys.size>0 && covered>=needKeys.size;
+  // аудио: считается подключённым, когда у ВСЕХ слов набора есть запись слота norm
+  let audioAll = (p.audio||[]).length>0;
+  if(audioAll){
+    const byKey=new Map();
+    for(const it of live) if(!byKey.has(dupKeyOfLang(it))) byKey.set(dupKeyOfLang(it), it);
+    for(const k of needKeys){
+      const it=byKey.get(k);
+      if(!it || !(it.recordings||[]).some(r=>r.speed==='norm')){ audioAll=false; break; }
+    }
+  }
+  return {total, inBase:live.length, covered, coveredAll, audioAll};
 }
 // Восстанавливает порядковый номер строки (seq) у карточек молитвы, добавленных ДО 1.10.3
 // (тогда поле seq не записывалось). Сверяем по эталонному порядку PRAYERS: карточка молитвы
@@ -9370,27 +9428,78 @@ function openPrayersModal(){
   closeAllModals();
   const list=PRAYERS.filter(p=>p.lang===activeLang);
   const m=document.getElementById('modalPrayers');
+  const isMuh=p=>String(p.tag||'').trim().startsWith('мухаммадия');
+  const shortLesson=p=>String(p.name||'').replace(/^Арабский Мухаммадия\s+/,'');
+  const singleRows=[], lessonRows=[];
+  list.forEach((p,i)=>{ (isMuh(p)?lessonRows:singleRows).push({p,i}); });
+  // строка кнопки текста/аудио/удалить для ОДНОГО набора (с гашением по состоянию базы)
+  const actBtns=(p,i,showAudio)=>{
+    const st=prayerState(p);
+    return `<div style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px">
+      <div style="display:flex; align-items:center; gap:6px">
+        <span class="muted" style="font-size:11px; flex:0 0 auto">${escapeHtml(prayerTextSize(p))}</span>
+        <button type="button" class="btn sec" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px" data-act="text" data-prayer="${i}" ${st.coveredAll?'disabled':''}>＋ Текст</button>
+      </div>
+      ${showAudio?`<div style="display:flex; align-items:center; gap:6px">
+        <span class="muted" style="font-size:11px; flex:0 0 auto">${escapeHtml(prayerSize(p))}</span>
+        <button type="button" class="btn sec" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px" data-act="audio" data-prayer="${i}" ${st.audioAll?'disabled':''}>＋ Аудио</button>
+      </div>`:''}
+    </div>
+    <button type="button" class="btn ghost" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px; color:var(--red)" data-act="del" data-prayer="${i}" ${st.inBase===0?'disabled':''}>Удалить</button>`;
+  };
+  // одиночная молитва (например «Дуа Кунут»)
+  const singleCard=(p,i)=>{
+    const st=prayerState(p);
+    return `<div class="conflict-card" style="display:flex; align-items:center; gap:10px">
+      <div style="flex:0 0 50%; min-width:0">
+        <div style="font-weight:600; word-break:break-word">${escapeHtml(p.name)}</div>
+        <div class="muted" style="font-size:11px; margin-top:2px">${(p.cards||[]).length} карточек</div>
+      </div>
+      ${actBtns(p,i,prayerAudioBytes(p)>0)}
+    </div>`;
+  };
+  // строка урока Мухаммадии (короткое имя + число карточек + кнопки)
+  const lessonCard=(p,i)=>{
+    const st=prayerState(p);
+    return `<div class="conflict-card" style="display:flex; align-items:center; gap:10px">
+      <div style="flex:0 0 50%; min-width:0">
+        <div style="font-weight:600; word-break:break-word">${escapeHtml(shortLesson(p))}</div>
+        <div class="muted" style="font-size:11px; margin-top:2px">${(p.cards||[]).length} карточек</div>
+      </div>
+      ${actBtns(p,i,false)}
+    </div>`;
+  };
+  const muhTotal=lessonRows.reduce((s,r)=>s+(r.p.cards||[]).length,0);
+  const muhInBase=lessonRows.reduce((s,r)=>s+prayerState(r.p).inBase,0);
+  const singlesHtml=singleRows.map(r=>singleCard(r.p,r.i)).join('');
+  const groupHtml=lessonRows.length?`
+    <div class="conflict-card" style="margin-bottom:10px">
+      <div style="display:flex; align-items:center; gap:8px; cursor:pointer" data-muh-toggle>
+        <span data-muh-chev style="flex:0 0 auto; color:var(--mut)">▸</span>
+        <span style="font-weight:600">Арабский Мухаммадия</span>
+        <span class="muted" style="font-size:11px">${lessonRows.length} уроков · ${muhTotal} карточек</span>
+        <div class="spacer"></div>
+        <button type="button" class="btn ghost" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px; color:var(--red)" data-act="delall" ${muhInBase?'':'disabled'}>Удалить все</button>
+      </div>
+      <div data-muh-list style="display:none; margin-top:10px">${lessonRows.map(r=>lessonCard(r.p,r.i)).join('')}</div>
+    </div>`:'';
   m.innerHTML=`<div class="sheet">
     <div class="row"><h2>Молитвы</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal('modalPrayers')">✕</button></div>
-    ${list.length?list.map((p,i)=>`
-      <div class="conflict-card" style="display:flex; align-items:center; gap:10px">
-        <div style="flex:0 0 50%; min-width:0">
-          <div style="font-weight:600; word-break:break-word">${escapeHtml(p.name)}</div>
-        </div>
-        <div style="flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:5px">
-          <div style="display:flex; align-items:center; gap:6px">
-            <span class="muted" style="font-size:11px; flex:0 0 auto">${escapeHtml(prayerTextSize(p))}</span>
-            <button type="button" class="btn sec" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px" data-act="text" data-prayer="${i}">＋ Текст</button>
-          </div>
-          ${prayerAudioBytes(p)?`<div style="display:flex; align-items:center; gap:6px">
-            <span class="muted" style="font-size:11px; flex:0 0 auto">${escapeHtml(prayerSize(p))}</span>
-            <button type="button" class="btn sec" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px" data-act="audio" data-prayer="${i}">＋ Аудио</button>
-          </div>`:''}
-        </div>
-        <button type="button" class="btn ghost" style="width:auto; flex:0 0 auto; padding:4px 10px; font-size:12px; color:var(--red)" data-act="del" data-prayer="${i}">Удалить</button>
-      </div>`).join(''):'<div class="auth-hint">Для этого языка молитв пока нет.</div>'}
+    ${list.length?(singlesHtml+groupHtml):'<div class="auth-hint">Для этого языка молитв пока нет.</div>'}
   </div>`;
   m.classList.remove('hidden');
+  // раскрытие/сворачивание группы Мухаммадии
+  const toggle=m.querySelector('[data-muh-toggle]');
+  if(toggle){
+    toggle.onclick=()=>{
+      const lst=m.querySelector('[data-muh-list]');
+      const chev=m.querySelector('[data-muh-chev]');
+      if(!lst) return;
+      const open=lst.style.display!=='none';
+      lst.style.display=open?'none':'block';
+      if(chev) chev.textContent=open?'▸':'▾';
+    };
+  }
   m.querySelectorAll('[data-prayer]').forEach(b=>{
     b.onclick=async ()=>{
       const p=list[+b.dataset.prayer];
@@ -9409,13 +9518,26 @@ function openPrayersModal(){
         const n=items.filter(it=>!it.deleted_at && String(it.tag||'').trim()===String(p.tag||'').trim()).length;
         if(!n){ toastShort('Молитвы нет в базе'); return; }
         if(!confirm(`Убрать молитву «${p.name}» (${n} карт.) в Корзину?\n\nАудио будет удалено сразу и навсегда (освободит место). Текст можно восстановить из Корзины, аудио — заново подключить кнопкой «＋ Аудио».`)) return;
-        const removed=await removePrayer(p);
+        await removePrayer(p);
         renderDict(); updateChips(); refreshModeFilterBadges(); updateTrashButton();
         toastShort('Молитва в корзине, аудио удалено');
       }
       closeModal('modalPrayers');
     };
   });
+  // «Удалить все»: все уроки Мухаммадии в Корзину (Дуа Кунут не трогаем)
+  const delAll=m.querySelector('[data-act="delall"]');
+  if(delAll){
+    delAll.onclick=async ()=>{
+      const n=items.filter(it=>!it.deleted_at && String(it.tag||'').trim().startsWith('мухаммадия')).length;
+      if(!n){ toastShort('Уроков Мухаммадии нет в базе'); return; }
+      if(!confirm(`Убрать все уроки «Арабский Мухаммадия» (1–10) в Корзину? (${n} карт.)\n\nТекст можно восстановить из Корзины.`)) return;
+      await removeAllMuhammadiya();
+      renderDict(); updateChips(); refreshModeFilterBadges(); updateTrashButton();
+      toastShort('Все уроки Мухаммадии в корзине');
+      closeModal('modalPrayers');
+    };
+  }
 }
 function sampleData(skipConfirm){
   // примеры добавляются для АКТИВНОГО языка; предупреждаем только если в нём уже есть карточки
