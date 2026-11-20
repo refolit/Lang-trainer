@@ -2100,6 +2100,8 @@ function go(scrId, writeIt){
   if(scrId==='scr-write') startWrite(writeIt);
   if(scrId==='scr-exam') startExam();
   if(scrId==='scr-more') renderMore();
+  // Фаза 12: реальная работа — переходы по экранам (с троттлингом, не чаще раза в 10 минут).
+  markUserActivity('screen');
 }
 
 // ============================== PINYIN ==============================
@@ -7696,12 +7698,17 @@ async function logActivityEvent(type, metadata){
     return !r.error;
   }catch(e){ return false; }
 }
+// Текущий экран (для журнала активности): 'dict'|'study'|'write'|'exam'|'more'.
+function currentScreenId(){
+  const s=document.querySelector('.screen.active');
+  return s ? String(s.id||'').replace(/^scr-/,'') : '';
+}
 function markUserActivity(reason, force){
   if(!_syncUser) return;
   const t=Date.now();
   if(!force && t-activityLastAt<ACTIVITY_HEARTBEAT_MS) return;
   activityLastAt=t;
-  logActivityEvent('activity',{reason, screen:moreTab, lang:activeLang});
+  logActivityEvent('activity',{reason, screen:moreTab, lang:activeLang, view:currentScreenId()});
 }
 function stopActivityHeartbeat(){
   if(activityHeartbeat){ clearInterval(activityHeartbeat); activityHeartbeat=null; }
