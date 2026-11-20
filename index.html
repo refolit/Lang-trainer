@@ -1409,6 +1409,15 @@ html[data-color="standard"] .sn-slider input[type=range]{
         <div class="card" style="margin-top:10px" id="adminCard" hidden>
           <div class="card-h"><span>Админ</span><span class="muted" style="font-weight:600">видите только вы</span></div>
           <div id="adminBody"></div>
+          <div id="activityAdmin" hidden>
+            <div class="card-h" style="margin-top:12px"><span>Активность пользователей</span><span class="muted" id="activityUnread" style="font-weight:700"></span></div>
+            <div id="activitySummary" class="admin-list"></div>
+            <div class="row" style="margin-top:10px;gap:8px">
+              <button class="btn sec" id="activityReadBtn" style="width:auto;padding:8px 12px">Отметить прочитанным</button>
+              <span class="muted" style="font-size:12px">последние события</span>
+            </div>
+            <div id="activityFeed" class="synclog" style="margin-top:8px"></div>
+          </div>
         </div>
         <div class="card" style="margin-top:10px">
           <div class="card-h"><span>Журнал синхронизаций</span><span class="muted" style="font-weight:600">последние 30</span></div>
@@ -1663,7 +1672,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.11.16';
+const APP_VERSION='1.12.0';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -7299,6 +7308,8 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.12.0','20.11.26','Мониторинг активности пользователей через Supabase Realtime: журнал входов, открытия приложения, рабочей активности и синхронизаций; админская сводка, лента событий, бейдж непрочитанных и базовая статистика за сегодня/7 дней. Добавлена защищённая таблица user_activity_events и RPC для административного просмотра.'],
+  ['1.11.17','19.11.26','Молитвы: уроки «Арабский Мухаммадия» собраны в раскрывающийся список (шапка со счётчиком и кнопкой «Удалить все»). Кнопки «＋ Текст»/«＋ Аудио»/«Удалить» гаснут по состоянию базы (урок добавлен / аудио подключено / урока нет); у каждого урока показано число карточек. Синхронизация ускорена: карточки пушатся батчем, аудио выгружается параллельно. Экзамен «Тоны → Пиньинь» оформлен как «Выбор ответов» (крупное слово + карточки-варианты).'],
   ['1.11.16','19.11.26','Молитвы: добавлены наборы «Арабский Мухаммадия» 3, 4, 5-6, 7, 8, 9 и 10 уроки (212 карточек, только текст). «Мухаммадия 1 урок» переименован в «1-2 уроки». Модалка «Молитвы» переделана: имя занимает половину ширины и переносится по словам, кнопки «＋ Текст» и «＋ Аудио» — компактные, одна под другой, «Удалить» справа; перед кнопками показан размер текста и аудио; у наборов без аудио кнопка «＋ Аудио» не выводится.'],
   ['1.11.15','18.11.26','Озвучка арабского (и других языков без запасных голосов) починена: Google translate_tts после двух подряд неудач блокируется лишь на 25 с (раньше — навсегда до перезагрузки страницы), при успехе блокировка снимается. Загрузка mp3 больше не считается успешной, если canplay так и не наступил (убраны «тихие» проигрывания).'],
   ['1.11.14','17.11.26','Режим «Стандартный» переделан: теперь честные 5 семантических цветов — иероглифы #2563eb (синий), пиньинь #0d9488 (бирюзовый), перевод #ef4444 (красный), неактивные кнопки #f0ece4 (беж), активные кнопки #0891b2 (циан). Режим стал theme-aware: во всех 8 темах, в тёмных используются светлые варианты текстов и тёмный беж подложек. Зелёный «верно» и красный «ошибка» экзамена не меняются. «Разноцветный» остаётся по умолчанию.'],
@@ -7549,6 +7560,7 @@ function periodEnd(periodStart, range, nextStart){
 let moreTab='stats';
 function switchMoreTab(tab){
   moreTab=tab;
+  markUserActivity('navigation', true);
   document.getElementById('moreTabStats').classList.toggle('hidden', tab!=='stats');
   document.getElementById('moreTabSync').classList.toggle('hidden', tab!=='sync');
   document.getElementById('moreTabSettings').classList.toggle('hidden', tab!=='settings');
@@ -7657,6 +7669,49 @@ function deviceId(){
 function deviceLabel(){
   try{ return localStorage.getItem('ltDeviceLabel')||''; }catch(e){ return ''; }
 }
+// ---------- Фаза 12: оперативный журнал активности ----------
+let activityLastAt=0;
+let activityHeartbeat=null;
+let activityRealtime=null;
+const ACTIVITY_HEARTBEAT_MS=10*60*1000;
+function activityMeta(meta){
+  const out={};
+  if(meta && typeof meta==='object'){
+    for(const k of Object.keys(meta).slice(0,8)){
+      const v=meta[k];
+      if(['string','number','boolean'].includes(typeof v)) out[k]=String(v).slice(0,120);
+    }
+  }
+  return out;
+}
+async function logActivityEvent(type, metadata){
+  if(SB_OFFLINE || !_syncUser || !sbClient()) return false;
+  try{
+    const r=await sbClient().from('user_activity_events').insert({
+      user_id:_syncUser.id, event_type:type, device_id:deviceId(),
+      device_label:deviceLabel().slice(0,32), app_version:APP_VERSION,
+      metadata:activityMeta(metadata)
+    });
+    return !r.error;
+  }catch(e){ return false; }
+}
+function markUserActivity(reason, force){
+  if(!_syncUser) return;
+  const t=Date.now();
+  if(!force && t-activityLastAt<ACTIVITY_HEARTBEAT_MS) return;
+  activityLastAt=t;
+  logActivityEvent('activity',{reason, screen:moreTab, lang:activeLang});
+}
+function stopActivityHeartbeat(){
+  if(activityHeartbeat){ clearInterval(activityHeartbeat); activityHeartbeat=null; }
+}
+function startActivityHeartbeat(){
+  stopActivityHeartbeat();
+  if(!_syncUser) return;
+  activityHeartbeat=setInterval(()=>markUserActivity('heartbeat'),ACTIVITY_HEARTBEAT_MS);
+}
+function activityReadAt(){ try{return localStorage.getItem('ltActivityReadAt')||'';}catch(e){return '';} }
+function setActivityReadAt(v){ try{localStorage.setItem('ltActivityReadAt',v||new Date().toISOString());}catch(e){} }
 // Вставляем одну запись в журнал sync_log (серверная метка ts). Вызывается в конце успешного doSync.
 async function logSyncEvent(st){
   if(SB_OFFLINE || !_syncUser || !sbClient()) return;
@@ -7735,6 +7790,36 @@ function fmtDTlog(ts){
   const d=new Date(ts);
   const hh=String(d.getHours()).padStart(2,'0'), mm=String(d.getMinutes()).padStart(2,'0');
   return d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear()+' '+hh+':'+mm;
+}
+function activityEventLabel(type){
+  return {app_open:'открыл приложение',session_start:'вошёл',activity:'работал',sync_started:'начал синхронизацию',sync_completed:'завершил синхронизацию',sync_changed:'изменил данные при синхронизации',sync_error:'ошибка синхронизации'}[type]||type;
+}
+async function renderActivityAdmin(){
+  const root=document.getElementById('activityAdmin');
+  if(!root || !_adminOk) return;
+  root.hidden=false;
+  const summary=document.getElementById('activitySummary'), feed=document.getElementById('activityFeed'), unread=document.getElementById('activityUnread');
+  let users=[], events=[];
+  try{
+    const s=await sbClient().rpc('admin_activity_summary');
+    if(!s.error && Array.isArray(s.data)) users=s.data;
+    const f=await sbClient().rpc('admin_activity_events',{p_limit:50,p_before:null});
+    if(!f.error && Array.isArray(f.data)) events=f.data;
+  }catch(e){}
+  const now=Date.now(), read=activityReadAt();
+  const fresh=events.filter(x=>!read || new Date(x.occurred_at).getTime()>new Date(read).getTime()).length;
+  if(unread) unread.textContent=fresh?'новых: '+fresh:'';
+  summary.innerHTML=users.map(u=>{
+    const seen=u.last_seen_at?new Date(u.last_seen_at).getTime():0;
+    const live=seen && now-seen<12*60*1000;
+    return `<div class="admin-user"><div class="admin-u-head"><span class="admin-u-name">${escapeHtml(u.name||u.email||'(без имени)')}</span>${live?'<span class="admin-u-me">сейчас</span>':''}</div><div class="admin-u-meta"><span>вход <b>${fmtDTlog(u.last_seen_at)}</b></span><span>активность <b>${fmtDTlog(u.last_activity_at)}</b></span><span>синк <b>${fmtDTlog(u.last_sync_at)}</b></span><span>сегодня <b>${u.events_today||0}</b></span><span>7 дней <b>${u.events_7d||0}</b></span></div></div>`;
+  }).join('') || '<div class="admin-empty">Событий пока нет.</div>';
+  feed.innerHTML=events.map(x=>`<div class="sl-row"><div class="sl-head"><span class="sl-time">${fmtDTlog(x.occurred_at)}</span><b>${escapeHtml(x.user_name||x.email||'')}</b><span class="spacer"></span><span class="muted">${escapeHtml(x.device_label||'устройство')}</span></div><div class="sl-meta"><span>${escapeHtml(activityEventLabel(x.event_type))}</span>${x.metadata&&x.metadata.reason?`<span>${escapeHtml(x.metadata.reason)}</span>`:''}</div></div>`).join('') || '<div class="muted" style="padding:4px 2px">Событий пока нет.</div>';
+  const rb=document.getElementById('activityReadBtn');
+  if(rb) rb.onclick=()=>{setActivityReadAt(new Date().toISOString()); renderActivityAdmin();};
+  if(!activityRealtime){
+    activityRealtime=sbClient().channel('admin-user-activity').on('postgres_changes',{event:'INSERT',schema:'public',table:'user_activity_events'},()=>{ if(moreTab==='sync') renderActivityAdmin(); }).subscribe();
+  }
 }
 async function renderSyncPanel(){
   const cardsEl=document.getElementById('slCards'), byLangEl=document.getElementById('slByLang'),
@@ -7856,6 +7941,7 @@ async function renderAdminPanel(){
       if(u) openAdminUser(u);
     };
   });
+  renderActivityAdmin();
 }
 // Открывает словарь выбранного пользователя (модалка): список карточек + правка/удаление.
 async function openAdminUser(u){
@@ -9741,6 +9827,7 @@ function bindAudioLifecycle(){
   document.addEventListener('visibilitychange', ()=>{
     if(document.hidden){ stopAllAudio(); studyTouch(); clearWritePlay(); if(browseOn){ browseGen++; if(browseTmo){ clearTimeout(browseTmo); browseTmo=null; } } }
     else{
+      markUserActivity('visibility', true);
       if(browseOn){ /* вернулись из фона в «Листании» — продолжить текущее слово с полоской заново */
         const bit=studyQueue[studyIdx];
         if(bit) browseStep(bit);
@@ -10318,6 +10405,7 @@ async function doSync(){
   let confContent=0, confContentLocal=0, confContentCloud=0;
   let confProgress=0, confProgressLocal=0, confProgressCloud=0;
   const syncStartedAt=now();
+  logActivityEvent('sync_started',{screen:'sync'});
   try{
     // Живой пользователь текущей сессии, а НЕ кэш: если сессия сменилась (другой аккаунт,
     // переключение способа входа), устаревший _syncUser дал бы чужой user_id → RLS отклонит
@@ -10540,6 +10628,9 @@ async function doSync(){
       conflictContent:confContent, conflictContentLocal:confContentLocal, conflictContentCloud:confContentCloud,
       conflictProgress:confProgress, conflictProgressLocal:confProgressLocal, conflictProgressCloud:confProgressCloud
     });
+    const activitySyncMeta={pushed:pushedN,pulled:pulledN,changed:!!(pushedN||pulledN)};
+    logActivityEvent('sync_completed',activitySyncMeta);
+    if(pushedN||pulledN) logActivityEvent('sync_changed',activitySyncMeta);
     syncStatus('Синхронизировано · '+(pulledN?('принято '+pulledN):'')+(pushedN?((pulledN?' · ':'')+'отправлено '+pushedN):''), 'ok');
     // П.13: если вкладка «Синхронизация» открыта — сразу обновляем её журнал после успешного синка
     if(moreTab==='sync') renderSyncPanel();
@@ -10547,6 +10638,7 @@ async function doSync(){
     // откат к снапшоту — локальные данные не тронуты
     items=snap.items; settings=snap.settings; statsByLang=snap.statsByLang; stats=statsByLang[activeLang]; _sigSet=snap.sigSet; _sigStatsMap=snap.sigStats;
     const msg=String(e&&e.message||e);
+    logActivityEvent('sync_error',{code:/fetch|network|Failed to fetch/i.test(msg)?'network':'sync_failed'});
     console.error('Синхронизация: ошибка:', e);
     if(/fetch|network|Failed to fetch/i.test(msg)) syncStatus('Нет соединения — не синхронизировано','off');
     else if(/войдите|Сначала/i.test(msg)) syncStatus('Войдите, чтобы синхронизировать','');
@@ -10621,6 +10713,8 @@ async function renderAuth(){
   const u=await localSessionUser();
   _syncUser=u;
   if(u){
+    if(!window.__activityOpened){ window.__activityOpened=true; logActivityEvent('app_open'); }
+    startActivityHeartbeat();
     // Имя живёт в облаке (profiles.name): подтягиваем его, если на этом устройстве его ещё
     // нет (первый вход с нового браузера) — чтобы связка «имя + email» не терялась.
     try{
@@ -10959,8 +11053,8 @@ function initAuthState(){
     // (иначе при входе по магической ссылке обе модалки соревнуются за одно окно),
     // а по месту: в recoverSessionFromUrl (магическая ссылка) и в openAuthModal
     // (вход/регистрация по паролю).
-    if(event==='SIGNED_IN') renderAuth();
-    else if(event==='SIGNED_OUT') renderAuth();
+    if(event==='SIGNED_IN'){ renderAuth(); logActivityEvent('session_start'); }
+    else if(event==='SIGNED_OUT'){ stopActivityHeartbeat(); renderAuth(); }
   });
   // Всеядный перехват сессии из URL (implicit #access_token / PKCE ?code=).
   // При успехе сам вызовет SIGNED_IN → renderAuth; иначе ничего не меняет.
