@@ -2639,44 +2639,51 @@ function stopPlayer(){ Player.stop(); }
 // (создаём <audio> с URL — запрос проходит через service worker и попадает в TTS-кэш).
 // Тогда при переходе слово заиграет мгновенно, без задержки загрузки из Google.
 function prefetchGoogleTTS(text, tag){
-  try{
-    if(!text) return;
-    const t=String(text).trim().slice(0,200);
-    if(!t) return;
-    const tt=(tag||ttsLang()||'zh-CN').toLowerCase();
-    const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tt))+encodeURIComponent(t);
-    // Надёжный прогрев (правки 18.10.26): ждём canplay, а не просто ставим src=.
-    // Раньше src= лишь «просил» браузер начать загрузку, и при нестабильном Google-сервере
-    // mp3 мог не докачаться и не осесть в постоянный кэш — отсюда «периодически не грузятся».
-    // Теперь дожидаемся успеха (canplay) — SW гарантированно кладёт mp3 в hanzi-trainer-tts.
-    const a=new Audio(); a.preload='auto';
-    let done=false;
-    const finish=()=>{ if(done) return; done=true; try{ a.removeEventListener('canplay',onCan); a.removeEventListener('error',onErr); a.src=''; }catch(e){} };
-    const onCan=()=>finish();
-    const onErr=()=>finish();
-    a.addEventListener('canplay', onCan, {once:true});
-    a.addEventListener('error', onErr, {once:true});
-    a.src=url;
-    setTimeout(finish, 15000); // страховка: не держим объект дольше 15 с (сервер мог не ответить)
-  }catch(e){}
+  return new Promise(res=>{
+    try{
+      if(!text){ res(false); return; }
+      const t=String(text).trim().slice(0,200);
+      if(!t){ res(false); return; }
+      const tt=(tag||ttsLang()||'zh-CN').toLowerCase();
+      const url=G_TRANSLATE_TTS.replace('TTL', encodeURIComponent(tt))+encodeURIComponent(t);
+      const a=new Audio(); a.preload='auto';
+      let done=false;
+      const finish=(ok)=>{ if(done) return; done=true; clearTimeout(timer); try{ a.removeEventListener('canplay',onCan); a.removeEventListener('error',onErr); a.src=''; }catch(e){} res(!!ok); };
+      const onCan=()=>finish(true), onErr=()=>finish(false);
+      const timer=setTimeout(()=>finish(false),15000);
+      a.addEventListener('canplay',onCan,{once:true}); a.addEventListener('error',onErr,{once:true}); a.src=url;
+    }catch(e){ res(false); }
+  });
 }
-// Слова впереди по очереди (Учить/Экзамен), у которых нет своего mp3 — только синтез.
-function prefetchNextTTS(queue, idx, lookahead=2){
-  try{
-    if(!queue || !Array.isArray(queue)) return;
-    const gtag=googleTag(foreignVoice());
-    const tag=gtag||undefined;
-    let n=0;
-    for(let i=idx+1; i<queue.length && n<lookahead; i++){
-      const it=queue[i];
-      if(!it || !it.hanzi) continue;
-      const rec=liveRec(it,'norm');
-      if(rec && (rec.url || rec.path)) continue; // есть своё mp3 (локально или в облаке) — синтез не нужен
-      prefetchGoogleTTS(it.hanzi, tag);
-      n++;
-    }
-  }catch(e){}
+let ttsPrefetchGen=0;
+function cancelTtsPrefetch(){ ttsPrefetchGen++; }
+function ttsPrefetchUrl(text,tag){ const t=String(text||'').trim().slice(0,200), tt=(tag||ttsLang()||'zh-CN').toLowerCase(); return t?G_TRANSLATE_TTS.replace('TTL',encodeURIComponent(tt))+encodeURIComponent(t):''; }
+async function prefetchTTS(queue,idx,lookahead=5){
+  const gen=++ttsPrefetchGen;
+  if(!navigator.onLine || !queue || !Array.isArray(queue)) return;
+  if(!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+  const tag=googleTag(foreignVoice())||undefined, words=[], seen=new Set();
+  for(let i=idx+1;i<queue.length&&words.length<lookahead;i++){
+    const it=queue[i]; if(!it||!it.hanzi) continue;
+    const rec=liveRec(it,'norm'); if(rec&&(rec.url||rec.path)) continue;
+    const url=ttsPrefetchUrl(it.hanzi,tag); if(url&&!seen.has(url)){ seen.add(url); words.push({text:it.hanzi,tag,url}); }
+  }
+  if(!words.length) return;
+  let missing=words;
+  try{ const cache=await caches.open(TTS_CACHE_NAME); const checks=await Promise.all(words.map(async w=>({w,hit:!!(await cache.match(w.url))}))); missing=checks.filter(x=>!x.hit).map(x=>x.w); }catch(e){}
+  for(let i=0;i<missing.length;i+=2){
+    if(gen!==ttsPrefetchGen||!navigator.onLine) return;
+    if(i>0) await new Promise(r=>setTimeout(r,350+Math.random()*550));
+    if(gen!==ttsPrefetchGen||!navigator.onLine) return;
+    const results=await Promise.all(missing.slice(i,i+2).map(w=>prefetchGoogleTTS(w.text,w.tag)));
+    // Если вся партия не загрузилась, не продолжаем долбить источник: сеть/лимит,
+    // а обычное воспроизведение позже применит штатный fallback.
+    if(!results.some(Boolean)) return;
+  }
 }
+function prefetchNextTTS(queue,idx,lookahead=2){ prefetchTTS(queue,idx,lookahead); }
+// Старое тело prefetchNextTTS удалено: все вызовы используют единый ограниченный планировщик.
+// Слова без своего mp3 прогреваются через prefetchTTS, а не параллельными Audio-запросами.
 async function playWordNorm(it){
   // проигрывание слова в обычной скорости (из карточки словаря и в экзамене)
   if(!it) return;
@@ -2840,6 +2847,22 @@ function updateDictFilterChips(){
 // flt = {lvls:Set<1..5>, tags:Set<string>, due:bool, thisMonth:bool, lastMonth:bool,
 //        star:bool, learned:bool, addedRecent:bool, oftenWrong:bool, noSent:bool}
 let flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false, noSent:false};
+function emptyFilter(){ return {lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false, noSent:false}; }
+function serializeFilter(f=flt){
+  const out={};
+  if(f.lvls&&f.lvls.size) out.lvls=Array.from(f.lvls);
+  if(f.tags&&f.tags.size) out.tags=Array.from(f.tags);
+  for(const k of ['due','thisMonth','lastMonth','star','learned','addedRecent','oftenWrong','noSent']) if(f[k]) out[k]=true;
+  return Object.keys(out).length?out:null;
+}
+function restoreFilter(raw){
+  const f=emptyFilter();
+  if(raw&&Array.isArray(raw.lvls)) f.lvls=new Set(raw.lvls.map(Number).filter(n=>n>=1&&n<=5));
+  if(raw&&Array.isArray(raw.tags)) f.tags=new Set(raw.tags.map(String).filter(Boolean));
+  for(const k of ['due','thisMonth','lastMonth','star','learned','addedRecent','oftenWrong','noSent']) f[k]=!!(raw&&raw[k]);
+  return f;
+}
+function saveFilterState(){ settings.filterState={flt:serializeFilter(),dictFilter:['all','star','learned'].includes(dictFilter)?dictFilter:'all'}; persist(); }
 function fltActive(){ return flt.lvls.size>0 || flt.tags.size>0 || flt.due || flt.thisMonth || flt.lastMonth || flt.star || flt.learned || flt.addedRecent || flt.oftenWrong || flt.noSent; }
 function fltCount(){ return flt.lvls.size + flt.tags.size + (flt.due?1:0) + (flt.thisMonth?1:0) + (flt.lastMonth?1:0) + (flt.star?1:0) + (flt.learned?1:0) + (flt.addedRecent?1:0) + (flt.oftenWrong?1:0) + (flt.noSent?1:0); }
 // «Добавлено недавно» (как в статистике): последняя партия карточек за 7 дней — самая свежая дата addedOn за неделю.
@@ -3058,12 +3081,14 @@ function openFilterModal(){
   m.querySelector('[data-flt-nosent]').onclick=e=>{ tmp.noSent=!tmp.noSent; e.currentTarget.classList.toggle('on', tmp.noSent); tmpCount(); };
   m.querySelector('#fltExport').onclick=()=>exportWords(tmp);
   m.querySelector('#fltReset').onclick=()=>{
-    flt={lvls:new Set(), tags:new Set(), due:false, thisMonth:false, lastMonth:false, star:false, learned:false, addedRecent:false, oftenWrong:false, noSent:false};
+    flt=emptyFilter();
+    saveFilterState();
     renderDict(); updateFilterBadge(); refreshModeFilterBadges();
     closeModal('modalFilter');
   };
   m.querySelector('#fltApply').onclick=()=>{
     flt={lvls:new Set(tmp.lvls), tags:new Set(tmp.tags), due:tmp.due, thisMonth:tmp.thisMonth, lastMonth:tmp.lastMonth, star:tmp.star, learned:tmp.learned, addedRecent:tmp.addedRecent, oftenWrong:tmp.oftenWrong, noSent:tmp.noSent};
+    saveFilterState();
     renderDict(); updateFilterBadge(); refreshModeFilterBadges();
     closeModal('modalFilter');
   };
@@ -3883,7 +3908,8 @@ let studySeqOn=false;   // «Подряд»: слова в порядке соз
 // Направление показа ТЕКУЩЕЙ карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
 // Для 'mix' решается на каждый показ случайно и запоминается здесь, чтобы текст и озвучка совпали.
 let studyCurDir='fr';
-let studyDirMap=new Map();   // id слова → направление (fr/rf): в mix запоминается при первом показе
+let studyDirMap=new Map();   // id слова → направление (fr/rf): совместимый кэш
+let studyDirByIdx=new Map(); // позиция в текущей очереди → направление (надёжный возврат назад)
 // Аудио в «Учить» — только иностранный канал (русский убран из Учить/Экзамен, правки 27.10.26).
 // Автозвук «Учить» — независимый тумблер на этой странице (значок динамика рядом с шестерёнкой),
 // НЕ связан с глобальным «иностранное аудио» (то управляет Листанием и Экзаменом).
@@ -4044,12 +4070,17 @@ function startStudy(){
   enterSession();
   studyRunSeen=new Set();   // новый заход — счётчик «показано в этом заходе» обнуляем
   studyDirMap=new Map();    // и направления mix назначаются заново
+  studyDirByIdx=new Map();
   resetStudyQueue();
+  // Фоновый прогрев первых пяти слов: карточка уже показана, сеть не блокирует вход.
+  prefetchTTS(studyQueue,-1,5);
 }
 // перестроить очередь БЕЗ открытия новой сессии (конец очереди → зацикливание)
 function resetStudyQueue(){
+  cancelTtsPrefetch();
   document.getElementById('studySpeed').textContent='';
   studyDirMap=new Map();    // новая очередь → направления mix заново (иначе старые id «залипают»)
+  studyDirByIdx=new Map();
   studyQueue=buildStudyQueue();
   studyIdx=0;
   const wrap=document.getElementById('studyWrap');
@@ -4061,13 +4092,21 @@ function resetStudyQueue(){
 // Направление показа карточки «Учить»: 'fr' (иностр→рус) / 'rf' (рус→иностр).
 // Для 'mix' направление назначается ОДИН раз на карточку (по id слова) и запоминается,
 // чтобы «Назад/Вперёд» показывали карточку ровно в том направлении, в котором она шла.
-function studyDirFor(it){
+function studyDirFor(it, idx=studyIdx){
   const d=settings.dir||'fr';
   if(d==='mix'){
+    // Сначала держим направление по позиции: одна и та же карточка очереди
+    // не меняет сторону при переходах вперёд/назад.
+    if(idx!=null && studyDirByIdx.has(idx)) return studyDirByIdx.get(idx);
     const id=it&&it.id;
-    if(id!=null && studyDirMap.has(id)) return studyDirMap.get(id);
+    if(id!=null && studyDirMap.has(id)){
+      const cached=studyDirMap.get(id);
+      if(idx!=null) studyDirByIdx.set(idx,cached);
+      return cached;
+    }
     const v=(Math.random()<0.5)?'fr':'rf';
-    if(id!=null) studyDirMap.set(id, v);
+    if(idx!=null) studyDirByIdx.set(idx,v);
+    if(id!=null) studyDirMap.set(id,v);
     return v;
   }
   return d;
@@ -4077,7 +4116,7 @@ function studyDirFor(it){
 function refreshStudyCard(it){
   it=it||studyQueue[studyIdx];
   if(!it) return;
-  studyCurDir=studyDirFor(it);
+  studyCurDir=studyDirFor(it,studyIdx);
   const rf=studyCurDir==='rf';
   const big=document.getElementById('studyHanzi');
   big.textContent = rf ? (trJoined(it)||'') : it.hanzi;
@@ -9793,6 +9832,7 @@ document.getElementById('dictSearch').oninput=renderDict;
 document.querySelectorAll('[data-dict-filter]').forEach(b=>{
   b.onclick=()=>{
     dictFilter=b.dataset.dictFilter;
+    saveFilterState();
     renderDict();
     refreshModeFilterBadges();
   };
@@ -11189,6 +11229,10 @@ async function boot(){
   await DB.open();
   items=(await DB.get(ITEMS))||[];
   settings={...{hint:2,voiceURI:'',studyVoice:'',mulH:1,mulP:1,mulT:1,examMulH:1,examMulP:1,examMulT:1,writeOrder:'rand',writeHint:'on',writeHintSize:1,writeNavSize:1,examTf:true,examChoice:true,examChoiceN:8,examAudio:true,examAllTr:true,examAudioDelay:0,examTone:false,examToneDelay:0,examMatch:false,examWrite:false,examTonePyQ:false,examGradual:true,examGradualDelay:0,srsMode:'new',studyAudio:true,studyPy:true,studyTr:true,studyHanzi:true,studySeq:false,studyDir:'fr',dir:'fr',foreignAudio:true,foreignVoice:'',ruAudio:true,ruVoice:'',sessN:0,activeLang:'zh',langChosen:false}, ...((await DB.get(SET))||{})};
+  const savedFilter=settings.filterState||{};
+  flt=restoreFilter(savedFilter.flt);
+  dictFilter=['all','star','learned'].includes(savedFilter.dictFilter)?savedFilter.dictFilter:'all';
+  settings.filterState={flt:serializeFilter(),dictFilter};
   // Миграция 1.10.0: направление и голос «Учить» переехали в глобальные dir/foreignVoice.
   if(settings.dir==null){ settings.dir=settings.studyDir||'fr'; }
   if(settings.foreignVoice==null){ settings.foreignVoice=settings.studyVoice||''; }
