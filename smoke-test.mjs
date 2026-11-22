@@ -310,7 +310,7 @@ async function main() {
 
     // ================= 3. Экраны =================
     scenario('3. Экраны');
-    const screens = ['scr-dict', 'scr-study', 'scr-write', 'scr-exam', 'scr-more'];
+    const screens = ['scr-dict', 'scr-study', 'scr-write', 'scr-exam', 'scr-read', 'scr-more'];
     for (const s of screens) {
       const before = page.errors.length;
       await page.eval(`__SMOKE__.go(${JSON.stringify(s)})`);
@@ -341,6 +341,37 @@ async function main() {
       totalButtons += res.count;
       check(res.bad.length === 0, `экран ${s}: нет прямоугольных кнопок`, res.bad.slice(0, 5).join(' | '));
     }
+
+    // ================= 4б. Чтение =================
+    scenario('4б. Чтение текста');
+    await page.eval(`__SMOKE__.go("scr-read")`); await sleep(300);
+    // Язык текста по умолчанию — активный язык приложения: сначала явно ставим английский.
+    await page.eval(`document.querySelector('#readLangSeg button[data-code="en"]').click()`);
+    await sleep(200);
+    const readRes = await page.eval(`(() => {
+      const ta = document.getElementById('readInput');
+      ta.value = 'Hello world. This is a test!';
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      renderRead();
+      const en = [...document.querySelectorAll('#readView .read-w')].map(e => e.textContent);
+      document.querySelector('#readLangSeg button[data-code="zh"]').click();
+      ta.value = '今天天气很好。我们去公园吧！';
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      renderRead();
+      const zh = [...document.querySelectorAll('#readView .read-w')].map(e => e.textContent);
+      document.querySelector('#readVoiceSeg button[data-v="google"]').click();
+      const zhSent = [...document.querySelectorAll('#readView .read-w')].map(e => e.textContent);
+      document.querySelector('#readVoiceSeg button[data-v="local"]').click();
+      document.querySelector('#readLangSeg button[data-code="en"]').click();
+      // очищаем текст, чтобы тест не оставлял его в настройках
+      ta.value = ''; ta.dispatchEvent(new Event('input', { bubbles: true }));
+      return { en, zh, zhSent, cjk: __SMOKE__.readIsCJK() };
+    })()`);
+    await sleep(700); // даём отложенной записи текста в настройки сработать
+    check(readRes.en.length === 6 && readRes.en[0] === 'Hello', 'Чтение: английский текст делится на слова — ' + readRes.en.join(' '));
+    check(readRes.zh.length === 4, 'Чтение: китайский делится на фразы до 4 иероглифов — ' + readRes.zh.join('|'));
+    check(readRes.zhSent.length === 2, 'Чтение: режим Google подсвечивает предложения — ' + readRes.zhSent.join('|'));
+    check(readRes.cjk === false, 'Чтение: смена языка текста переключает разбиение');
 
     // ================= 5. Письмо =================
     scenario('5. Письмо и экзамен с карточками (zh/en/tr/ar)');

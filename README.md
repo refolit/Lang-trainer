@@ -24,6 +24,7 @@ Each language has its own cards, tags and statistics; the language is switched i
 - **Write (Письмо)** — Chinese: animated stroke order, trace or assemble from components; other languages: keyboard, letter-by-letter check or build from letters. Hints after mistakes, word order, audio.
 - **Exam (Экзамен)** — true/false, multiple choice, tones, "tones → pinyin", matching pairs, writing; results and a list of mistakes.
 - **Statistics** — totals, memory boxes, activity calendar, words/history charts, best streaks.
+- **Reading (Чтение)** — paste any text and the app reads it aloud, highlighting what is being spoken right now (word by word with the local voice, sentence by sentence with Google TTS) and scrolling along; tap a word to start from it. Chinese, English, Turkish and Arabic (RTL), five speeds.
 - **Prayers (Молитвы)** — ready-made Arabic sets (Du'a Qunut, Muhammadiya lessons 1–10) that can be added to the dictionary with audio.
 - **Audio** — Google TTS (regional voices, cached for offline), built-in speech synthesis as a fallback, own MP3 recordings per word.
 - **Design** — 8 themes (light, dark, sepia, blue, navy, forest, graphite, plum), two colour modes (5 semantic colours / multicolour), pill navigation, 3D buttons, RTL layout for Arabic.
@@ -101,8 +102,9 @@ What is checked:
 
 1. the app loads; `APP_VERSION`, `VERSION` in `sw.js` and the first `VERSIONS` entry match; the libraries are loaded;
 2. no uncaught exceptions, no `console.error`, no failed requests;
-3. all five screens open without errors;
+3. all six screens open without errors;
 4. every visible button has a rounded corner (≥ 4px), including exam options and letter cubes;
+   the reading screen splits English into words, Chinese into phrases of up to 4 characters and Google mode into sentences;
 5. writing works for `zh`/`en`/`tr`/`ar` and "Вперёд ▶" does not get stuck at the end of the queue in random order;
 6. the exam builds all modes (`tf`, `choice`, `tone`, `tonePy`, `match`, `write`), a wrong "tones → pinyin" answer re-queues the word in the same mode, and every mode renders;
 7. at 375×812 no screen overflows horizontally.
