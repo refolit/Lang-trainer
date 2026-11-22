@@ -31,8 +31,8 @@ Each language has its own cards, tags and statistics; the language is switched i
 
 ## Accounts and cloud sync
 
-- Sign-in by email + password (Supabase Auth), a display name stored in the cloud profile.
-- **Sync** with Supabase: cards, progress, settings, statistics and audio (Storage) are merged by stable card ids; conflicts are resolved by content/progress signatures; the sync journal shows what was pushed and pulled.
+- Sign-in by email + password (Supabase Auth), with separate registration and password-recovery flows; a display name is stored in the cloud profile.
+- **Sync** with Supabase: cards, progress, settings, statistics and audio (Storage) are merged by stable card ids; conflicts are resolved by content/progress signatures; the sync journal shows what was pushed and pulled. A network failure can leave already-uploaded remote operations applied; retry and compare the sync status before repeating destructive changes.
 - Works fully offline: without an account everything is kept on the device only.
 
 ## Admin panel
@@ -64,6 +64,7 @@ Available only to users listed in the `admins` table (checked server-side via `i
 | `index.html` | the whole app: HTML, CSS, JS (single source of truth) |
 | `sw.js` | service worker, cache name is tied to the app version |
 | `build-offline.mjs` | builds `hanzi-trainer-offline <version>.html` with libraries and stroke data embedded |
+| `smoke-test.mjs` | automated smoke tests (headless Chrome, no dependencies) |
 | `supabase/*.sql` | database scripts, run in Supabase SQL Editor in phase order |
 | `PROJECT_NOTES.md` | full project documentation and change history |
 | `SYNC_PLAN.md` | cloud sync design notes |
@@ -85,6 +86,30 @@ node build-offline.mjs "D:/! MyProjects/Github/Lang trainer/Lang trainer"
 ```
 
 Then add `!hanzi-trainer-offline <version>.html` to `.gitignore` so the file is tracked.
+
+### Smoke tests
+
+One command checks that the app still loads and works:
+
+```bash
+node smoke-test.mjs
+```
+
+No npm packages are needed: the script starts a local static server, launches the installed Chrome (or Edge) in headless mode with a temporary profile, and drives it over the DevTools protocol. Your normal browser profile — IndexedDB, localStorage, caches — is not touched; test cards are written only into the temporary profile.
+
+What is checked:
+
+1. the app loads; `APP_VERSION`, `VERSION` in `sw.js` and the first `VERSIONS` entry match; the libraries are loaded;
+2. no uncaught exceptions, no `console.error`, no failed requests;
+3. all five screens open without errors;
+4. every visible button has a rounded corner (≥ 4px), including exam options and letter cubes;
+5. writing works for `zh`/`en`/`tr`/`ar` and "Вперёд ▶" does not get stuck at the end of the queue in random order;
+6. the exam builds all modes (`tf`, `choice`, `tone`, `tonePy`, `match`, `write`), a wrong "tones → pinyin" answer re-queues the word in the same mode, and every mode renders;
+7. at 375×812 no screen overflows horizontally.
+
+Exit code is `1` if any check fails. The browser can be overridden with `SMOKE_CHROME=<path to chrome.exe>`.
+
+The test drives the app through `window.__SMOKE__`, which exists only when the page is opened with `?smoke=1` — a normal visit to the app never exposes it.
 
 ### Database
 

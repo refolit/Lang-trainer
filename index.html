@@ -12,8 +12,9 @@
      Офлайн/не загрузился → браузер молча берёт следующий в --font-cjk (Microsoft YaHei на Windows). -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap">
 <title>Language Trainer</title>
-<link rel="manifest" href='data:application/manifest+json,{"name":"汉语 тренажёр","short_name":"汉语","start_url":".","display":"standalone","background_color":"%23faf8f5","theme_color":"%23c62828","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
-<link rel="icon" type="image/svg+xml" href='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Crect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%23c62828%22/%3E%3Ctext x=%2250%22 y=%2272%22 font-size=%2262%22 text-anchor=%22middle%22 fill=%22white%22%3E汉%3C/text%3E%3C/svg%3E'>
+<link rel="manifest" href='data:application/manifest+json,%7B%22name%22%3A%22%E6%B1%89%E8%AF%AD%20%D1%82%D1%80%D0%B5%D0%BD%D0%B0%D0%B6%D1%91%D1%80%22%2C%22short_name%22%3A%22%E6%B1%89%E8%AF%AD%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23faf8f5%22%2C%22theme_color%22%3A%22%23c62828%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22images%2Ficon-192.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%2C%7B%22src%22%3A%22images%2Ficon-512.png%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%2C%7B%22src%22%3A%22images%2Ficon-512.png%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22maskable%22%7D%5D%7D'>
+<link rel="icon" type="image/png" sizes="192x192" href="images/icon-192.png">
+<link rel="apple-touch-icon" href="images/icon-192.png">
 
 <style>
 /* Nunito (variable, wght 200..1000) — встроено офлайн: latin + latin-ext + cyrillic */
@@ -314,7 +315,9 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 .wle-cell.todo{border-color:var(--red)}
 /* Собери слово из букв */
 .wbank{display:flex; gap:7px; justify-content:center; flex-wrap:wrap; margin:12px 0 6px}
-.wbank button{min-width:40px; height:44px; padding:0 9px; font-size:20px; font-weight:700; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; text-transform:lowercase}
+.wbank button,.wletter{min-width:40px; height:44px; padding:0 9px; font-size:20px; font-weight:700; border-radius:10px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; text-transform:lowercase; box-sizing:border-box}
+.wbank button{ }
+.wbank button.wletter{min-width:40px}
 .wbank button.used{opacity:.25; pointer-events:none}
 .wbank button.flash{animation:cubeFlash .42s ease}
 .wbank button.press{animation:cubePress .18s ease}
@@ -1051,7 +1054,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .match-cols{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:22px 0 0; align-items:stretch; width:100%}
 /* Выбор ответов: карточки-варианты (базовые размеры — мобильные) */
 .exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:6px}
-.exam-opt{font-size:17px; padding:12px 8px; min-height:70px; word-break:break-word}
+.exam-opt{font-size:17px; padding:12px 8px; min-height:70px; word-break:break-word; border-radius:14px; border:1.5px solid var(--line); background:var(--card); color:var(--ink); font-weight:700; cursor:pointer; box-shadow:0 3px 0 var(--sec-d)}
 /* Вариант-иероглиф (китайский, направление рус→кит): крупный CJK-шрифт; длинная фраза сжимается */
 .exam-opt.hz{font-family:var(--font-cjk); font-size:32px; line-height:1.3; padding:14px 10px; min-height:80px}
 .exam-opt.hz.sent{font-size:22px; line-height:1.4}
@@ -1068,7 +1071,7 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
    Телефоны и планшеты (<1024px) — размеры прежние. */
 @media (min-width:1024px){
   #examOpts.exam-opts{display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; margin-top:6px}
-  .exam-opt{font-size:22px; padding:18px 14px; min-height:91px; word-break:break-word}
+  .exam-opt{font-size:22px; padding:18px 14px; min-height:91px; word-break:break-word; border-radius:14px}
   .exam-opt.hz{font-size:38px; line-height:1.3; padding:16px 14px; min-height:96px}
   .exam-opt.hz.sent{font-size:26px; line-height:1.4}
   .match-pair{font-size:29px; line-height:1.3}
@@ -1342,6 +1345,7 @@ html[data-color="standard"] .sn-slider input[type=range]{
       <span class="big-ic">📭</span>
       <div>Пока мало слов для экзамена — нужно хотя бы 4.</div>
       <div class="empty-sub" id="examEmptyCount"></div>
+      <button class="btn" id="examEmptyAdd" style="width:auto; padding:9px 16px; margin-top:14px">＋ Добавить слова</button>
     </div>
   </section>
 
@@ -1508,6 +1512,19 @@ html[data-color="standard"] .sn-slider input[type=range]{
         </div>
 
         <div class="card">
+          <div class="card-h">О приложении</div>
+          <div class="data-stats">
+            <div class="ds-row"><span>📦 Версия</span><b id="aboutVer">—</b></div>
+            <div class="ds-row"><span>🗓 Сборка</span><b id="aboutDate">—</b></div>
+            <div class="ds-row"><span>📱 Устройство</span><b id="aboutDevice">—</b></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn sec" id="btnAboutVersion">История версий</button>
+            <button class="btn ghost" id="btnAboutDocs" style="width:auto">Документация</button>
+          </div>
+        </div>
+
+        <div class="card">
           <div style="font-size:12.5px; color:var(--mut); line-height:1.55">
             <b style="color:var(--ink)">Про аудио.</b> Скачайте MP3 с
             <a href="https://tts.wangwangit.com/" target="_blank" rel="noopener">tts.wangwangit.com</a>
@@ -1652,9 +1669,9 @@ let stats = { streak:0, lastDay:'', activity:{} };
 // Для остальных языков «Письмо» — печать на клавиатуре.
 const LANGS=[
   {code:'zh', name:'中文',      flag:'🇨🇳', rtl:false, has_strokes:true,  tts:'zh-CN'},
-  {code:'en', name:'English',  flag:'🇬🇧', rtl:false, has_strokes:false, tts:'en-US'},
-  {code:'tr', name:'Türkçe',   flag:'🇹🇷', rtl:false, has_strokes:false, tts:'tr-TR'},
-  {code:'ar', name:'العربية',  flag:'🇸🇦', rtl:true,  has_strokes:false, tts:'ar-SA'}
+  {code:'en', name:'English',  flag:'🇬🇧', rtl:false, has_strokes:false, tts:'en-US'}, // smoke: LANGS_EN
+  {code:'tr', name:'Türkçe',   flag:'🇹🇷', rtl:false, has_strokes:false, tts:'tr-TR'}, // smoke: LANGS_TR
+  {code:'ar', name:'العربية',  flag:'🇸🇦', rtl:true,  has_strokes:false, tts:'ar-SA'}  // smoke: LANGS_AR
 ];
 // Флаги — инлайн-SVG, а не эмодзи: на Windows региональные эмодзи-флаги (🇨🇳 и т.п.)
 // не рисуются (видно «CN» или пусто), SVG работает одинаково везде и офлайн.
@@ -1672,7 +1689,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.12.1';
+const APP_VERSION='1.12.2';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -1799,6 +1816,33 @@ function ensureAddedAt(it){
 // Эффективный момент добавления для сортировки (см. ensureAddedAt).
 function addedOrderTs(it){ return +it.addedAt||0; }
 function normBox(it){ let b=+it.box||1; return b<1?1:(b>5?5:b); }
+// ===== ТЕСТОВЫЙ ДОСТУП (только для smoke-test.mjs) =====
+// Открывается ТОЛЬКО при ?smoke=1, поэтому на GitHub Pages по обычной ссылке недоступен.
+// Даёт автоматическому тесту управлять состоянием без кликов по всему интерфейсу;
+// на работу приложения не влияет (просто объект в window).
+if(/[?&]smoke=1\b/.test(location.search)){
+  window.__SMOKE__={
+    appVersion:APP_VERSION,
+    // VERSIONS объявлен ниже по файлу (TDZ) — читаем его лениво, когда тест уже загружен.
+    get versions(){ try{ return VERSIONS.map(v=>v[0]); }catch(e){ return []; } },
+    get items(){ return items; },
+    get settings(){ return settings; },
+    get statsByLang(){ return statsByLang; },
+    get examSettings(){ return examSettings; },
+    get examSeq(){ return examSeq; },
+    get examIdx(){ return examIdx; },
+    get examCurrentIt(){ return examCurrentIt; },
+    get examTonePyState(){ return examTonePyState; },
+    get writeCurItem(){ return writeCurItem; },
+    get writeSeq(){ return writeSeq; },
+    get activeLang(){ return activeLang; },
+    setActiveLang(l){ return setLang(l); },
+    go, persist, normBox,
+    examPool, examModes, examBuildSeq, requeueExam, toneQuestion, toneWordOk, writableItems,
+    renderExamTonePy, examTonePyPick, startExam, examFinish, writeNextTyping, startWrite,
+    closeAllModals
+  };
+}
 function isNewWord(it){ return !it.newDone; }            // «новое» = ещё не набрало 4 верных ответа
 function isLearned(it){ return normBox(it)>=5; }         // коробка 5 — выучено
 function markShown(it){ SHOW_N++; it.lastShowN=SHOW_N; it.lastSeen=now(); recordSeen(it); }
@@ -2035,14 +2079,14 @@ function assignStableId(it){
 // Сигнатуры settings/stats для LWW. Исключаем updated_at (сама метка) и sessN
 // (локальный счётчик сессий — меняется при каждом входе в режим, но это не пользовательская настройка).
 function settingsSig(s){ const o={}; for(const k in s){ if(k==='updated_at'||k==='sessN') continue; o[k]=s[k]; } return JSON.stringify(o); }
-function statsSig(s){ const o={}; for(const k in s){ if(k==='updated_at') continue; o[k]=s[k]; } return JSON.stringify(o); }
+function statsSig(s){ const o={}; for(const k in s){ if(k==='updated_at') continue; o[k]=s[k]; } return JSON.stringify(o); } // smoke: STATS_SIG
 let _sigSet=null;   // базовая сигнатура настроек, проставляется в boot()
 
 // Статистика разделена по языкам (Фаза 5): карта {lang → stats}. Переменная `stats`
 // — это статистика АКТИВНОГО языка (для совместимости со всем остальным кодом).
 const DB_STATS_ALL='stats-all';
 let statsByLang={};                // {code → {streak,lastDay,activity,words,...}}
-let _sigStatsMap={};               // сигнатуры каждой языковой статистики (для persist)
+let _sigStatsMap={};               // сигнатуры каждой языковой статистики (для persist) // smoke: SIG_STATS_MAP
 function statsFor(lang){
   if(!statsByLang[lang]){
     statsByLang[lang]={streak:0,lastDay:'',activity:{}};
@@ -2546,7 +2590,8 @@ function foreignTracks(it, opts, speeds, rateMap, labelMap, R){
   for(const sp of speeds){
     const r=rec(sp);
     // пустая ссылка (слёт blob: напр. после восстановления БД) — не ломаем плейлист
-    if(r && r.url) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
+    // только http/blob/data — пустые и недокачанные записи (path без url) не ломают плейлист
+    if(r && r.url && /^(blob:|data:|https?:)/.test(r.url)) out.push({kind:'file',url:r.url,reps:R,label:labelMap[sp]});
   }
   if(out.length) return out;
   const sv=foreignVoice();
@@ -2730,7 +2775,7 @@ async function hwCharData(ch){
     const ctrl=new AbortController();
     const timer=setTimeout(()=>ctrl.abort(), 4000);
     try{
-      const r=await fetch(u, {signal:ctrl.signal});
+      const r=await fetch(u, {signal:ctrl.signal}); // smoke: FETCH_CHAR_DATA
       if(!r.ok) return null;
       return await r.json();
     }catch(e){ return null; }
@@ -5584,10 +5629,16 @@ function renderTypeCardsHint(){
 }
 function writeNextTyping(){
   const btn=document.getElementById('writeNext'); // подсветим кнопку «Вперёд ▶», как в китайском режиме
-  const L=writeTypeSeq(); if(!L.length) return;
+  let L=writeTypeSeq(); if(!L.length) return;
   const i=L.findIndex(x=>x.id===writeCurItem.id);
-  let nx=i<0?L[0]:(i>=L.length-1?L[0]:L[i+1]);
-  if(i>=L.length-1){ rebuildWriteSeq(); }
+  let nx;
+  if(i>=L.length-1){
+    rebuildWriteSeq();
+    L=writeTypeSeq();
+    nx=L[0];
+  }else{
+    nx=i<0?L[0]:L[i+1];
+  }
   setWriteItemTyping(nx);
 }
 function renderWriteLabels(){
@@ -6100,12 +6151,9 @@ function startExam(){
   // Гейт и подсказку считаем по ГОТОВЫМ словам сессии (examPool), а не по всем словам с переводом:
   // выученные (коробка 5) и «не подошедшие по SRS-сроку» в экзамен не попадают, поэтому раньше
   // подсказка врала («Сейчас слов: 5. Добавьте ещё 0» при реально готовом 1 слове).
-  const have=examPool().length;
-  document.getElementById('examEmpty').classList.toggle('hidden', have>=4);
-  if(have<4){
+  updateExamEmpty();
+  if(examPool().length<4){
     document.getElementById('examBody').innerHTML='';
-    const need=Math.max(0,4-have);
-    document.getElementById('examEmptyCount').textContent='Сейчас слов: '+have+'. Добавьте ещё '+need+' — и можно начинать!';
     updateExamScore();
     return;
   }
@@ -6588,6 +6636,7 @@ function requeueExam(it){
   if(examSettings.choice) modes.push('choice');
   if(examSettings.tf) modes.push('tf');
   if(examSettings.tone && hasStrokes()) modes.push('tone');
+  if(examSettings.tonePyQ && hasStrokes()) modes.push('tonePy');
   if(examSettings.match) modes.push('match');
   if(examSettings.write && examWritePool().length) modes.push('write');
   if(!modes.length) return;
@@ -7310,6 +7359,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.12.2','22.11.26','Все кнопки скруглены (в т.ч. варианты ответов экзамена и «Тоны → Пиньинь» и буквы в письме). Исправлено «Вперёд ▶» в письме при случайном порядке и возврат слова в «Тоны → Пиньинь» при ошибке. Service worker больше не срывает установку из-за одного недоступного CDN. Добавлены автоматические smoke-тесты (node smoke-test.mjs). Кнопка «＋ Добавить слова» на пустом экзамене. Автоповтор синхронизации после сбоя сети (5→15→60 с). Исправлено «аудио то играет, то нет»: разблокировка звука первым касанием и пустые записи в плейлисте.'],
   ['1.12.1','21.11.26','Экран «Письмо»: исправлено падение английского режима после переключения с китайского (обращение к несуществующей переменной в startWrite).'],
   ['1.12.0','20.11.26','Мониторинг активности пользователей через Supabase Realtime: журнал входов, открытия приложения, рабочей активности и синхронизаций; админская сводка, лента событий, бейдж непрочитанных и базовая статистика за сегодня/7 дней. Добавлена защищённая таблица user_activity_events и RPC для административного просмотра.'],
   ['1.11.17','19.11.26','Молитвы: уроки «Арабский Мухаммадия» собраны в раскрывающийся список (шапка со счётчиком и кнопкой «Удалить все»). Кнопки «＋ Текст»/«＋ Аудио»/«Удалить» гаснут по состоянию базы (урок добавлен / аудио подключено / урока нет); у каждого урока показано число карточек. Синхронизация ускорена: карточки пушатся батчем, аудио выгружается параллельно. Экзамен «Тоны → Пиньинь» оформлен как «Выбор ответов» (крупное слово + карточки-варианты).'],
@@ -7570,7 +7620,7 @@ function switchMoreTab(tab){
   document.getElementById('moreTabSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   if(tab==='stats') renderMoreStats();
   else if(tab==='sync') renderSyncPanel();
-  else renderDataStats();
+  else { renderDataStats(); renderAboutCard(); }
 }
 // Читаемый размер в байтах: до 1 МБ — в КБ (точнее для текста слов), дальше — в МБ с 1 знаком.
 function fmtBytes(n){
@@ -7629,7 +7679,7 @@ function renderMoreStats(){
   renderStHist();
   renderStStreaks();
 }
-function renderTiles(){
+function renderTiles(){ // smoke: RENDER_TILES
   const list=langItems();
   const learned=list.filter(isLearned).length;
   const studying=list.filter(it=>!isLearned(it)).length;
@@ -7646,7 +7696,7 @@ function renderTiles(){
   document.getElementById('stStudying').textContent=studying;
 }
 // «Память (5 уровней)» — горизонтальные бары
-function renderMemoryBars(){
+function renderMemoryBars(){ // smoke: RENDER_MEMORY_BARS
   const el=document.getElementById('stBars'); if(!el) return;
   const labels=['Уровень 1 — новое','Уровень 2 — раз в 2 сессии','Уровень 3 — раз в 4 сессии','Уровень 4 — раз в 6 сессий','Уровень 5 — выучено'];
   const counts=[0,0,0,0,0];
@@ -8114,7 +8164,7 @@ function stTextW(s){ measCv.font=ETALON; return measCv.measureText(s).width; }
 function stAt(t){ const d=new Date(t); return {y:d.getFullYear(), m:d.getMonth(), d:d.getDate()}; }
 function stKey(y,m,d){ return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0'); }
 function stMs(y,m,d){ return new Date(y,m,d).getTime(); }
-const ST_TODAY=stAt(Date.now());
+const ST_TODAY=stAt(Date.now()); // smoke: ST_TODAY
 const MONTHS_NOM=['янв.','февр.','мар.','апр.','май','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
 const MO_NO=['янв.','февр.','мар.','апр.','мая','июн.','июл.','авг.','сент.','окт.','нояб.','дек.'];
 
@@ -8164,7 +8214,7 @@ function buildDropdown(el, periods, onChange, initialId){
 }
 
 // ---------- «Календарь» — хитмап, сегодня справа, лента смахивается ----------
-function renderStCalendar(){
+function renderStCalendar(){ // smoke: RENDER_ST_CALENDAR
   const el=document.getElementById('stCalWrap'); if(!el) return;
   const act=stats.activity||{};
   const S=16, GAP=2, STEP=S+GAP;
@@ -8273,7 +8323,7 @@ function ensureStatsDropdowns(){
   buildDropdown(document.getElementById('stHistSeg'), HIST_PERIODS, function(id){ stHistCur=id; renderStHist(); }, stHistCur);
 }
 
-function wordsBuckets(id, N){
+function wordsBuckets(id, N){ // smoke: WORDS_BUCKETS
   const words=stats.words||{};
   const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
   const starts=[]; let s=stBucketStart(id, t0);
@@ -8301,7 +8351,7 @@ function wordsFitN(id){
   n=Math.max(2, Math.min(10, n, spanN));
   return n;
 }
-function renderStWords(){
+function renderStWords(){ // smoke: RENDER_ST_WORDS
   const wrapEl=document.getElementById('stWordsChart'); if(!wrapEl) return;
   const cur=stWordsCur, isDay=(cur==='d');
   const PW=estimateMonthWidth(), PH=190;
@@ -8450,7 +8500,7 @@ function attachWordsHover(wrapEl, D, cur, xs, ys, PWv, PH){
 }
 
 // ---------- «История» — столбики, справа налево (uHabits History) ----------
-function histBuckets(id, N){
+function histBuckets(id, N){ // smoke: HIST_BUCKETS
   const act=stats.activity||{};
   const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
   const starts=[]; let s=stBucketStart(id, t0);
@@ -8479,7 +8529,7 @@ function histFitN(id){
   const n=Math.floor((plotW-maxW)/(maxW+16))+1;
   return Math.max(2, Math.min(10, n, spanN));
 }
-function renderStHist(){
+function renderStHist(){ // smoke: RENDER_ST_HIST
   const wrapEl=document.getElementById('stHistChart'); if(!wrapEl) return;
   const cur=stHistCur;
   const PW=estimateMonthWidth(), PH=190;
@@ -8581,7 +8631,7 @@ function pluralRu(n, one, few, many){
   if(d>=2&&d<=4&&(h<10||h>=20)) return few;
   return many;
 }
-function renderStStreaks(){
+function renderStStreaks(){ // smoke: RENDER_ST_STREAKS
   const listEl=document.getElementById('stStreakList'); if(!listEl) return;
   const act=stats.activity||{};
   const t0=stMs(ST_TODAY.y, ST_TODAY.m, ST_TODAY.d);
@@ -9711,6 +9761,15 @@ async function wipeAll(){
 async function refreshAll(){
   renderDict(); renderMore(); updateChips(); renderVersion(); refreshModeFilterBadges();
   renderToolbar();
+  // Заглушка экзамена живёт вне экранов: после добавления/удаления слов обновляем её сразу,
+  // иначе «Сейчас слов: N» и сама заглушка остаются старыми до входа на экзамен.
+  // Не трогаем идущую сессию экзамена — только заглушку, пока заданий нет.
+  if(document.getElementById('examEmpty') && !examSeq.length) updateExamEmpty();
+}
+function updateExamEmpty(){
+  const have=examPool().length;
+  document.getElementById('examEmpty').classList.toggle('hidden', have>=4);
+  document.getElementById('examEmptyCount').textContent='Сейчас слов: '+have+'. Добавьте ещё '+Math.max(0,4-have)+' — и можно начинать!';
 }
 // Состав кнопок словаря зависит от языка: «Молитвы» — только в арабском,
 // «Список» — во всех языках кроме арабского (там он перенесён в карточку добавления слова).
@@ -9728,6 +9787,8 @@ document.getElementById('btnPrayers').onclick=openPrayersModal;
 document.getElementById('btnBatch').onclick=openBatch;
 document.getElementById('btnTrash').onclick=openTrash;
 document.getElementById('btnSync').onclick=doSync;
+// Заглушка экзамена: сразу открываем добавление слова, чтобы не искать «＋ Слово» в Словаре.
+document.getElementById('examEmptyAdd').onclick=()=>openItemModal(null);
 document.getElementById('dictSearch').oninput=renderDict;
 document.querySelectorAll('[data-dict-filter]').forEach(b=>{
   b.onclick=()=>{
@@ -9785,6 +9846,15 @@ document.getElementById('btnImport').onclick=()=>document.getElementById('fileIm
 document.getElementById('fileImport').onchange=e=>{ if(e.target.files[0]) doImportFile(e.target.files[0]); e.target.value=''; };
 document.getElementById('btnSample').onclick=sampleData;
 document.getElementById('btnWipe').onclick=wipeAll;
+// Карточка «О приложении»: версия, дата сборки и имя устройства (заполняется при открытии «Ещё»).
+function renderAboutCard(){
+  const v=document.getElementById('aboutVer'); if(!v) return;
+  v.textContent=APP_VERSION;
+  document.getElementById('aboutDate').textContent=versionDate();
+  document.getElementById('aboutDevice').textContent=deviceLabel()||'—';
+}
+document.getElementById('btnAboutVersion').onclick=openVersionModal;
+document.getElementById('btnAboutDocs').onclick=()=>window.open('https://github.com/refolit/Lang-trainer#readme','_blank','noopener');
 document.getElementById('btnClearTts').onclick=async ()=>{
   if(!confirm('Очистить кэш озвучки (синтезированный звук)? Офлайн-озвучка перекачается заново при следующем проигрывании. Слова и ваши mp3 не пострадают.')) return;
   await clearTtsCache();
@@ -9812,18 +9882,20 @@ function unlockAudio(){
   // блокируется политикой автовоспроизведения. Беззвучный (muted) пустой Audio внутри
   // первого касания снимает блокировку; на устройствах, где звук и так работает, — ничего не меняет.
   try{
+    // Пустой src (не «без src»): иначе Chrome отвергает play() и разблокировка не срабатывает.
     const a=new Audio(); a.muted=true; a.setAttribute('playsinline','');
+    a.src='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
     const p=a.play();
     if(p && p.then){ p.then(()=>{ a.pause(); }).catch(()=>{}); }
   }catch(e){}
   if(!('speechSynthesis' in window)) return;
+  // ВАЖНО: не cancel() сразу после speak() — в Chrome это обрывает саму разблокировку.
+  // Пустую utterance просто даём доиграть (её onend и снимает блокировку).
   try{
     const u=new SpeechSynthesisUtterance(' ');
     u.volume=0; u.rate=1;
     u.onend=u.onerror=()=>{};
-    speechSynthesis.cancel();
     speechSynthesis.speak(u);
-    // на случай, если событие не пришло — всё равно считаем разблокированным
     setTimeout(()=>{ try{ speechSynthesis.cancel(); }catch(e){} }, 800);
   }catch(e){}
 }
@@ -9866,6 +9938,11 @@ function stopAllAudio(){
 // Календарь activity и «дни» words склеиваются по датам (union), а не побеждают одной стороной.
 const SYNC_LANG='zh';                 // метка языка в кэше sync-meta (для совместимости старых записей)
 let syncBusy=false;                   // идёт синхронизация (блокирует повторный клик)
+// Автоповтор после сбоя сети: 5 с → 15 с → 60 с, не более 5 попыток подряд.
+const SYNC_RETRY_DELAYS=[5000,15000,60000,60000,60000];
+let syncRetryN=0;                     // номер следующей автопопытки (0 — нет запланированной)
+let syncRetryTimer=null;
+let syncRetryAt=0;                    // когда сработает автоповтор (epoch-мс)
 let lastSyncAt=0;                     // момент последней успешной синхронизации
 let _syncUser=null;                   // вошедший пользователь (обновляется в renderAuth)
 
@@ -9887,11 +9964,39 @@ function setSyncEnabled(incoming){
   b.disabled=!incoming; b.classList.remove('busy'); b.textContent='Синхронизировать';
 }
 function syncNetDown(){ return SB_OFFLINE || !sbReady(); }
+// --- автоповтор синхронизации после сетевого сбоя ---
+// Сброс только таймера (счётчик попыток сохраняется — его обнуляет syncRetryReset).
+function syncRetryClearTimer(){ if(syncRetryTimer){ clearTimeout(syncRetryTimer); syncRetryTimer=null; } syncRetryAt=0; }
+function syncRetryCancel(){ syncRetryClearTimer(); syncRetryN=0; }
+function syncRetrySchedule(){
+  syncRetryClearTimer();
+  if(syncRetryN>=SYNC_RETRY_DELAYS.length) return;
+  const delay=SYNC_RETRY_DELAYS[syncRetryN];
+  syncRetryAt=now()+delay;
+  syncRetryN++;
+  syncRetryTimer=setTimeout(()=>{
+    syncRetryTimer=null; syncRetryAt=0;
+    if(syncBusy || !_syncUser || syncNetDown()) return;   // сеть вернётся — refreshSyncUI перезапустит
+    doSync();
+  }, delay);
+}
+function syncRetryText(){
+  if(!syncRetryAt) return '';
+  return ' · повтор через '+Math.max(1,Math.ceil((syncRetryAt-now())/1000))+' с';
+}
+// Пока ждём автоповтор, раз в секунду обновляем обратный отсчёт в статусе.
+setInterval(()=>{ if(syncRetryAt && !syncBusy) syncStatus('Нет соединения — не синхронизировано'+syncRetryText(),'off'); },1000);
+// Браузер сообщил, что сеть вернулась — не ждём паузу, синхронизируем сразу.
+window.addEventListener('online',()=>{ if(_syncUser && !syncBusy && !syncNetDown()) refreshSyncUI(); });
 function refreshSyncUI(){
   if(!document.getElementById('btnSync')) return;
   if(SB_OFFLINE){ setSyncEnabled(false); syncStatus('Офлайн-версия — без облачной синхронизации','off'); return; }
-  if(!sbReady()){ setSyncEnabled(false); syncStatus('Нет соединения','off'); return; }
+  if(!sbReady()){ setSyncEnabled(false); syncStatus('Нет соединения'+syncRetryText(),'off'); return; }
   if(!_syncUser){ setSyncEnabled(false); syncStatus('Войдите, чтобы синхронизировать',''); return; }
+  // Сеть вернулась, а автоповтор ещё ждёт паузу — не ждём её, синхронизируем сразу.
+  // setTimeout(…,0): refreshSyncUI зовётся и из finally самого doSync, повторный вход в doSync
+  // из того же стека надо отложить, иначе выйдет рекурсия.
+  if(syncRetryTimer && !syncBusy){ syncRetryClearTimer(); setTimeout(()=>{ if(!syncBusy && _syncUser && !syncNetDown()) doSync(); },0); return; }
   setSyncEnabled(true);
   if(lastSyncAt){
     const n=dirtyCount();
@@ -10404,6 +10509,7 @@ function modalSyncConflicts(rows){
 }
 async function doSync(){
   if(syncBusy || syncNetDown()) return;
+  syncRetryCancel();   // ручной запуск отменяет запланированный автоповтор
   syncBusy=true; setSyncEnabled(false); syncStatus('Синхронизация…','spin');
   // Снапшот для отката: если сеть оборвётся на полпути, локальные данные не должны пострадать.
   const snap={items:items.slice(), settings:{...settings}, statsByLang:JSON.parse(JSON.stringify(statsByLang)), sigSet:_sigSet, sigStats:{..._sigStatsMap}};
@@ -10622,6 +10728,7 @@ async function doSync(){
     // одинаковые карточки (язык+слово) — дубли не осядут в IndexedDB.
     makeLocalUnique();
     await persist(); await refreshAll();
+    syncRetryCancel();   // успех — серия автоповторов закрыта
     lastSyncAt=now();
     await purgeExpiredTrash();   // автоочистка Корзины после успешного синка
     await saveMeta();
@@ -10648,7 +10755,11 @@ async function doSync(){
     const msg=String(e&&e.message||e);
     logActivityEvent('sync_error',{code:/fetch|network|Failed to fetch/i.test(msg)?'network':'sync_failed'});
     console.error('Синхронизация: ошибка:', e);
-    if(/fetch|network|Failed to fetch/i.test(msg)) syncStatus('Нет соединения — не синхронизировано','off');
+    if(/fetch|network|Failed to fetch/i.test(msg)){
+      // Сетевой сбой — пробуем сами ещё раз с нарастающей паузой, не заставляя жать кнопку.
+      syncRetrySchedule();
+      syncStatus('Нет соединения — не синхронизировано'+syncRetryText(),'off');
+    }
     else if(/войдите|Сначала/i.test(msg)) syncStatus('Войдите, чтобы синхронизировать','');
     else syncStatus('Ошибка синхронизации: '+(msg.slice(0,80)||'неизвестно'),'off');
   }finally{
@@ -11152,7 +11263,8 @@ async function boot(){
   refreshAll();
   initAuthState();
 }
-boot().catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
+window.__BOOT_DONE__=false;
+boot().then(()=>{ window.__BOOT_DONE__=true; }).catch(e=>{ console.error(e); toast('Ошибка запуска: '+e.message); });
 
 // PWA: service worker только на https/localhost (иначе — просто кэш браузера).
 // updateViaCache:'none' — браузер всегда берёт свежий sw.js, не кэшированный старый.

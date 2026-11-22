@@ -40,6 +40,22 @@ out = out.replace(
   /<script src="https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2"><\/script>/,
   '<script>window.__NO_SUPABASE__=true;</script>'
 );
+// Иконки-PNG вшиваем как data: URI — офлайн-файл остаётся одним самодостаточным HTML
+// (рядом с ним нет папки images/). Иначе manifest/favicon/apple-touch-icon давали бы 404.
+const ICONS = { 'images/icon-192.png': 'images/icon-192.png', 'images/icon-512.png': 'images/icon-512.png' };
+for (const f of Object.keys(ICONS)) {
+  ICONS[f] = 'data:image/png;base64,' + readFileSync(base + '/' + f).toString('base64');
+}
+// 1) manifest: иконки в JSON
+const mm = out.match(/href='(data:application\/manifest\+json,[^']*)'/);
+if (mm) {
+  const mj = JSON.parse(decodeURIComponent(mm[1].slice('data:application/manifest+json,'.length)));
+  for (const ic of (mj.icons || [])) if (ICONS[ic.src]) ic.src = ICONS[ic.src];
+  out = out.replace(mm[1], 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(mj)));
+}
+// 2) <link rel=icon / apple-touch-icon> в head
+for (const f of Object.keys(ICONS)) out = out.split('href="' + f + '"').join('href="' + ICONS[f] + '"');
+
 // Убираем фолбэки загрузки внешних библиотек
 out = out.replace(/\/\/ ============================== LIB FALLBACK ==============================[\s\S]*?\n}\n\);\n/, '');
 out = out.replace(/\/\/ ============================== LIB FALLBACK ==============================[\s\S]*?document\.head\.appendChild\(s\);\n}\n/, '');
