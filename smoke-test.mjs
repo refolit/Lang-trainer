@@ -345,21 +345,51 @@ async function main() {
     // ================= 4б. Чтение =================
     scenario('4б. Чтение текста');
     await page.eval(`__SMOKE__.go("scr-read")`); await sleep(300);
+    // после переработки 1.13.3 шестерёнки наверху больше нет — открываем настройки напрямую
+    const readBuilt = await page.eval(`(() => { try { renderRead(); bindReadScreen(); return true; } catch (e) { return String(e && e.message || e); } })()`);
+    check(readBuilt === true, 'Чтение: экран собирается без падения (renderRead)', String(readBuilt));
     const readRes = await page.eval(`(() => {
       const ta = document.getElementById('readInput');
       ta.value = '今天天气很好。我们去公园吧！';
       ta.dispatchEvent(new Event('input', { bubbles: true }));
       renderRead();
+      renderRead();           // второй проход — как при повторном открытии экрана
+      readSetPlaying(true);   // имитируем начатое чтение (кнопка «Пауза»)
+      readHighlightAt(0);     // первая фраза подсвечена
       const small = [...document.querySelectorAll('#readHighlight .read-w')].map(e => e.textContent);
+      const smallHasCur = !!document.querySelector('#readHighlight .read-w.cur');
       document.querySelector('#readModeBar button[data-read-mode="large"]').click();
-      const large = document.querySelector('#readLargeView').textContent.trim();
+      const largeView = document.getElementById('readLargeView');
+      const large = largeView.textContent.trim();
+      const largeSent = [...largeView.querySelectorAll('.read-w.sent')].map(e => e.textContent.trim());
+      const largeHasCur = !!largeView.querySelector('.read-w.cur');
+      const gearAtBottom = !!document.querySelector('#scr-read #readSettingsBtn');
+      const statusAtBottom = !!document.querySelector('#scr-read #readStatus');
       document.querySelector('#readModeBar button[data-read-mode="small"]').click();
+      const hasInfoBtn = !!document.getElementById('readInfoBtn');
       ta.value = ''; ta.dispatchEvent(new Event('input', { bubbles: true }));
-      return { small, large };
+      return { small, smallHasCur, large, largeSent, largeHasCur, gearAtBottom, statusAtBottom, hasInfoBtn };
     })()`);
     await sleep(700);
     check(readRes.small.length === 4, 'Чтение: китайский в режиме «Мелкий» делится на фразы до 4 иероглифов — ' + readRes.small.join('|'));
-    check(readRes.large.includes('今天天气很好'), 'Чтение: режим «Крупный» показывает предложение — ' + readRes.large);
+    check(readRes.smallHasCur, 'Чтение: в «Мелком» читаемая фраза подсвечена');
+    check(readRes.largeSent.length >= 2, 'Чтение: «Крупный» показывает весь текст по предложениям — ' + readRes.largeSent.join('|'));
+    check(readRes.large.includes('今天天气很好') && readRes.large.includes('我们去公园吧'), 'Чтение: «Крупный» содержит оба предложения — ' + readRes.large);
+    check(readRes.largeHasCur, 'Чтение: в «Крупном» текущее предложение подсвечено');
+    check(readRes.gearAtBottom && readRes.statusAtBottom, 'Чтение: шестерёнка и статус в нижней строке');
+    check(!readRes.hasInfoBtn, 'Чтение: кнопка «i» убрана');
+
+    // ================= 4в. Статистика: склейка календарей и серия =================
+    const stRes = await page.eval(`(() => {
+      const cal = __SMOKE__.mergeCalendars({ '2026-11-20': 3, '2026-11-21': 1 }, { '2026-11-21': 2, '2026-11-22': 5 });
+      const streak = __SMOKE__.statsStreak({ '2026-11-20': 1, '2026-11-21': 2, '2026-11-22': 1 }, '2026-11-22');
+      const gap = __SMOKE__.statsStreak({ '2026-11-19': 1, '2026-11-21': 1, '2026-11-22': 1 }, '2026-11-22');
+      return { cal, streak, gap };
+    })()`);
+    check(stRes.cal['2026-11-20'] === 3 && stRes.cal['2026-11-21'] === 2 && stRes.cal['2026-11-22'] === 5,
+      'Синк: календарь по дням склеивается максимумом — ' + JSON.stringify(stRes.cal));
+    check(stRes.streak === 3, 'Синк: серия считается по календарю — ' + stRes.streak);
+    check(stRes.gap === 2, 'Синк: серия обрывается на пропущенном дне — ' + stRes.gap);
 
     // ================= 5. Письмо =================
     scenario('5. Письмо и экзамен с карточками (zh/en/tr/ar)');

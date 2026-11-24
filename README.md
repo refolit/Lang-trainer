@@ -23,8 +23,8 @@ Each language has its own cards, tags and statistics; the language is switched i
 - **Learn (Изучение)** — flashcards with spaced repetition (Leitner boxes, intervals in days), direction "foreign → Russian" / "Russian → foreign" / mixed, adjustable card sizes, "browse" mode with audio, "Write this" button.
 - **Write (Письмо)** — Chinese: animated stroke order, trace or assemble from components; other languages: keyboard, letter-by-letter check or build from letters. Hints after mistakes, word order, audio.
 - **Exam (Экзамен)** — true/false, multiple choice, tones, "tones → pinyin", matching pairs, writing; results and a list of mistakes.
-- **Statistics** — totals, memory boxes, activity calendar, words/history charts, best streaks.
-- **Reading (Чтение)** — paste Chinese text and the app reads it aloud, highlighting what is being spoken right now inside the same field (phrases of up to 4 characters with the local voice, sentences with Google TTS). Two modes at the top: **Мелкий** — the whole text with phrase-by-phrase highlighting, tap a phrase to start from it; **Крупный** — one sentence at a time in large type with back / read / forward buttons. Voice (local / Google) and speed live behind the gear.
+- **Statistics** — totals, memory boxes, activity calendar, words/history charts, best streaks. When syncing, the per-day calendar is unioned (max per day) in both directions and the streak is recomputed from it, so days studied on another device are never lost and the streak reads the same everywhere.
+- **Reading (Чтение)** — paste Chinese text and the app reads it aloud, highlighting what is being spoken right now inside the same field (phrases of up to 4 characters with the local voice, sentences with Google TTS). Two modes at the top: **Мелкий** — the whole text in the input field with phrase-by-phrase highlighting (the highlight layer scrolls together with the field), tap a phrase to start from it; **Крупный** — the whole text in large type, sentence by sentence highlighting with auto-scrolling, back / read / forward buttons. Below them the status line with the gear (voice local / Google, speed 0.7×–1.3×).
 - **Prayers (Молитвы)** — ready-made Arabic sets (Du'a Qunut, Muhammadiya lessons 1–10) that can be added to the dictionary with audio.
 - **Audio** — Google TTS (regional voices, cached for offline), built-in speech synthesis as a fallback, own MP3 recordings per word.
 - **Design** — 8 themes (light, dark, sepia, blue, navy, forest, graphite, plum), two colour modes (5 semantic colours / multicolour), pill navigation, 3D buttons, RTL layout for Arabic.
@@ -83,7 +83,7 @@ node -e "const fs=require('fs');const h=fs.readFileSync('index.html','utf8');fs.
 To rebuild the offline single file (reads `APP_VERSION` from `index.html`):
 
 ```bash
-node build-offline.mjs "D:/! MyProjects/Github/Lang trainer/Lang trainer"
+node build-offline.mjs
 ```
 
 Then add `!hanzi-trainer-offline <version>.html` to `.gitignore` so the file is tracked.
@@ -104,7 +104,8 @@ What is checked:
 2. no uncaught exceptions, no `console.error`, no failed requests;
 3. all six screens open without errors;
 4. every visible button has a rounded corner (≥ 4px), including exam options and letter cubes;
-   the reading screen splits Chinese into phrases of up to 4 characters in "Мелкий" and shows one sentence in "Крупный";
+   the reading screen splits Chinese into phrases of up to 4 characters in "Мелкий" and into sentences in "Крупный";
+   the statistics merge unions the per-day calendar (max per day) and recomputes the streak from it;
 5. writing works for `zh`/`en`/`tr`/`ar` and "Вперёд ▶" does not get stuck at the end of the queue in random order;
 6. the exam builds all modes (`tf`, `choice`, `tone`, `tonePy`, `match`, `write`), a wrong "tones → pinyin" answer re-queues the word in the same mode, and every mode renders;
 7. at 375×812 no screen overflows horizontally.

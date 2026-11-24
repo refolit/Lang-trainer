@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const base = process.argv[2];
+// База — папка проекта. По умолчанию текущая, чтобы работало и `node build-offline.mjs`.
+const base = process.argv[2] || process.cwd();
 const src = readFileSync(base + '/index.html', 'utf8');
 
 const HANZI_WRITER = 'https://cdn.jsdelivr.net/npm/hanzi-writer@3.6/dist/hanzi-writer.min.js';
