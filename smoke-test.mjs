@@ -380,6 +380,17 @@ async function main() {
     check(readRes.gearAtBottom && readRes.statusAtBottom, 'Чтение: шестерёнка и статус в нижней строке');
     check(!readRes.hasInfoBtn, 'Чтение: кнопка «i» убрана');
 
+    const readSettingsRes = await page.eval(`(() => {
+      settings.readMode='sentence'; settings.readFontSize=1; renderRead(); openReadSettings();
+      const r=document.getElementById('readFontSizeRange');
+      const before={min:r&&r.min, max:r&&r.max, step:r&&r.step, value:r&&r.value, slider:r&&r.parentElement.className, label:document.getElementById('readFontSizeValue')&&document.getElementById('readFontSizeValue').textContent};
+      if(r){ r.value='150'; r.dispatchEvent(new Event('input',{bubbles:true})); }
+      const after={value:settings.readFontSize, css:document.getElementById('readLargeView').style.getPropertyValue('--read-font-size'), label:document.getElementById('readFontSizeValue')&&document.getElementById('readFontSizeValue').textContent};
+      closeModal('modalReadSettings'); return {before,after};
+    })()`);
+    check(readSettingsRes.before.min==='50' && readSettingsRes.before.max==='250' && readSettingsRes.before.step==='10', 'Чтение: размер иероглифов использует шкалу «Изучения» 50–250% / шаг 10', JSON.stringify(readSettingsRes.before));
+    check(readSettingsRes.before.slider==='sn-slider' && readSettingsRes.after.label==='150%' && readSettingsRes.after.value===1.5, 'Чтение: размер сохраняется как множитель и отображается в процентах', JSON.stringify(readSettingsRes.after));
+
     // ================= 4в. Статистика: склейка календарей и серия =================
     const stRes = await page.eval(`(() => {
       const cal = __SMOKE__.mergeCalendars({ '2026-11-20': 3, '2026-11-21': 1 }, { '2026-11-21': 2, '2026-11-22': 5 });
