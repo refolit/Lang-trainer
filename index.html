@@ -201,17 +201,17 @@ nav.tabs button .nm{white-space:nowrap; font-size:10.5px; letter-spacing:-.2px}
 .read-highlight .read-w.sent.cur{background:var(--amber)}
 /* «Крупный» и «Предложение» используют ту же центральную карточку. */
 .read-large{flex:1 1 auto; min-height:220px; overflow-y:auto; text-align:center; padding:24px 18px; font-family:var(--font-cjk); font-weight:700; font-size:calc(36px * var(--mul-h,1)); line-height:1.55; white-space:pre-wrap; word-break:break-word; color:var(--ink); background:transparent}
+.read-large.read-sentence{font-size:var(--read-font-size,48px)}
 .read-large.hidden{display:none}
 .read-large .read-w{display:inline; cursor:pointer; border-radius:10px; padding:2px 4px; transition:background .12s ease, color .12s ease}
 .read-large .read-w.cur{background:var(--amber); color:#3b2f00}
-.read-large.read-sentence{display:flex; align-items:center; justify-content:center; overflow:hidden; padding:24px 18px}
+.read-large.read-sentence{display:flex; align-items:center; justify-content:center; overflow:hidden; padding:24px 18px; font-size:var(--read-font-size,48px)}
 .read-large.read-sentence .read-text{width:100%; display:flex; align-items:center; justify-content:center; min-height:100%}
 .read-large.read-sentence .read-w.sent{display:block; max-width:100%}
 .read-empty{color:var(--mut); font-size:14px; text-align:center; padding:18px 0}
 .read-ctrl{display:flex; align-items:center; gap:10px; flex:0 0 auto; margin-top:10px}
-.read-ctrl .btn{flex:1 1 0; min-width:0; width:auto; padding:6px 8px; min-height:32px}
-.read-ctrl .btn.read-main{flex-grow:2; background:var(--amber); color:#3b2f00; box-shadow:0 4px 0 #d6930b, 0 6px 14px rgba(249,168,37,.22)}
-.read-ctrl .btn.read-main.playing{background:var(--red); color:#fff; box-shadow:0 4px 0 var(--red-d), 0 6px 14px rgba(198,40,40,.22)}
+.read-ctrl .btn{flex:1 1 0; min-width:0; width:0; box-sizing:border-box; overflow:hidden; white-space:nowrap; padding:6px 8px; min-height:38px}
+.read-ctrl .btn.read-main{background:var(--amber); color:#3b2f00; box-shadow:0 4px 0 #d6930b, 0 6px 14px rgba(249,168,37,.22)}
 .read-ctrl .btn.dim{opacity:.45}
 .read-status-row{display:flex; align-items:center; gap:8px; margin:7px 0 5px; padding:0; min-height:34px; flex:0 0 auto}
 .read-status-row .chip{flex:0 0 auto; font-size:11px; padding:3px 9px}
@@ -1417,15 +1417,12 @@ html[data-color="standard"] .sn-slider input[type=range]{
       <div class="read-status-row">
         <span class="chip" id="readProgress">0 / 0</span>
         <span class="stline" id="readStatus"></span>
-        <span class="speaker" id="readSpeed"></span>
         <button type="button" class="study-speak" id="readSpeakBtn" title="Аудио на этой странице" aria-label="Аудио на этой странице"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
         <button type="button" class="study-gear light" id="readSettingsBtn" title="Настройки чтения" aria-label="Настройки чтения"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
       </div>
     </div>
   </section>
 
-  <!-- НАСТРОЙКИ ЧТЕНИЯ -->
-  <div class="modal hidden" id="modalReadSettings"></div>
 
   <!-- ЕЩЁ / НАСТРОЙКИ + СТАТИСТИКА -->
   <section class="screen" id="scr-more">
@@ -1743,7 +1740,7 @@ let settings = {
   cubeLayout:'film',                                                     // режим кубиков (en): film|fanfare
   dir:'fr', foreignAudio:true, foreignVoice:'', ruAudio:true, ruVoice:'',
   examAudio:true,                                                         // независимый тумблер озвучки Экзамена (значок динамика)
-  readText:'', readMode:'small', readVoice:'local', readRate:1                // «Чтение»: китайский текст, режим, голос, скорость
+  readText:'', readMode:'small', readVoice:'local', readRate:1, readFontSize:48 // «Чтение»: китайский текст, режим, голос, скорость, размер предложения
 };
 let stats = { streak:0, lastDay:'', activity:{} };
 // Активный язык (Фаза 5): справочник языков; у каждого — свои карточки и статистика.
@@ -1771,7 +1768,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.13.3';
+const APP_VERSION='1.13.4';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2872,7 +2869,7 @@ function readHighlight(i){
     }
   }catch(e){}
 }
-function readSetStatus(txt){ if(readEls.status) readEls.status.textContent=txt||''; }
+function readSetStatus(txt){ if(readEls.status) readEls.status.textContent=''; }
 function readSetProgress(index,total){
   if(readEls.progress) readEls.progress.textContent=(total?Math.max(0,index+1):0)+' / '+(total||0);
 }
@@ -2880,7 +2877,7 @@ function readSetPlaying(on){
   readPlayState=!!on;
   if(readEls.play){
     readEls.play.innerHTML = on ? '⏸ Пауза' : '▶ Читать';
-    readEls.play.classList.toggle('playing',!!on);
+    readEls.play.classList.remove('playing');
   }
   if(readEls.speak) readEls.speak.classList.toggle('on',!!on);
 }
@@ -3013,21 +3010,23 @@ async function readStartSentence(){
   const gen=++readGen, run={gen,stopped:false,spoke:false};
   readRun=run; readEls.readPos=cur.sentence.from;
   readSetPlaying(true); readRenderMode();
-  readSetStatus('Повторяю предложение с паузой 1 сек…');
+  readSetStatus('');
   const stale=()=>run.stopped || gen!==readGen;
   while(!stale()){
     await readPlaySentenceOnce(text,tag,rate,stale);
     if(stale()) break;
     await new Promise(resolve=>setTimeout(resolve,1000));
   }
-  if(gen===readGen){ readRun=null; readSetPlaying(false); readSetStatus('Остановлено.'); }
+  if(gen===readGen){ readRun=null; readSetPlaying(false); readSetStatus(''); }
 }
 function openReadSettings(){ closeAllModals(); const m=document.getElementById('modalReadSettings'); if(m){m.classList.remove('hidden'); renderReadSettings();} }
 function renderReadSettings(){
   const m=document.getElementById('modalReadSettings'); if(!m||m.classList.contains('hidden')) return;
-  m.innerHTML='<div class="sheet"><div class="row"><h2>Настройки чтения</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal(\'modalReadSettings\')">✕</button></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Голос</div><div class="seg" id="readVoiceSeg"><button data-v="local">Локальный</button><button data-v="google">Google</button></div></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Скорость</div><div class="seg" id="readRateSeg"><button data-v="0.7">0.7×</button><button data-v="0.85">0.85×</button><button data-v="1">1×</button><button data-v="1.15">1.15×</button><button data-v="1.3">1.3×</button></div></div></div>';
+  const fs=Math.max(32,Math.min(96,+settings.readFontSize||48)); settings.readFontSize=fs;
+  m.innerHTML='<div class="sheet"><div class="row"><h2>Настройки чтения</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal(\'modalReadSettings\')">✕</button></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Голос</div><div class="seg" id="readVoiceSeg"><button data-v="local">Локальный</button><button data-v="google">Google</button></div></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Скорость</div><div class="seg" id="readRateSeg"><button data-v="0.7">0.7×</button><button data-v="0.85">0.85×</button><button data-v="1">1×</button><button data-v="1.15">1.15×</button><button data-v="1.3">1.3×</button></div></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Размер шрифта иероглифов</div><input id="readFontSizeRange" type="range" min="32" max="96" step="2" value="'+fs+'"></div></div>';
   m.querySelectorAll('#readVoiceSeg button').forEach(b=>{b.classList.toggle('active',b.dataset.v===(settings.readVoice||'local'));b.onclick=()=>{settings.readVoice=b.dataset.v;persist();renderReadSettings();renderRead();};});
   m.querySelectorAll('#readRateSeg button').forEach(b=>{b.classList.toggle('active',Math.abs(+b.dataset.v-(settings.readRate||1))<.001);b.onclick=()=>{settings.readRate=+b.dataset.v||1;persist();renderReadSettings();};});
+  const range=m.querySelector('#readFontSizeRange'); if(range) range.oninput=()=>{settings.readFontSize=+range.value||48;persist();if(readEls.large) readEls.large.style.setProperty('--read-font-size',settings.readFontSize+'px');};
 }
 // Записать текст из поля в настройки (с отложенной записью: не дёргаем IndexedDB на каждую букву).
 let readSaveTmo=null;
@@ -3047,11 +3046,11 @@ function renderRead(){
   readEls.input=readEls.input||document.getElementById('readInput');
   readEls.view=readEls.view||document.getElementById('readHighlight');
   readEls.large=readEls.large||document.getElementById('readLargeView');
+  if(readEls.large) readEls.large.style.setProperty('--read-font-size',(+settings.readFontSize||48)+'px');
   readEls.editor=readEls.editor||document.getElementById('readEditor');
   readEls.play=readEls.play||document.getElementById('readPlayBtn');
   readEls.status=readEls.status||document.getElementById('readStatus');
   readEls.progress=readEls.progress||document.getElementById('readProgress');
-  readEls.speed=readEls.speed||document.getElementById('readSpeed');
   readEls.speak=readEls.speak||document.getElementById('readSpeakBtn');
   readEls.mode=readEls.mode||document.getElementById('readModeBar');
   readEls.settings=readEls.settings||document.getElementById('readSettingsBtn');
@@ -3059,7 +3058,6 @@ function renderRead(){
   readEls.next=readEls.next||document.getElementById('readNextBtn');
   readEls.largeIndex=readEls.largeIndex||0;
   readSetProgress(0,0);
-  if(readEls.speed) readEls.speed.innerHTML='<span class="speed">'+((+settings.readRate||1).toFixed(2).replace(/0+$/,'').replace(/\.$/,'')+'×')+'</span>';
   // Поле заполняем из настроек только если в нём ещё ничего нет или оно не в фокусе
   // и текст не правился вручную (иначе правка «прыгала» бы назад к сохранённому).
   if(document.activeElement!==readEls.input && !readEls.input.value) readEls.input.value=settings.readText||'';
@@ -3120,7 +3118,7 @@ function readSpeakLocalOnce(text, voice, langTag, rate, onBoundary){
     setTimeout(goSpeak, 20);
     // Если речь так и не началась (движок не запустился / нет звукового устройства) —
     // не ждём полный таймаут на КАЖДОЕ слово, иначе чтение «замирает» после первого слова.
-    tmo=setTimeout(()=>{ if(!started) finish(); }, 1800+Math.min(1200, String(text).length*40));
+    tmo=setTimeout(finish, 5000+Math.min(5000, String(text).length*120));
   });
 }
 // Одна единица сетевым mp3 (Google → Youdao → Baidu). Возвращает true, если звук реально сыграл.
@@ -3142,7 +3140,7 @@ async function readStartLarge(pos){
   const run={gen, mode, units:mk.units, cur:-1, stopped:false, text, spoke:false};
   readRun=run;
   readSetPlaying(true);
-  readSetStatus(mode==='google' ? 'Читаю по предложениям (голос Google)…' : 'Читаю по предложениям (локальный голос)…');
+  readSetStatus('');
   const stale=()=>run.stopped || gen!==readGen;
   // Chrome «усыпляет» speechSynthesis после простоя — первая реплика теряется. Будим движок.
   if(mode==='local' && 'speechSynthesis' in window){
@@ -3158,10 +3156,10 @@ async function readStartLarge(pos){
         speechSynthesis.speak(w);
       }catch(e){ clearTimeout(tmo); done(); }
     });
-    if(stale()) return;
+    if(stale()) { readSetPlaying(false); return; }
     if(!run.woke){
       run.mode='google';
-      readSetStatus('Локальный голос не звучит — читаю голосом Google.');
+      readSetStatus('');
     }
   }
   let voice=null;
@@ -3169,13 +3167,13 @@ async function readStartLarge(pos){
     voice = findLocalVoice(tag) || (('speechSynthesis' in window) ? (speechSynthesis.getVoices()[0]||null) : null);
     if(!voice){
       run.mode='google';
-      readSetStatus('Локального голоса нет — читаю голосом Google.');
+      readSetStatus('');
     }
   }
   const units=run.units;
   let i=Math.max(0, units.findIndex(u=>readEls.readPos>=u.from && readEls.readPos<u.to));
   if(i<0) i=0;
-  if(i>=units.length) return;
+  if(i>=units.length){ readRun=null; readSetPlaying(false); return; }
   for(; i<units.length; i++){
     if(stale()) break;
     const u=units[i];
@@ -3187,18 +3185,17 @@ async function readStartLarge(pos){
       await readSpeakLocalOnce(u.text, voice, tag, rate, null);
       if(i<2 && !stale() && !readVoiceAlive()){
         run.mode='google';
-        readSetStatus('Локальный голос не звучит — перехожу на голос Google.');
+        readSetStatus('');
       }
     }else{
       const ok=await readPlayRemoteOnce(u.text, tag, rate, stale);
       if(!ok && !stale()) await speakLocalFallback(u.text, rate, tag);
     }
-    if(last && !stale()) readEls.large.scrollTop=readEls.large.scrollHeight;
   }
   if(gen===readGen && !run.stopped){
     readRun=null;
     readSetPlaying(false);
-    readSetStatus('Готово.');
+    readSetStatus('');
     readClearHighlight();
   }
 }
@@ -3240,7 +3237,7 @@ async function readStart(startUnit){
   readRun=run;
   readSavedText=text;
   readSetPlaying(true);
-  readSetStatus(mode==='google' ? 'Читаю по предложениям (голос Google)…' : 'Читаю по словам (локальный голос)…');
+  readSetStatus('');
   const stale=()=>run.stopped || gen!==readGen;
   // Chrome «усыпляет» speechSynthesis, если страница давно не получала ввода: первый speak()
   // тогда молча теряется (onstart не приходит). Будим движок пустой репликой: если он жив,
@@ -3259,12 +3256,12 @@ async function readStart(startUnit){
         speechSynthesis.speak(w);
       }catch(e){ clearTimeout(tmo); done(); }
     });
-    if(stale()) return;
+    if(stale()) { readSetPlaying(false); return; }
     // движок не отозвался на «побудку» — локальный голос на этом устройстве не звучит:
     // сразу честно переходим на сетевой mp3, а не читаем в тишину
     if(!run.woke){
       run.mode='google';
-      readSetStatus('Локальный голос не звучит — читаю голосом Google (по предложениям).');
+      readSetStatus('');
       readShowMarkup(text, 'google');
       run.units=readBuildMarkup(text, 'google').units;
     }
@@ -3276,7 +3273,7 @@ async function readStart(startUnit){
     if(!voice){
       // локального голоса на устройстве нет — честно переключаемся на сетевой mp3
       run.mode='google';
-      readSetStatus('Локального голоса нет — читаю голосом Google (по предложениям).');
+      readSetStatus('');
       readShowMarkup(text, 'google');
       run.units=readBuildMarkup(text, 'google').units;
     }
@@ -3297,7 +3294,7 @@ async function readStart(startUnit){
       // Только на первых словах: если движок «оживает» с задержкой, не рвём чтение посреди текста.
       if(i-from<2 && !stale() && !readVoiceAlive()){
         run.mode='google';
-        readSetStatus('Локальный голос не звучит — перехожу на голос Google (по предложениям).');
+        readSetStatus('');
         readShowMarkup(text, 'google');
         run.units=readBuildMarkup(text, 'google').units;
         i=0;
@@ -3314,7 +3311,7 @@ async function readStart(startUnit){
     readRun=null;
     readSavedText=null;
     readSetPlaying(false);
-    readSetStatus(i>=units.length ? 'Готово.' : 'Остановились на этом месте — нажмите «Читать», чтобы продолжить с начала.');
+    readSetStatus('');
     readClearHighlight();
   }
 }
@@ -8117,6 +8114,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.13.4','25.11.26','Чтение: кнопки выровнены, статус упрощён, добавлена настройка размера иероглифов в режиме «Предложение», исправлен возврат кнопки аудио в состояние «Читать» после завершения воспроизведения.'],
   ['1.13.3','24.11.26','Чтение: экран приведён к схеме «Изучения». Сверху «Мелкий» / «Крупный», снизу «Назад / Читать / Вперёд» и строка «статус — шестерёнка» над главным меню. «Крупный» показывает весь текст крупно с подсветкой по предложениям и автопрокруткой; в «Мелком» исправлена прокрутка и виден курсор. Убрана кнопка «i»; убраны наложения звука при повторных нажатиях «Читать». Статистика по дням и серия при синхронизации склеиваются между устройствами.'],
   ['1.13.2','22.11.26','Чтение: переработан экран. Сверху две кнопки «Мелкий» / «Крупный»: «Мелкий» — прежнее чтение китайского фразами до 4 иероглифов с подсветкой; «Крупный» — одно предложение крупным текстом по центру с кнопками «Назад / Читать / Вперёд». Ввод и подсветка объединены в одном поле, рамка при вводе не утолщается. Голос «Локальный / Google» и скорость перенесены в настройки по шестерёнке; убраны вводный текст, выбор языка и подсказка про фразы.'],
   ['1.13.1','22.11.26','Чтение: исправлено падение экрана после переделки (обращение к удалённым элементам), подсветка крупного режима, общий ввод текста для обоих режимов.'],

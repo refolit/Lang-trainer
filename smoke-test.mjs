@@ -275,6 +275,7 @@ async function main() {
     const swVer = (swSrc.match(/const VERSION\s*=\s*'([^']+)'/) || [])[1];
     check(ver.app === swVer, 'APP_VERSION = VERSION в sw.js', `${ver.app} / ${swVer}`);
     check(ver.first === ver.app, 'первая запись VERSIONS = APP_VERSION', `${ver.first} / ${ver.app}`);
+    check(ver.app === '1.13.4', 'версия релиза 1.13.4', ver.app);
     check(await page.eval('!!window.pinyinPro'), 'pinyin-pro загружен');
     check(await page.eval('!!window.HanziWriter'), 'hanzi-writer загружен');
     // Манифест и иконки установки: JSON валиден, PNG реально отдаются
