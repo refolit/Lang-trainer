@@ -180,41 +180,44 @@ nav.tabs button.active{color:var(--red); background:#fbecec; font-weight:700}
 /* Шесть вкладок: чуть плотнее (иначе подписи «Изучение»/«Экзамен» переносятся на телефоне) */
 nav.tabs button{padding-left:2px; padding-right:2px}
 nav.tabs button .nm{white-space:nowrap; font-size:10.5px; letter-spacing:-.2px}
-/* «Чтение»: одно спокойное поле — ввод и подсветка находятся в одном окне.
-   Экран устроен как «Изучение»: сверху режимы и текст, снизу «Назад / Читать / Вперёд»,
-   под ними строка «статус … шестерёнка», прижатая к нижнему меню. */
+/* «Чтение» визуально следует каркасу «Изучения»: режимы сверху, центральная
+   карточка, три транспортные кнопки и компактная строка состояния снизу. */
 #scr-read{padding-bottom:0; display:none; flex-direction:column}
 #scr-read.active{display:flex}
-#scr-read .read-wrap{flex:1 1 auto; display:flex; flex-direction:column; min-height:0; padding-bottom:0}
-.read-mode{display:flex; align-items:center; gap:6px; justify-content:center; flex-wrap:nowrap; margin-bottom:10px; flex:0 0 auto}
-.read-mode button{font-size:13px; padding:7px 16px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--mut); cursor:pointer}
-.read-mode button.on{background:var(--red); border-color:var(--red); color:#fff}
-.read-textarea{flex:1 1 auto; min-height:0; display:flex; flex-direction:column}
-.read-editor{position:relative; flex:1 1 auto; min-height:220px; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--card)}
+#scr-read .read-wrap{width:100%; max-width:620px; height:100%; margin:0 auto; display:flex; flex-direction:column; min-height:0; padding-bottom:0}
+.read-mode{display:flex; align-items:center; gap:6px; justify-content:center; flex-wrap:nowrap; margin:0 0 8px; flex:0 0 auto}
+.read-mode button{font-size:13px; padding:6px 14px; min-height:32px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--mut); cursor:pointer; box-shadow:0 2px 7px rgba(30,28,26,.06)}
+.read-mode button.on{background:var(--red); border-color:var(--red); color:#fff; box-shadow:0 3px 0 var(--red-d), 0 5px 10px rgba(198,40,40,.16)}
+.read-textarea{flex:1 1 auto; min-height:0; display:flex; flex-direction:column; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--card); box-shadow:var(--shadow-sm)}
+.read-editor{position:relative; flex:1 1 auto; min-height:220px; overflow:hidden; background:transparent}
 .read-editor:focus-within{border-color:var(--red)}
 .read-editor.hidden{display:none}
-.read-editor textarea,.read-highlight{position:absolute; inset:0; width:100%; min-height:220px; box-sizing:border-box; padding:14px; margin:0; border:0!important; outline:0!important; resize:none; font:18px/1.9 var(--font); white-space:pre-wrap; word-break:break-word; overflow:auto}
+.read-editor textarea,.read-highlight{position:absolute; inset:0; width:100%; min-height:220px; box-sizing:border-box; padding:18px 16px; margin:0; border:0!important; outline:0!important; resize:none; font:18px/1.9 var(--font); white-space:pre-wrap; word-break:break-word; overflow:auto}
 .read-editor textarea{z-index:2; color:transparent; caret-color:var(--ink); background:transparent; -webkit-text-fill-color:transparent}
 .read-highlight{z-index:1; color:var(--ink); pointer-events:none}
 .read-highlight .read-w{cursor:pointer; border-radius:6px; padding:1px 2px; margin:0 -2px; transition:background .12s ease, color .12s ease}
 .read-highlight .read-w.cur{background:var(--amber); color:#3b2f00; font-weight:700; box-shadow:0 0 0 2px var(--amber)}
 .read-highlight .read-w.sent{background:rgba(249,168,37,.22)}
 .read-highlight .read-w.sent.cur{background:var(--amber)}
-/* «Крупный»: весь текст крупно, как карточка «Изучения», читаемое предложение подсвечено */
-.read-large{flex:1 1 auto; min-height:220px; overflow-y:auto; text-align:center; padding:18px 14px; font-family:var(--font-cjk); font-weight:700; font-size:calc(36px * var(--mul-h,1)); line-height:1.55; white-space:pre-wrap; word-break:break-word; color:var(--ink)}
+/* «Крупный» и «Предложение» используют ту же центральную карточку. */
+.read-large{flex:1 1 auto; min-height:220px; overflow-y:auto; text-align:center; padding:24px 18px; font-family:var(--font-cjk); font-weight:700; font-size:calc(36px * var(--mul-h,1)); line-height:1.55; white-space:pre-wrap; word-break:break-word; color:var(--ink); background:transparent}
 .read-large.hidden{display:none}
 .read-large .read-w{display:inline; cursor:pointer; border-radius:10px; padding:2px 4px; transition:background .12s ease, color .12s ease}
 .read-large .read-w.cur{background:var(--amber); color:#3b2f00}
-.read-large.read-sentence{display:flex; align-items:center; justify-content:center; overflow:hidden; padding:18px 14px}
-.read-large.read-sentence .read-text{width:100%; display:flex; align-items:center; justify-content:center; min-height:100%;}
-.read-large.read-sentence .read-w.sent{display:block; max-width:100%;}
+.read-large.read-sentence{display:flex; align-items:center; justify-content:center; overflow:hidden; padding:24px 18px}
+.read-large.read-sentence .read-text{width:100%; display:flex; align-items:center; justify-content:center; min-height:100%}
+.read-large.read-sentence .read-w.sent{display:block; max-width:100%}
 .read-empty{color:var(--mut); font-size:14px; text-align:center; padding:18px 0}
 .read-ctrl{display:flex; align-items:center; gap:10px; flex:0 0 auto; margin-top:10px}
-.read-ctrl .btn{width:auto; flex:0 0 auto; padding:9px 14px; min-height:38px}
-.read-ctrl .btn.read-main{flex:1 1 auto}
+.read-ctrl .btn{flex:1 1 0; min-width:0; width:auto; padding:6px 8px; min-height:32px}
+.read-ctrl .btn.read-main{flex-grow:2; background:var(--amber); color:#3b2f00; box-shadow:0 4px 0 #d6930b, 0 6px 14px rgba(249,168,37,.22)}
+.read-ctrl .btn.read-main.playing{background:var(--red); color:#fff; box-shadow:0 4px 0 var(--red-d), 0 6px 14px rgba(198,40,40,.22)}
 .read-ctrl .btn.dim{opacity:.45}
 .read-status-row{display:flex; align-items:center; gap:8px; margin:7px 0 5px; padding:0; min-height:34px; flex:0 0 auto}
+.read-status-row .chip{flex:0 0 auto; font-size:11px; padding:3px 9px}
 .read-status-row .stline{flex:1 1 auto; text-align:left; font-size:12px; color:var(--mut); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.read-status-row .speaker{flex:0 0 auto}
+.read-status-row .study-speak{flex:0 0 auto}
 .read-status-row .study-gear.light{flex:0 0 auto}
 
 /* Cards & lists */
@@ -1412,7 +1415,10 @@ html[data-color="standard"] .sn-slider input[type=range]{
         <button class="btn sec" id="readNextBtn">Вперёд ▶</button>
       </div>
       <div class="read-status-row">
+        <span class="chip" id="readProgress">0 / 0</span>
         <span class="stline" id="readStatus"></span>
+        <span class="speaker" id="readSpeed"></span>
+        <button type="button" class="study-speak" id="readSpeakBtn" title="Аудио на этой странице" aria-label="Аудио на этой странице"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/></svg></button>
         <button type="button" class="study-gear light" id="readSettingsBtn" title="Настройки чтения" aria-label="Настройки чтения"><svg viewBox="0 -960 960 960" aria-hidden="true"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Z"/></svg></button>
       </div>
     </div>
@@ -2835,13 +2841,14 @@ function readBuildMarkup(text, mode){
   return {html, units};
 }
 function readActiveView(){
-  return readMode()==='large' ? readEls.large : readEls.view;
+  return (readMode()==='large'||readMode()==='sentence') ? readEls.large : readEls.view;
 }
 function readClearHighlight(){
   [readEls.view,readEls.large].filter(Boolean).forEach(v=>v.querySelectorAll('.read-w.cur').forEach(el=>el.classList.remove('cur')));
 }
 function readHighlight(i){
   const v=readActiveView();
+  if(readMode()==='large'||readMode()==='sentence') readSetProgress(i, readLargeSentences(readCurrentText().slice(0,READ_MAX_CHARS)).length);
   if(!v) return;
   readClearHighlight();
   if(i==null || i<0) return;
@@ -2866,11 +2873,16 @@ function readHighlight(i){
   }catch(e){}
 }
 function readSetStatus(txt){ if(readEls.status) readEls.status.textContent=txt||''; }
-let readPlayState=false;
+function readSetProgress(index,total){
+  if(readEls.progress) readEls.progress.textContent=(total?Math.max(0,index+1):0)+' / '+(total||0);
+}
 function readSetPlaying(on){
   readPlayState=!!on;
-  if(!readEls.play) return;
-  readEls.play.innerHTML = on ? '⏸ Пауза' : '▶ Читать';
+  if(readEls.play){
+    readEls.play.innerHTML = on ? '⏸ Пауза' : '▶ Читать';
+    readEls.play.classList.toggle('playing',!!on);
+  }
+  if(readEls.speak) readEls.speak.classList.toggle('on',!!on);
 }
 // Текущий текст: если поле на экране и пользователь его правил — берём из поля.
 function readCurrentText(){
@@ -2922,6 +2934,8 @@ function readCenterCurrent(smooth){
 }
 function readRenderMode(){
   const mode=readMode(), text=readCurrentText().slice(0,READ_MAX_CHARS);
+  const sentences=readLargeSentences(text);
+  readSetProgress(mode==='small'?0:(readEls.largeIndex||0), mode==='small'?0:sentences.length);
   readEls.mode?.querySelectorAll('[data-read-mode]').forEach(b=>b.classList.toggle('on',b.dataset.readMode===mode));
   if(readEls.editor) readEls.editor.classList.toggle('hidden',mode!=='small');
   if(readEls.large) {
@@ -3036,11 +3050,16 @@ function renderRead(){
   readEls.editor=readEls.editor||document.getElementById('readEditor');
   readEls.play=readEls.play||document.getElementById('readPlayBtn');
   readEls.status=readEls.status||document.getElementById('readStatus');
+  readEls.progress=readEls.progress||document.getElementById('readProgress');
+  readEls.speed=readEls.speed||document.getElementById('readSpeed');
+  readEls.speak=readEls.speak||document.getElementById('readSpeakBtn');
   readEls.mode=readEls.mode||document.getElementById('readModeBar');
   readEls.settings=readEls.settings||document.getElementById('readSettingsBtn');
   readEls.prev=readEls.prev||document.getElementById('readPrevBtn');
   readEls.next=readEls.next||document.getElementById('readNextBtn');
   readEls.largeIndex=readEls.largeIndex||0;
+  readSetProgress(0,0);
+  if(readEls.speed) readEls.speed.innerHTML='<span class="speed">'+((+settings.readRate||1).toFixed(2).replace(/0+$/,'').replace(/\.$/,'')+'×')+'</span>';
   // Поле заполняем из настроек только если в нём ещё ничего нет или оно не в фокусе
   // и текст не правился вручную (иначе правка «прыгала» бы назад к сохранённому).
   if(document.activeElement!==readEls.input && !readEls.input.value) readEls.input.value=settings.readText||'';
@@ -3161,6 +3180,7 @@ async function readStartLarge(pos){
     if(stale()) break;
     const u=units[i];
     readEls.readPos=u.from;
+    readEls.largeIndex=i;
     readHighlight(i);
     readCenterCurrent(true);
     if(run.mode==='local'){
