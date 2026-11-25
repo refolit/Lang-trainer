@@ -205,6 +205,9 @@ nav.tabs button .nm{white-space:nowrap; font-size:10.5px; letter-spacing:-.2px}
 .read-large.hidden{display:none}
 .read-large .read-w{display:inline; cursor:pointer; border-radius:10px; padding:2px 4px; transition:background .12s ease, color .12s ease}
 .read-large .read-w.cur{background:var(--amber); color:#3b2f00}
+.read-large.read-sentence{display:flex; align-items:center; justify-content:center; overflow:hidden; padding:18px 14px}
+.read-large.read-sentence .read-text{width:100%; display:flex; align-items:center; justify-content:center; min-height:100%;}
+.read-large.read-sentence .read-w.sent{display:block; max-width:100%;}
 .read-empty{color:var(--mut); font-size:14px; text-align:center; padding:18px 0}
 .read-ctrl{display:flex; align-items:center; gap:10px; flex:0 0 auto; margin-top:10px}
 .read-ctrl .btn{width:auto; flex:0 0 auto; padding:9px 14px; min-height:38px}
@@ -1394,6 +1397,7 @@ html[data-color="standard"] .sn-slider input[type=range]{
       <div class="read-mode" id="readModeBar">
         <button type="button" data-read-mode="small">Мелкий</button>
         <button type="button" data-read-mode="large">Крупный</button>
+        <button type="button" data-read-mode="sentence">Предложение</button>
       </div>
       <div class="read-textarea">
         <div class="read-editor" id="readEditor">
@@ -2875,7 +2879,9 @@ function readCurrentText(){
   // зависеть от отложенной записи в IndexedDB.
   return String(ta ? ta.value : (settings.readText||''));
 }
-function readMode(){ return settings.readMode==='large'?'large':'small'; }
+function readMode(){
+  return settings.readMode==='sentence' ? 'sentence' : (settings.readMode==='large' ? 'large' : 'small');
+}
 function readLargeSentences(text){ return readSplitSentences(text).filter(s=>s.text.trim()); }
 // Разметка «Крупного»: весь текст по предложениям, каждое — подсвечиваемая единица.
 // В «Мелком» подсветка идёт по словам/фразам, но места те же — поэтому индексы единиц совпадают.
@@ -2902,13 +2908,28 @@ function readLargeUnitAt(pos){
   if(i<0) i=Math.max(0,Math.min(mk.units.length-1,readEls.largeIndex||0));
   return {i, unit:mk.units[i], units:mk.units};
 }
+function readCenterCurrent(smooth){
+  const box=readEls.large;
+  if(!box) return;
+  const el=box.querySelector('.read-w.cur');
+  if(!el) return;
+  try{
+    const r=el.getBoundingClientRect(), b=box.getBoundingClientRect();
+    const current=box.scrollTop + (r.top-b.top);
+    const target=Math.max(0, Math.min(box.scrollHeight-box.clientHeight, current - (box.clientHeight-r.height)/2));
+    box.scrollTo({top:target, behavior:smooth?'smooth':'auto'});
+  }catch(e){}
+}
 function readRenderMode(){
   const mode=readMode(), text=readCurrentText().slice(0,READ_MAX_CHARS);
   readEls.mode?.querySelectorAll('[data-read-mode]').forEach(b=>b.classList.toggle('on',b.dataset.readMode===mode));
-  if(readEls.editor) readEls.editor.classList.toggle('hidden',mode==='large');
-  if(readEls.large) readEls.large.classList.toggle('hidden',mode!=='large');
-  // «Назад/Вперёд» листают только в «Крупном»
-  [readEls.prev,readEls.next].forEach(b=>{ if(b) b.classList.toggle('dim', mode!=='large'); });
+  if(readEls.editor) readEls.editor.classList.toggle('hidden',mode!=='small');
+  if(readEls.large) {
+    readEls.large.classList.toggle('hidden',mode==='small');
+    readEls.large.classList.toggle('read-sentence',mode==='sentence');
+  }
+  // «Назад/Вперёд» работают в «Крупном» и «Предложении»
+  [readEls.prev,readEls.next].forEach(b=>{ if(b) b.classList.toggle('dim', mode==='small'); });
   if(mode==='large'){
     const mk=readBuildLargeMarkup(text);
     if(!mk.units.length){
@@ -2918,18 +2939,17 @@ function readRenderMode(){
     const u=readLargeUnitAt(readEls.readPos);
     readEls.largeIndex=u?u.i:0;
     readEls.large.innerHTML='<div class="read-text">'+mk.html+'</div>';
-    // читаемое предложение подсвечиваем сразу (окно ставим на него без плавной прокрутки)
     if(u){
       const el=readEls.large.querySelector('.read-w[data-u="'+u.i+'"]');
-      if(el){
-        el.classList.add('cur');
-        // без плавности: при открытии экрана окно должно стоять на читаемом месте сразу
-        try{
-          const r=el.getBoundingClientRect(), s=readEls.large.getBoundingClientRect();
-          if(r.top<s.top+20 || r.bottom>s.bottom-20) readEls.large.scrollTop=Math.max(0, readEls.large.scrollTop+(r.top-s.top)-readEls.large.clientHeight/2);
-        }catch(e){}
-      }
+      if(el) el.classList.add('cur');
+      requestAnimationFrame(()=>readCenterCurrent(false));
     }
+  }else if(mode==='sentence'){
+    const ss=readLargeSentences(text);
+    const idx=Math.max(0,Math.min(ss.length-1,readEls.largeIndex||0));
+    readEls.largeIndex=idx;
+    const s=ss[idx];
+    readEls.large.innerHTML=s ? '<div class="read-text"><span class="read-w sent cur" data-u="'+idx+'">'+escapeHtml(s.text)+'</span></div>' : '<div class="read-empty">Пока пусто — вставьте текст выше.</div>';
   }else if(readEls.view){
     if(!text.trim()) readEls.view.innerHTML='<div class="read-empty">Пока пусто — вставьте текст выше.</div>';
     else { const mk=readBuildMarkup(text,'local'); readEls.view.innerHTML=mk.html; }
@@ -2953,12 +2973,40 @@ function readHighlightAt(pos){
 // Начало следующего/предыдущего предложения относительно текущей позиции.
 function readSentStep(dir){
   const text=readCurrentText().slice(0,READ_MAX_CHARS), ss=readLargeSentences(text);
-  if(!ss.length) return 0;
+  if(!ss.length) return {pos:0,index:0};
   const p=Number(readEls.readPos)||0;
   const cur=ss.findIndex(s=>p>=s.from && p<s.to);
-  const from=cur<0?0:cur;
+  const from=cur<0?Math.max(0,Math.min(ss.length-1,readEls.largeIndex||0)):cur;
   const j=Math.max(0,Math.min(ss.length-1,from+dir));
-  return ss[j].from;
+  return {pos:ss[j].from,index:j};
+}
+function readCurrentSentence(){
+  const text=readCurrentText().slice(0,READ_MAX_CHARS), ss=readLargeSentences(text);
+  if(!ss.length) return null;
+  const i=Math.max(0,Math.min(ss.length-1,readEls.largeIndex||0));
+  return {sentence:ss[i], index:i, total:ss.length};
+}
+async function readPlaySentenceOnce(text, tag, rate, stale){
+  const ok=await readPlayRemoteOnce(text, tag, rate, stale);
+  if(!ok && !stale()) await speakLocalFallback(text, rate, tag);
+  return ok;
+}
+async function readStartSentence(){
+  if(readRun) { readStop(); return; }
+  const cur=readCurrentSentence();
+  if(!cur){ toast('Сначала вставьте текст'); return; }
+  const text=cur.sentence.text, tag=readLangTag(), rate=+settings.readRate||1;
+  const gen=++readGen, run={gen,stopped:false,spoke:false};
+  readRun=run; readEls.readPos=cur.sentence.from;
+  readSetPlaying(true); readRenderMode();
+  readSetStatus('Повторяю предложение с паузой 1 сек…');
+  const stale=()=>run.stopped || gen!==readGen;
+  while(!stale()){
+    await readPlaySentenceOnce(text,tag,rate,stale);
+    if(stale()) break;
+    await new Promise(resolve=>setTimeout(resolve,1000));
+  }
+  if(gen===readGen){ readRun=null; readSetPlaying(false); readSetStatus('Остановлено.'); }
 }
 function openReadSettings(){ closeAllModals(); const m=document.getElementById('modalReadSettings'); if(m){m.classList.remove('hidden'); renderReadSettings();} }
 function renderReadSettings(){
@@ -3114,10 +3162,7 @@ async function readStartLarge(pos){
     const u=units[i];
     readEls.readPos=u.from;
     readHighlight(i);
-    const canScroll=s=>s.scrollHeight-s.clientHeight;
-    const last=canScroll(readEls.large)<4;
-    const goal=Math.max(0, readEls.large.scrollTop - readEls.large.clientHeight/2 + (readEls.large.querySelector('.read-w.cur')||{offsetHeight:0}).offsetHeight/2);
-    if(!last) readEls.large.scrollTo({top:goal, behavior:'smooth'});
+    readCenterCurrent(true);
     if(run.mode==='local'){
       await readSpeakLocalOnce(u.text, voice, tag, rate, null);
       if(i<2 && !stale() && !readVoiceAlive()){
@@ -3277,14 +3322,26 @@ function bindReadScreen(){
   });
   play.onclick=()=>{
     if(readRun){ readStop(); return; }
-    if(readMode()==='large') readStartLarge(readEls.largeIndex||0); else readStart(0);
+    if(readMode()==='sentence') readStartSentence();
+    else if(readMode()==='large') readStartLarge(readEls.largeIndex||0);
+    else readStart(0);
   };
   readEls.mode?.querySelectorAll('[data-read-mode]').forEach(b=>b.onclick=()=>{
     if(readRun) readStop();
-    settings.readMode=b.dataset.readMode; readEls.largeIndex=0; persist(); readRenderMode();
+    settings.readMode=b.dataset.readMode; readEls.largeIndex=0; readEls.readPos=0; persist(); readRenderMode();
   });
-  if(readEls.prev) readEls.prev.onclick=()=>{ if(readMode()==='large') readStartLarge(Math.max(0,(readEls.largeIndex||0)-1)); };
-  if(readEls.next) readEls.next.onclick=()=>{ if(readMode()==='large') readStartLarge((readEls.largeIndex||0)+1); };
+  if(readEls.prev) readEls.prev.onclick=()=>{
+    if(readMode()==='large' || readMode()==='sentence'){
+      const step=readSentStep(-1);
+      readStop(); readEls.largeIndex=step.index; readEls.readPos=step.pos; readRenderMode();
+    }
+  };
+  if(readEls.next) readEls.next.onclick=()=>{
+    if(readMode()==='large' || readMode()==='sentence'){
+      const step=readSentStep(1);
+      readStop(); readEls.largeIndex=step.index; readEls.readPos=step.pos; readRenderMode();
+    }
+  };
   // пауза/остановка по уходу со страницы или в фон — речь не «висит»
   document.addEventListener('visibilitychange', ()=>{
     if(document.hidden && readRun) readStop();
@@ -5366,7 +5423,7 @@ function isDue(it){ return it.starred || ((it.nextDue||0)<=now()); }
 // Три переключателя сохраняют своё последнее состояние в settings
 let writer=null, writeChars=[], writeCharIdx=0, writeCurItem=null;
 let writeAudioOn=true, writeOutlineOn=true, writeAnimOn=false;
-let writeAnimRunning=false, writeToken=0;
+let writeAnimRunning=false, writeToken=0, writeAnimTmo=null;
 let writeSeq=[]; // упорядоченный список слов/предложений для письма (звёзды первыми; при «Рандом» — вразброс)
 
 // Подсказка (слово над окном письма) и Назад/Вперёд: включение + ползунок размера (П.8/9 «22.26»).
@@ -6375,7 +6432,12 @@ function writeNavTyping(dir){ // прокрутка слов в режиме п�
   setWriteItemTyping(L[i]);
 }
 
-function stopWriteAnim(){ writeToken++; } // прерывает отложенную перестройку
+function stopWriteAnim(){
+  writeToken++;
+  writeAnimRunning=false;
+  if(writeAnimTmo){ clearTimeout(writeAnimTmo); writeAnimTmo=null; }
+  try{ if(writer && writer.cancel) writer.cancel(); }catch(e){}
+} // прерывает отложенную перестройку
 // --- озвучка «Письма»: как в «Учить» ---
 // Бесконечный повтор слова целиком на обычной скорости через Player (mp3 или TTS),
 // с той же паузой, что и «Учить» (studyRepeatDelay). Останавливается:
@@ -6414,7 +6476,8 @@ function writePlayLoop(it){
   step();
 }
 function startWriteChar(quiet){
-  const token=++writeToken;
+  stopWriteAnim();
+  const token=writeToken;
   writeAnimRunning=false;
   if(!writeChars.length) return;
   renderZhWriteBar();
@@ -6541,15 +6604,26 @@ const WRITE_ANIM_DELAY=1200;
 function playWriteAnim(){
   if(!writer || !writeAnimOn) return;
   if(writeAnimRunning) return;
+  const token=writeToken;
   writeAnimRunning=true;
   const ch=writeChars[writeCharIdx]; if(!ch) { writeAnimRunning=false; return; }
-  writer.animateCharacter({
-    onComplete:()=>{
-      writeAnimRunning=false;
-      // цикл продолжается, только если анимация всё ещё включена
-      if(writeAnimOn) setTimeout(playWriteAnim, WRITE_ANIM_DELAY);
-    }
-  });
+  try{
+    writer.animateCharacter({
+      onComplete:()=>{
+        if(token!==writeToken) return;
+        writeAnimRunning=false;
+        // цикл продолжается, только если анимация всё ещё включена
+        if(writeAnimOn){
+          writeAnimTmo=setTimeout(()=>{
+            writeAnimTmo=null;
+            if(token===writeToken) playWriteAnim();
+          }, WRITE_ANIM_DELAY);
+        }
+      }
+    });
+  }catch(e){
+    if(token===writeToken) writeAnimRunning=false;
+  }
 }
 function toggleWriteRand(){
   // «Рандомно» в тулбаре Письма — тот же флаг, что и в настройках (Обычный/Рандом)
