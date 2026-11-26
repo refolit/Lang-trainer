@@ -275,7 +275,7 @@ async function main() {
     const swVer = (swSrc.match(/const VERSION\s*=\s*'([^']+)'/) || [])[1];
     check(ver.app === swVer, 'APP_VERSION = VERSION в sw.js', `${ver.app} / ${swVer}`);
     check(ver.first === ver.app, 'первая запись VERSIONS = APP_VERSION', `${ver.first} / ${ver.app}`);
-    check(ver.app === '1.13.4', 'версия релиза 1.13.4', ver.app);
+    check(ver.app === '1.13.5', 'версия релиза 1.13.5', ver.app);
     check(await page.eval('!!window.pinyinPro'), 'pinyin-pro загружен');
     check(await page.eval('!!window.HanziWriter'), 'hanzi-writer загружен');
     // Манифест и иконки установки: JSON валиден, PNG реально отдаются
@@ -568,6 +568,24 @@ async function main() {
       })()`);
       check(over.sw <= over.w + 1, `экран ${s}: нет горизонтального переполнения`, `scrollWidth ${over.sw} / ${over.w}${over.out.length ? ' · ' + over.out.join(' | ') : ''}`);
     }
+    const fitRead = await page.eval(`(async () => {
+      __SMOKE__.go('scr-read');
+      settings.readMode='sentence'; settings.readFontSize=1.5;
+      const ta=document.getElementById('readInput');
+      const setText=(text)=>{ ta.value=text; ta.dispatchEvent(new Event('input',{bubbles:true})); renderRead(); };
+      setText('今天的天气非常好我们一起去公园散步然后学习中文和练习发音这是一段很长的句子用于测试屏幕适配。');
+      document.querySelector('#readModeBar button[data-read-mode="sentence"]').click();
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const el=document.getElementById('readLargeView');
+      const long={font:parseFloat(getComputedStyle(el).fontSize), inline:el.style.getPropertyValue('--read-font-size'), sh:el.scrollHeight, ch:el.clientHeight, sw:el.scrollWidth, cw:el.clientWidth, mul:settings.readFontSize};
+      setText('你好。');
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const short={font:parseFloat(getComputedStyle(el).fontSize), inline:el.style.getPropertyValue('--read-font-size'), sh:el.scrollHeight, ch:el.clientHeight, mul:settings.readFontSize};
+      return {long,short};
+    })()`);
+    check(fitRead.long.font <= 120.01 && fitRead.long.font < fitRead.short.font, 'Чтение: длинное предложение уменьшает размер под экран', JSON.stringify(fitRead));
+    check(fitRead.long.sh <= fitRead.long.ch + 1 && fitRead.long.sw <= fitRead.long.cw + 1, 'Чтение: адаптированный текст не переполняет карточку', JSON.stringify(fitRead.long));
+    check(fitRead.long.mul === 1.5 && fitRead.short.mul === 1.5 && fitRead.short.font > fitRead.long.font, 'Чтение: fit не изменяет множитель и восстанавливает максимально возможный размер', JSON.stringify(fitRead));
     await page.send('Emulation.clearDeviceMetricsOverride');
 
     // ================= итог =================

@@ -1768,7 +1768,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.13.4';
+const APP_VERSION='1.13.5';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -2961,6 +2961,7 @@ function readRenderMode(){
     readEls.largeIndex=idx;
     const s=ss[idx];
     readEls.large.innerHTML=s ? '<div class="read-text"><span class="read-w sent cur" data-u="'+idx+'">'+escapeHtml(s.text)+'</span></div>' : '<div class="read-empty">Пока пусто — вставьте текст выше.</div>';
+    if(s) scheduleReadSentenceFit();
   }else if(readEls.view){
     if(!text.trim()) readEls.view.innerHTML='<div class="read-empty">Пока пусто — вставьте текст выше.</div>';
     else { const mk=readBuildMarkup(text,'local'); readEls.view.innerHTML=mk.html; }
@@ -3011,6 +3012,41 @@ function readFontSizeMultiplier(){
   if(raw!==value) settings.readFontSize=value;
   return value;
 }
+let readFitRaf=0;
+function fitReadSentence(){
+  readFitRaf=0;
+  const box=readEls.large;
+  if(!box || readMode()!=='sentence' || box.classList.contains('hidden')) return;
+  const text=box.querySelector('.read-w.sent');
+  if(!text) return;
+  const base=80*readFontSizeMultiplier();
+  // Всегда начинаем с пользовательского размера: после смены фразы/окна
+  // ранее уменьшенный размер не должен «залипать».
+  box.style.setProperty('--read-font-size',base+'px');
+  const cs=getComputedStyle(box);
+  const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
+  const maxW=Math.max(1,box.clientWidth-padX), maxH=Math.max(1,box.clientHeight-padY);
+  const fits=()=>{
+    const r=text.getBoundingClientRect();
+    const b=box.getBoundingClientRect();
+    return r.width<=maxW+1 && r.height<=maxH+1 && r.left>=b.left+padX-1 && r.right<=b.right-padX+1 && r.top>=b.top+padY-1 && r.bottom<=b.bottom-padY+1;
+  };
+  if(fits()) return;
+  let lo=12, hi=base;
+  box.style.setProperty('--read-font-size',lo+'px');
+  if(!fits()) return;
+  for(let n=0;n<12;n++){
+    const mid=(lo+hi)/2;
+    box.style.setProperty('--read-font-size',mid+'px');
+    if(fits()) lo=mid; else hi=mid;
+  }
+  box.style.setProperty('--read-font-size',lo.toFixed(2)+'px');
+}
+function scheduleReadSentenceFit(){
+  if(readFitRaf) cancelAnimationFrame(readFitRaf);
+  readFitRaf=requestAnimationFrame(fitReadSentence);
+}
 async function readStartSentence(indexOverride){
   if(readRun) { readStop(); return; }
   if(indexOverride!=null){
@@ -3036,7 +3072,7 @@ function renderReadSettings(){
   m.innerHTML='<div class="sheet"><div class="row"><h2>Настройки чтения</h2><div class="spacer"></div><button class="btn ghost" style="width:auto" onclick="closeModal(\'modalReadSettings\')">✕</button></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Голос</div><div class="seg" id="readVoiceSeg"><button data-v="local">Локальный</button><button data-v="google">Google</button></div></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Скорость</div><div class="seg" id="readRateSeg"><button data-v="0.7">0.7×</button><button data-v="0.85">0.85×</button><button data-v="1">1×</button><button data-v="1.15">1.15×</button><button data-v="1.3">1.3×</button></div></div><div class="sn-block"><div style="font-weight:700;margin-bottom:8px">Размер шрифта иероглифов</div><div class="sn-slider"><input id="readFontSizeRange" type="range" min="50" max="250" step="10" value="'+pct+'"><span class="sn-slider-val" id="readFontSizeValue">'+pct+'%</span></div></div></div>';
   m.querySelectorAll('#readVoiceSeg button').forEach(b=>{b.classList.toggle('active',b.dataset.v===(settings.readVoice||'local'));b.onclick=()=>{settings.readVoice=b.dataset.v;persist();renderReadSettings();renderRead();};});
   m.querySelectorAll('#readRateSeg button').forEach(b=>{b.classList.toggle('active',Math.abs(+b.dataset.v-(settings.readRate||1))<.001);b.onclick=()=>{settings.readRate=+b.dataset.v||1;persist();renderReadSettings();};});
-  const range=m.querySelector('#readFontSizeRange'); if(range) range.oninput=()=>{settings.readFontSize=(+range.value||100)/100;persist();if(readEls.large) readEls.large.style.setProperty('--read-font-size',(80*settings.readFontSize)+'px');const val=m.querySelector('#readFontSizeValue');if(val) val.textContent=range.value+'%';};
+  const range=m.querySelector('#readFontSizeRange'); if(range) range.oninput=()=>{settings.readFontSize=(+range.value||100)/100;persist();if(readEls.large) readEls.large.style.setProperty('--read-font-size',(80*settings.readFontSize)+'px');const val=m.querySelector('#readFontSizeValue');if(val) val.textContent=range.value+'%';scheduleReadSentenceFit();};
 }
 // Записать текст из поля в настройки (с отложенной записью: не дёргаем IndexedDB на каждую букву).
 let readSaveTmo=null;
@@ -4985,7 +5021,11 @@ function updateStudySize(){
   applyStudySizes();   // строка размеров («иер px · пин px · пер px») обновляется вместе с размерами
 }
 // пересчитывать размеры при повороте/изменении ширины и после смены слайдеров
-window.addEventListener('resize', ()=>{ if(document.getElementById('scr-study').classList.contains('active')) updateStudySize(); });
+window.addEventListener('resize', ()=>{
+  if(document.getElementById('scr-study').classList.contains('active')) updateStudySize();
+  const scr=document.getElementById('scr-read');
+  if(scr && scr.classList.contains('active') && readMode()==='sentence') scheduleReadSentenceFit();
+});
 // --- Автоповтор озвучки в «Учить»: слово звучит при показе, затем повторяется
 // ограниченное число раз (STUDY_REPEAT_MAX), пока пользователь активен на этой карточке.
 // Останавливается: достижением лимита повторов, действием пользователя (studyTouch),
@@ -8127,7 +8167,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.13.4','25.11.26','Чтение: кнопки выровнены, статус упрощён, добавлена настройка размера иероглифов в режиме «Предложение», исправлен возврат кнопки аудио в состояние «Читать» после завершения воспроизведения.'],
+  ['1.13.5','26.11.26','Чтение: добавлен адаптивный размер предложения, чтобы длинный текст помещался на одном экране; добавлены проверки fit-to-screen.'],
   ['1.13.3','24.11.26','Чтение: экран приведён к схеме «Изучения». Сверху «Мелкий» / «Крупный», снизу «Назад / Читать / Вперёд» и строка «статус — шестерёнка» над главным меню. «Крупный» показывает весь текст крупно с подсветкой по предложениям и автопрокруткой; в «Мелком» исправлена прокрутка и виден курсор. Убрана кнопка «i»; убраны наложения звука при повторных нажатиях «Читать». Статистика по дням и серия при синхронизации склеиваются между устройствами.'],
   ['1.13.2','22.11.26','Чтение: переработан экран. Сверху две кнопки «Мелкий» / «Крупный»: «Мелкий» — прежнее чтение китайского фразами до 4 иероглифов с подсветкой; «Крупный» — одно предложение крупным текстом по центру с кнопками «Назад / Читать / Вперёд». Ввод и подсветка объединены в одном поле, рамка при вводе не утолщается. Голос «Локальный / Google» и скорость перенесены в настройки по шестерёнке; убраны вводный текст, выбор языка и подсказка про фразы.'],
   ['1.13.1','22.11.26','Чтение: исправлено падение экрана после переделки (обращение к удалённым элементам), подсветка крупного режима, общий ввод текста для обоих режимов.'],
