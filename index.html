@@ -207,7 +207,7 @@ nav.tabs button .nm{white-space:nowrap; font-size:10.5px; letter-spacing:-.2px}
 .read-large .read-w.cur{background:var(--amber); color:#3b2f00}
 .read-large.read-sentence{display:flex; align-items:center; justify-content:center; overflow:hidden; padding:24px 18px; font-size:var(--read-font-size,48px)}
 .read-large.read-sentence .read-text{width:100%; display:flex; align-items:center; justify-content:center; min-height:100%}
-.read-large.read-sentence .read-w.sent{display:block; max-width:100%}
+.read-large.read-sentence .read-w.sent{display:block; align-self:center; max-width:100%}
 .read-empty{color:var(--mut); font-size:14px; text-align:center; padding:18px 0}
 .read-ctrl{display:flex; align-items:center; gap:10px; flex:0 0 auto; margin-top:10px}
 .read-ctrl .btn{flex:1 1 0; min-width:0; width:0; box-sizing:border-box; overflow:hidden; white-space:nowrap; padding:6px 8px; min-height:38px}
@@ -1768,7 +1768,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.13.5';
+const APP_VERSION='1.13.6';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -3027,21 +3027,38 @@ function fitReadSentence(){
   const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
   const padY=(parseFloat(cs.paddingTop)||0)+(parseFloat(cs.paddingBottom)||0);
   const maxW=Math.max(1,box.clientWidth-padX), maxH=Math.max(1,box.clientHeight-padY);
-  const fits=()=>{
+  const measure=()=>{
     const r=text.getBoundingClientRect();
-    const b=box.getBoundingClientRect();
-    return r.width<=maxW+1 && r.height<=maxH+1 && r.left>=b.left+padX-1 && r.right<=b.right-padX+1 && r.top>=b.top+padY-1 && r.bottom<=b.bottom-padY+1;
+    const lh=parseFloat(getComputedStyle(box).lineHeight)||1;
+    return {r, lines:Math.max(1,Math.ceil(r.height/lh-.01))};
   };
-  if(fits()) return;
+  const fitsCard=()=>{
+    const {r}=measure();
+    return r.width<=maxW+1 && r.height<=maxH+1;
+  };
+  const fitsPreferred=()=>{
+    const {lines}=measure();
+    return fitsCard() && lines<=3;
+  };
+  // До трёх строк сохраняем прежний пользовательский размер. Уменьшаем
+  // только если фраза выходит за карточку или превышает желательные 3 строки.
+  if(fitsPreferred()) return;
   let lo=12, hi=base;
   box.style.setProperty('--read-font-size',lo+'px');
-  if(!fits()) return;
-  for(let n=0;n<12;n++){
-    const mid=(lo+hi)/2;
-    box.style.setProperty('--read-font-size',mid+'px');
-    if(fits()) lo=mid; else hi=mid;
+  const minPreferred=fitsPreferred();
+  const target=minPreferred ? fitsPreferred : fitsCard;
+  if(target()){
+    for(let n=0;n<12;n++){
+      const mid=(lo+hi)/2;
+      box.style.setProperty('--read-font-size',mid+'px');
+      if(target()) lo=mid; else hi=mid;
+    }
+    box.style.setProperty('--read-font-size',lo.toFixed(2)+'px');
+  } else {
+    // Даже минимальный размер не укладывает фразу в 3 строки: оставляем
+    // больше строк, но всё равно показываем текст внутри карточки.
+    box.style.setProperty('--read-font-size',lo+'px');
   }
-  box.style.setProperty('--read-font-size',lo.toFixed(2)+'px');
 }
 function scheduleReadSentenceFit(){
   if(readFitRaf) cancelAnimationFrame(readFitRaf);
@@ -8167,7 +8184,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
-  ['1.13.5','26.11.26','Чтение: добавлен адаптивный размер предложения, чтобы длинный текст помещался на одном экране; добавлены проверки fit-to-screen.'],
+  ['1.13.6','26.11.26','Чтение: адаптивный размер сохраняет прежний шрифт и переносы, уменьшая его только при переполнении карточки.'],
   ['1.13.3','24.11.26','Чтение: экран приведён к схеме «Изучения». Сверху «Мелкий» / «Крупный», снизу «Назад / Читать / Вперёд» и строка «статус — шестерёнка» над главным меню. «Крупный» показывает весь текст крупно с подсветкой по предложениям и автопрокруткой; в «Мелком» исправлена прокрутка и виден курсор. Убрана кнопка «i»; убраны наложения звука при повторных нажатиях «Читать». Статистика по дням и серия при синхронизации склеиваются между устройствами.'],
   ['1.13.2','22.11.26','Чтение: переработан экран. Сверху две кнопки «Мелкий» / «Крупный»: «Мелкий» — прежнее чтение китайского фразами до 4 иероглифов с подсветкой; «Крупный» — одно предложение крупным текстом по центру с кнопками «Назад / Читать / Вперёд». Ввод и подсветка объединены в одном поле, рамка при вводе не утолщается. Голос «Локальный / Google» и скорость перенесены в настройки по шестерёнке; убраны вводный текст, выбор языка и подсказка про фразы.'],
   ['1.13.1','22.11.26','Чтение: исправлено падение экрана после переделки (обращение к удалённым элементам), подсветка крупного режима, общий ввод текста для обоих режимов.'],
