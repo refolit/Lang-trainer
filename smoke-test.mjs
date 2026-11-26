@@ -275,7 +275,7 @@ async function main() {
     const swVer = (swSrc.match(/const VERSION\s*=\s*'([^']+)'/) || [])[1];
     check(ver.app === swVer, 'APP_VERSION = VERSION в sw.js', `${ver.app} / ${swVer}`);
     check(ver.first === ver.app, 'первая запись VERSIONS = APP_VERSION', `${ver.first} / ${ver.app}`);
-    check(ver.app === '1.13.6', 'версия релиза 1.13.6', ver.app);
+    check(ver.app === '1.13.7', 'версия релиза 1.13.7', ver.app);
     check(await page.eval('!!window.pinyinPro'), 'pinyin-pro загружен');
     check(await page.eval('!!window.HanziWriter'), 'hanzi-writer загружен');
     // Манифест и иконки установки: JSON валиден, PNG реально отдаются
@@ -506,6 +506,37 @@ async function main() {
     for (const m of ['tf', 'choice', 'tone', 'tonePy', 'match', 'write']) {
       check(modes[m] > 0, `режим ${m} попадает в очередь экзамена`, 'заданий: ' + (modes[m] || 0));
     }
+
+    // Настройки экзамена: английские подписи и одинаковые, отдельно вынесенные ползунки.
+    await page.eval('__SMOKE__.setActiveLang("en"); __SMOKE__.go("scr-exam")');
+    await sleep(350);
+    await page.eval('openExamSettings(); switchExamSettingsTab("general")');
+    await sleep(100);
+    const examSettingsRes = await page.eval(`(() => {
+      const m = document.getElementById('modalExamSettings');
+      const rows = [...m.querySelectorAll('.exam-size-slider')];
+      const ranges = rows.map(row => row.querySelector('input[type="range"]'));
+      const widths = ranges.map(r => Math.round(r.getBoundingClientRect().width * 100) / 100);
+      return {
+        visible: !!m && !m.classList.contains('hidden'),
+        labels: rows.map(row => row.querySelector('.sn-slider-lab')?.textContent.trim()),
+        keys: ranges.map(r => r?.dataset.examSize),
+        oldHint: m?.textContent.includes('Отдельно от режима'),
+        widths,
+        separated: rows.every(row => {
+          const label = row.querySelector('.sn-slider-lab');
+          const control = row.querySelector('.exam-size-slider-control');
+          return !!label && !!control && label.nextElementSibling === control;
+        })
+      };
+    })()`);
+    check(examSettingsRes.visible, 'en: настройки экзамена открываются', JSON.stringify(examSettingsRes));
+    check(JSON.stringify(examSettingsRes.labels) === JSON.stringify(['Английский текст', 'Транскрипция', 'Перевод']), 'en: подписи размеров текста корректны', examSettingsRes.labels.join(' | '));
+    check(examSettingsRes.keys.length === 3 && new Set(examSettingsRes.keys).size === 3, 'en: отображаются три ползунка размеров', examSettingsRes.keys.join(', '));
+    check(!examSettingsRes.oldHint, 'в настройках экзамена удалена старая подсказка');
+    check(examSettingsRes.widths.length === 3 && examSettingsRes.widths.every(w => Math.abs(w - examSettingsRes.widths[0]) <= 0.5), 'en: три ползунка имеют одинаковую ширину', examSettingsRes.widths.join(', '));
+    check(examSettingsRes.separated, 'en: подпись и ползунок размещены раздельно');
+    await page.eval('closeModal("modalExamSettings"); __SMOKE__.setActiveLang("zh")');
 
     // tonePy: неверный ответ → слово возвращается в очередь именно режимом tonePy
     const tp = await page.eval(`(async () => {

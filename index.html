@@ -1013,6 +1013,13 @@ label.lbl{display:block; font-size:12px; color:var(--mut); margin:12px 0 5px; fo
 .sn-slider .sn-slider-lab{flex:0 0 auto; font-size:12px; color:var(--mut); font-weight:600}
 .sn-slider input[type=range]{flex:1 1 auto; min-width:0; accent-color:var(--red); height:28px; margin:0}
 .sn-slider-val{flex:0 0 auto; min-width:52px; text-align:right; font-size:13px; font-weight:700; color:var(--red); font-variant-numeric:tabular-nums}
+/* Размеры текста экзамена: подпись отдельно, одинаковый трек для каждого ползунка. */
+.exam-size-sliders{display:flex; flex-direction:column; gap:2px; margin-top:8px}
+.exam-size-sliders .exam-size-slider{display:block; padding:0 0 12px}
+.exam-size-sliders .exam-size-slider .sn-slider-lab{display:block; margin-bottom:2px}
+.exam-size-sliders .exam-size-slider-control{display:flex; align-items:center; gap:10px; width:100%}
+.exam-size-sliders .exam-size-slider-control input[type=range]{display:block; flex:1 1 auto; width:100%; min-width:0}
+.exam-size-sliders .exam-size-slider-control .sn-slider-val{flex:0 0 52px}
 /* Ползунок «Постепенно через» в одну строку с переключателем «Постепенно» */
 .exam-sub .grad-inline{flex:1 1 auto; min-width:0; padding:0; gap:4px; margin-left:8px}
 .exam-sub .grad-inline .sn-slider-val{min-width:32px; font-size:12px}
@@ -1768,7 +1775,7 @@ let activeLang='zh';        // текущий язык (подтягиваетс
 
 // Версия приложения. Правила бампа: мелкие правки (текст/отступы/цвет/размер) — третья цифра +1;
 // заметные (новая кнопка/фильтр/сообщение) — вторая цифра +1, третья в 0; крупные (новый режим/переработка логики) — первая цифра +1.
-const APP_VERSION='1.13.6';
+const APP_VERSION='1.13.7';
 
 // ============================== SUPABASE (облачная синхронизация) ==============================
 // Публичные значения (не секретные): URL проекта и anon-ключ. Безопасность даёт RLS.
@@ -7125,7 +7132,7 @@ function toggleExamAllTr(){
 // Ползунок размера текста в настройках экзамена: 50–200 %, шаг 10 (отдельный от «Учить»).
 function examSizeSliderHTML(skey, label){
   const cur=Math.round((settings[skey]||1)*100);
-  return `<div class="sn-slider"><span class="sn-slider-lab">${escapeHtml(label)}</span><input type="range" min="50" max="250" step="10" value="${cur}" data-exam-size="${skey}"><span class="sn-slider-val" data-exam-size-val="${skey}">${cur}%</span></div>`;
+  return `<div class="exam-size-slider"><span class="sn-slider-lab">${escapeHtml(label)}</span><div class="exam-size-slider-control"><input type="range" min="50" max="250" step="10" value="${cur}" data-exam-size="${skey}"><span class="sn-slider-val" data-exam-size-val="${skey}">${cur}%</span></div></div>`;
 }
 // Мгновенно применяет размеры текста к текущему вопросу экзамена (не трогает озвучку).
 // Покрывает ВСЕ элементы задания: главный вопрос (.eq-word/.exam-py/.eq-tr) и карточные
@@ -7251,10 +7258,12 @@ function renderExamSettings(){
         </span>
       </div>
       <div class="menu-item" style="display:block">
-        <div class="mi-label">Размер текста<span class="mi-hint">Отдельно от режима «Изучение»: размер иероглифа / пиньиня / перевода в заданиях</span></div>
-        ${examSizeSliderHTML('examMulH', studySizeLabel('h'))}
-        ${hasTranscriptRow()?examSizeSliderHTML('examMulP', studySizeLabel('p')):''}
-        ${examSizeSliderHTML('examMulT', studySizeLabel('t'))}
+        <div class="mi-label">Размер текста</div>
+        <div class="exam-size-sliders">
+          ${examSizeSliderHTML('examMulH', studySizeLabel('h'))}
+          ${hasTranscriptRow()?examSizeSliderHTML('examMulP', studySizeLabel('p')):''}
+          ${examSizeSliderHTML('examMulT', studySizeLabel('t'))}
+        </div>
       </div>
       <div class="menu-item">
         <div class="mi-label">Все переводы<span class="mi-hint">Использовать альтернативные переводы в заданиях</span></div>
@@ -8184,6 +8193,7 @@ function updateChips(){
 
 // ---------- История версий ----------
 const VERSIONS=[
+  ['1.13.7','26.11.26','Экзамен: убрана лишняя подсказка, а размеры английского текста, транскрипции и перевода вынесены в отдельные одинаковые ползунки.'],
   ['1.13.6','26.11.26','Чтение: адаптивный размер сохраняет прежний шрифт и переносы, уменьшая его только при переполнении карточки.'],
   ['1.13.3','24.11.26','Чтение: экран приведён к схеме «Изучения». Сверху «Мелкий» / «Крупный», снизу «Назад / Читать / Вперёд» и строка «статус — шестерёнка» над главным меню. «Крупный» показывает весь текст крупно с подсветкой по предложениям и автопрокруткой; в «Мелком» исправлена прокрутка и виден курсор. Убрана кнопка «i»; убраны наложения звука при повторных нажатиях «Читать». Статистика по дням и серия при синхронизации склеиваются между устройствами.'],
   ['1.13.2','22.11.26','Чтение: переработан экран. Сверху две кнопки «Мелкий» / «Крупный»: «Мелкий» — прежнее чтение китайского фразами до 4 иероглифов с подсветкой; «Крупный» — одно предложение крупным текстом по центру с кнопками «Назад / Читать / Вперёд». Ввод и подсветка объединены в одном поле, рамка при вводе не утолщается. Голос «Локальный / Google» и скорость перенесены в настройки по шестерёнке; убраны вводный текст, выбор языка и подсказка про фразы.'],
